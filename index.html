@@ -1170,6 +1170,54 @@
         #mechanism { height:265px; }
         .live-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }
       }
+      /* Event timing and sound-contributor explanations: physical quantities,
+         no invented loudness index. Labels never compete for marker space. */
+      .shot-timing { margin:0; padding:12px 14px; border-bottom:1px solid var(--line); background:#0d191f; }
+      .shot-timing-heading { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 14px; margin-bottom:12px; font-size:.875rem; line-height:1.4; }
+      .shot-timing-heading > span { color:var(--muted); font-family:var(--mono); }
+      .shot-timing[data-verdict="after-exit"] .shot-timing-heading > span,.shot-timing[data-verdict="after-threshold"] .shot-timing-heading > span { color:var(--cyan); }
+      .shot-timing[data-verdict="early"] .shot-timing-heading > span { color:var(--amber); }
+      .event-track { position:relative; height:32px; border:1px solid var(--line-bright); border-radius:7px; background:#091116; }
+      .event-fill { position:absolute; inset:0 auto 0 0; border-radius:6px; background:linear-gradient(90deg,#5de4e718,#5de4e734); }
+      .event-tick { position:absolute; top:0; bottom:0; width:2px; transform:translateX(-50%); background:var(--event-color); }
+      .event-tick::after { content:""; position:absolute; top:calc(3px + var(--lane)*9px); left:-3px; width:8px; height:8px; border-radius:50%; background:var(--event-color); outline:2px solid #0d191f; }
+      .event-tick.useful,.event-key .useful { --event-color:var(--green); }
+      .event-tick.exit,.event-key .exit { --event-color:var(--cyan); }
+      .event-tick.brake,.event-key .brake { --event-color:var(--amber); }
+      .event-scale,.comparison-scale { display:flex; justify-content:space-between; gap:12px; margin-top:5px; font: .75rem var(--mono); color:var(--muted); }
+      .event-key { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:10px; }
+      .event-key button { min-width:0; min-height:44px; padding:7px 9px; border:1px solid var(--line); border-left:3px solid var(--event-color); border-radius:6px; background:#101d24; color:var(--text); text-align:left; cursor:pointer; }
+      .event-key button span { display:block; font-size:.875rem; line-height:1.35; }
+      .event-key button strong { display:block; margin-top:4px; font:600 .875rem var(--mono); color:var(--event-color); }
+      .event-key button:disabled { border-left-color:var(--muted); color:var(--muted); cursor:default; }
+      .event-key button:disabled strong { color:var(--muted); }
+      .timing-caveat { margin:8px 0 0; font-size:.8rem; line-height:1.45; color:var(--muted); }
+      .timing-reading-help { border:0; margin:6px 0 0; padding:0; }
+      .timing-reading-help > summary { padding:0; font-size:.875rem; color:var(--muted); }
+      .sound-explain-link { width:calc(100% - 20px); margin:0 10px 10px; min-height:40px; border:1px solid var(--line-bright); border-radius:8px; padding:8px 12px; background:var(--cyan-dim); color:var(--cyan); font-size:.875rem; cursor:pointer; text-align:left; }
+      .sound-explanations { outline-offset:4px; }
+      .sound-explanations > .sound-heading { margin-top:0; }
+      .sound-explanations .sound-heading strong { font-size:1rem; }
+      .sound-explanations .sound-heading p { font-size:.875rem; line-height:1.5; }
+      .intensity.sound-explainer { --impact-color:var(--cyan); --comparison-color:var(--cyan); padding:18px; }
+      .sound-explainer[data-comparison="lower"] { --impact-color:var(--green); --comparison-color:var(--green); }
+      .sound-explainer[data-comparison="higher"] { --impact-color:var(--amber); --comparison-color:var(--amber); }
+      .sound-explainer[data-comparison="unknown"],.sound-explainer[data-comparison="no-reference"],.sound-explainer[data-comparison="zero-reference"] { --impact-color:var(--muted); --comparison-color:var(--muted); }
+      .sound-explainer .intensity-head strong { font-size:1rem; line-height:1.4; }
+      .sound-explainer .intensity-head output { font-size:1.45rem; overflow-wrap:anywhere; }
+      .sound-explainer p { font-size:1rem; line-height:1.55; }
+      .sound-explainer .sound-quantity,.sound-explainer .sound-measured { font-size:.875rem; }
+      .sound-comparison { margin:16px 0; padding:12px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+      .comparison-heading { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; align-items:baseline; font-size:.875rem; color:var(--muted); }
+      .comparison-heading strong { font:600 1.1rem var(--mono); color:var(--text); overflow-wrap:anywhere; }
+      .comparison-track { position:relative; height:11px; margin-top:12px; border-radius:8px; background:#283139; }
+      .comparison-fill { height:100%; border-radius:8px; background:linear-gradient(90deg,var(--green),var(--amber),var(--red)); }
+      .comparison-reference { position:absolute; top:-3px; bottom:-3px; left:50%; width:2px; background:#eefbfa; }
+      .sound-comparison[data-comparison="unknown"] .comparison-track,.sound-comparison[data-comparison="no-reference"] .comparison-track,.sound-comparison[data-comparison="zero-reference"] .comparison-track { background:repeating-linear-gradient(135deg,#283139,#283139 4px,#17242b 4px,#17242b 8px); }
+      .comparison-meaning { display:inline-block; margin:12px 0 0; border:1px solid var(--comparison-color); border-radius:999px; padding:5px 9px; color:var(--comparison-color); font-size:.875rem; line-height:1.4; }
+      .sound-explainer .comparison-note { font-size:.8rem; }
+      @media(max-width:1200px) { .sound-explanations .intensity-grid { grid-template-columns:1fr; } }
+      @media(max-width:500px) { .event-key { grid-template-columns:1fr; } .shot-timing { padding:12px 10px; } .sound-explainer { padding:14px; } }
     </style>
 </head>
 <body>
@@ -1941,16 +1989,141 @@
     if (incomplete) {
       const warning = doc.createElement("p"); warning.className = "shot-incomplete"; warning.setAttribute("role", "status"); warning.textContent = incomplete; stage.insertBefore(warning, flag.nextSibling);
     }
-    stage.append(glance, live, help);
+    if (caption.timingHTML) {
+      const wrapper = doc.createElement("div"); wrapper.innerHTML = caption.timingHTML;
+      stage.insertBefore(wrapper.children[0], stage.querySelector("#phaseText"));
+    }
+    stage.append(glance);
+    if (caption.explainSound) {
+      const explain = doc.createElement("button"); explain.id = "explainSound"; explain.type = "button"; explain.className = "sound-explain-link"; explain.textContent = caption.explainSound; stage.append(explain);
+    }
+    stage.append(live, help);
     stage.id = "workspace-shot"; stage.dataset.workspacePanel = "shot";
     graphs.id = "workspace-graphs"; graphs.dataset.workspacePanel = "graphs";
     const details = doc.createElement("section"); details.id = "workspace-details"; details.dataset.workspacePanel = "details";
     for (const child of Array.from(next.childNodes)) if (child !== stage && child !== graphs) details.append(child);
+    const sound = details.querySelector("#soundExplanations"); if (sound) details.prepend(sound);
     next.append(transport, stage, graphs, details);
   }
   const api = { mount, prepareResults, CATEGORIES, VIEWS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.PneumaticWorkspace = api;
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
+
+/* Presentation of solver quantities, never an acoustic model or a power fit. */
+(function (root) {
+  "use strict";
+  const finite = Number.isFinite;
+  const thresholdPercent = fraction => Number((fraction * 100).toPrecision(12));
+  const eventTime = (s, key) => finite(s[key]) && s[key] >= 0 && s[key] <= s.duration ? s[key] : null;
+  function timing(s, p) {
+    const events = ["usefulTime", "exitTime", "strongBrakeTime"].map(key => ({ key, time: eventTime(s, key) }));
+    const [useful, exit, brake] = events.map(event => event.time);
+    // A linear event window, not the phase-paced playback timeline. Missing
+    // exit uses the full observation interval rather than inventing an exit.
+    const lastEvent = Math.max(0, ...events.map(event => event.time ?? 0));
+    const end = exit === null ? s.duration : Math.min(s.duration, Math.max(.001, lastEvent * 1.12));
+    for (const event of events) event.percent = event.time === null || !(end > 0) ? null : event.time / end * 100;
+    let verdict = "unavailable";
+    if (exit === null) verdict = "no-exit";
+    else if (p.airbrakeLength === 0) verdict = "no-pin";
+    else if (brake === null) verdict = "no-slowing";
+    else if (useful !== null) {
+      if (brake === useful) verdict = "same-threshold";
+      else if (brake === exit) verdict = "same-exit";
+      else if (brake > exit) verdict = "after-exit";
+      else verdict = brake > useful ? "after-threshold" : "early";
+    }
+    return { events, end, verdict, marginMs: useful !== null && brake !== null ? (brake - useful) * 1000 : null };
+  }
+  function verdictText(value, t) {
+    const text = {
+      "no-exit": ["BB exit not reached · timing unresolved", "BB nije izašao · vremenski odnos nije riješen"],
+      "no-pin": ["Airbrake off · no braking comparison", "Kočnica isključena · nema usporedbe kočenja"],
+      "no-slowing": ["Slowing threshold not reached in this run", "Prag usporavanja nije dosegnut u ovoj simulaciji"],
+      "same-threshold": ["Energy threshold and slowing coincide", "Prag energije i usporavanje se podudaraju"],
+      "same-exit": ["Substantial slowing coincides with BB exit", "Značajno usporavanje podudara se s izlaskom BB-a"],
+      "after-exit": ["Substantial slowing begins after BB exit", "Značajno usporavanje počinje nakon izlaska BB-a"],
+      "after-threshold": ["Energy threshold first · BB still in barrel when slowing starts", "Prag energije prvi · BB je još u cijevi pri početku usporavanja"],
+      early: ["Substantial slowing begins before the energy threshold", "Značajno usporavanje počinje prije praga energije"],
+      unavailable: ["Timing comparison unavailable", "Vremenska usporedba nije dostupna"]
+    };
+    return t(...(text[value] || text.unavailable));
+  }
+  function timingMarkup(s, p, t, fmt, stamp) {
+    const model = timing(s, p), labels = [
+      `${thresholdPercent(p.usefulFraction)}% ${t("peak BB energy", "vršne energije BB-a")}`,
+      t("BB exit", "Izlazak BB-a"), t("Strong slowing after entry", "Snažno usporavanje nakon ulaska")
+    ];
+    const colors = ["useful", "exit", "brake"], exit = model.events[1];
+    const missing = key => key === "strongBrakeTime" && p.airbrakeLength === 0 ? t("airbrake off", "kočnica isključena") : t("not reached", "nije dosegnuto");
+    return `<section id="shotTiming" class="shot-timing" data-verdict="${model.verdict}" aria-label="${t("Pneumatic timing target", "Cilj pneumatskog vremenskog odnosa")}">
+      <div class="shot-timing-heading"><strong>${t("Tuning target: energy before strong slowing", "Cilj: energija prije snažnog usporavanja")}</strong><span>${verdictText(model.verdict, t)}</span></div>
+      <div class="event-track" aria-hidden="true">${exit.percent === null ? "" : `<div class="event-fill" style="width:${exit.percent.toFixed(5)}%"></div>`}${model.events.map((event, i) => event.percent === null ? "" : `<i class="event-tick ${colors[i]}" style="left:${event.percent.toFixed(5)}%;--lane:${i}"></i>`).join("")}</div>
+      <div class="event-scale"><span>0 ms</span><span>${t("Linear event window", "Linearni prozor događaja")} · ${stamp(model.end)}</span></div>
+      <div class="event-key">${model.events.map((event, i) => `<button type="button" class="${colors[i]}" data-event="${event.key}" ${event.time === null ? "disabled" : ""}><span>${labels[i]}</span><strong>${event.time === null ? missing(event.key) : stamp(event.time)}</strong></button>`).join("")}</div>
+      <details id="timingReadingHelp" class="timing-reading-help" data-preserve-open><summary>${t("How to read this", "Kako čitati prikaz")}</summary><p class="timing-caveat">${t("Tinted area: before BB exit. Green is an energy threshold, not acceleration ending. Amber marks modeled slowing—not proof that the airbrake alone caused it. Click an event to seek its actual model time.", "Obojeno područje: prije izlaska BB-a. Zelena je prag energije, ne kraj ubrzavanja. Jantarna označuje modelirano usporavanje — ne dokazuje da ga uzrokuje samo zračna kočnica. Klikom na događaj prikažite stvarno vrijeme modela.")}</p></details>
+    </section>`;
+  }
+  function compare(value, reference) {
+    if (!finite(value) || value < 0) return { status: "unknown", percent: null, width: 0 };
+    if (!finite(reference) || reference < 0) return { status: "no-reference", percent: null, width: 0 };
+    if (reference === 0) return { status: "zero-reference", percent: null, width: 0 };
+    const percent = value / reference * 100;
+    if (!finite(percent)) return { status: "no-reference", percent: null, width: 0 };
+    return { status: percent < 100 ? "lower" : percent > 100 ? "higher" : "same", percent, width: Math.min(percent, 200) / 2 };
+  }
+  function soundQuantities(s, baseline) {
+    const impact = s.valid && eventTime(s, "pistonHitTime") !== null ? s.impactEnergy : null;
+    const flow = s.valid && eventTime(s, "exitTime") !== null ? s.peakOutflow : null;
+    const referenceImpact = baseline?.valid && eventTime(baseline, "pistonHitTime") !== null ? baseline.impactEnergy : null;
+    const referenceFlow = baseline?.valid && eventTime(baseline, "exitTime") !== null ? baseline.peakOutflow : null;
+    return { impact, flow, referenceImpact, referenceFlow, impactComparison: compare(impact, referenceImpact), flowComparison: compare(flow, referenceFlow) };
+  }
+  function comparisonMarkup(comparison, reference, unit, kind, t, fmt) {
+    const { status, percent, width } = comparison;
+    const names = kind === "impact" ? {
+      lower: ["Less contact energy than reference", "Manje energije kontakta od reference"],
+      higher: ["More contact energy than reference", "Više energije kontakta od reference"],
+      same: ["Same contact energy as reference", "Jednaka energija kontakta kao referenca"]
+    } : {
+      lower: ["Lower observed outflow than reference", "Manji opaženi protok od reference"],
+      higher: ["Higher observed outflow than reference", "Veći opaženi protok od reference"],
+      same: ["Same observed outflow as reference", "Jednak opaženi protok kao referenca"]
+    };
+    const unknown = status === "unknown" ? t("Event missing · quantity unknown, not zero", "Događaj nedostaje · veličina nepoznata, nije nula") : status === "zero-reference" ? t("Zero reference · percentage undefined", "Nulta referenca · postotak nije definiran") : t("Reference unavailable · no relative comparison", "Referenca nije dostupna · nema relativne usporedbe");
+    return `<div class="sound-comparison" data-comparison="${status}"><div class="comparison-heading"><span>${t("Against the no-airbrake reference", "Usporedba s referencom bez kočnice")}</span><strong>${percent === null ? "—" : fmt(percent, 1, "%")}</strong></div>
+      <div class="comparison-track" aria-hidden="true">${percent === null ? "" : `<div class="comparison-fill" style="width:${width.toFixed(5)}%"></div><i class="comparison-reference"></i>`}</div>
+      <div class="comparison-scale" aria-hidden="true"><span>0%</span><span>100%</span><span>200%</span></div>
+      <span class="comparison-meaning">${names[status] ? t(...names[status]) : unknown}</span>
+      <p class="comparison-note">${t("Reference", "Referenca")}: ${fmt(reference, 3, unit)}. ${percent > 200 ? t("Bar capped at 200%; the number above is uncapped. ", "Traka je ograničena na 200%; broj iznad nije. ") : ""}${t("This compares the modeled quantity—not sound reduction.", "Uspoređuje se modelirana veličina — ne smanjenje zvuka.")}</p></div>`;
+  }
+  function soundMarkup(s, baseline, t, fmt) {
+    const q = soundQuantities(s, baseline);
+    const impact = finite(q.impact) ? q.impact * 1000 : null, referenceImpact = finite(q.referenceImpact) ? q.referenceImpact * 1000 : null;
+    const flow = finite(q.flow) ? q.flow * 1000 : null, referenceFlow = finite(q.referenceFlow) ? q.referenceFlow * 1000 : null;
+    return `<section id="soundExplanations" class="sound-explanations" tabindex="-1" aria-label="${t("Piston impact and muzzle blast explained", "Objašnjenje udara pistona i praska na ustima")}">
+      <div class="sound-heading"><div><strong>${t("Two different sound contributors", "Dva različita doprinosa zvuku")}</strong><p>${t("The piston makes a mechanical strike; escaping air makes a muzzle blast. These bars compare modeled quantities, not measured loudness. 100% = the same inputs and piston mass, with zero airbrake projection.", "Piston stvara mehanički udarac, a izlazak zraka prasak na ustima. Trake uspoređuju modelirane veličine, ne izmjerenu glasnoću. 100% = isti ulazi i masa pistona, uz nulto izbočenje zračne kočnice.")}</p></div><span class="tag unknown">${t("not dB", "nisu dB")}</span></div>
+      <div class="intensity-grid">
+      <article class="intensity sound-explainer impact-primary" data-comparison="${q.impactComparison.status}"><div class="intensity-head"><strong>${t("Piston impact — mechanical strike", "Udar pistona — mehanički udarac")}</strong><output>${fmt(impact, 2, "mJ")}</output></div>
+      <p class="sound-quantity">${t("Modeled energy at first contact · ½mv²", "Modelirana energija pri prvom kontaktu · ½mv²")}</p>
+      ${comparisonMarkup(q.impactComparison, referenceImpact, "mJ", "impact", t, fmt)}
+      <p><strong>${t("What it means:", "Što to znači:")}</strong> ${t("This is the piston energy that reaches the cylinder head—the source of the mechanical thump. More energy can feed a stronger strike, but the bumper determines how quickly it is absorbed. Energy alone does not give peak force or loudness.", "To je energija kojom piston dolazi do glave cilindra — izvor mehaničkog udarca. Više energije može doprinijeti jačem udaru, ali odbojnik određuje koliko se brzo apsorbira. Sama energija ne određuje vršnu silu ni glasnoću.")}</p>
+      <p>${t("Actual sound also depends on bumper material, spring vibration and receiver/stock resonance. No dB or durability prediction.", "Stvarni zvuk ovisi i o materijalu odbojnika, vibraciji opruge te rezonanciji kućišta i kundaka. Ovo nije predviđanje dB ni trajnosti.")}</p>
+      <p class="sound-measured">${t("First-contact speed", "Brzina pri prvom kontaktu")}: <strong>${fmt(q.impact === null ? null : s.pistonImpactVelocity, 2, "m/s")}</strong></p></article>
+      <article class="intensity sound-explainer muzzle-primary" data-comparison="${q.flowComparison.status}"><div class="intensity-head"><strong>${t("Muzzle blast — escaping air", "Prasak na ustima — izlazak zraka")}</strong><output>${fmt(flow, 2, "g/s")}</output></div>
+      <p class="sound-quantity">${t("Peak modeled muzzle outflow observed during this run", "Najveći modelirani protok na ustima opažen tijekom simulacije")}</p>
+      ${comparisonMarkup(q.flowComparison, referenceFlow, "g/s", "flow", t, fmt)}
+      <p><strong>${t("What it means:", "Što to znači:")}</strong> ${t("After the BB exits, compressed air escapes from the barrel and contributes a separate air blast. Pressure, gas inventory and discharge rate describe that release. A higher outflow is not the same as a measured increase in sound.", "Nakon izlaska BB-a stlačeni zrak izlazi iz cijevi i doprinosi zasebnom zračnom prasku. Tlak, masa plina i brzina istjecanja opisuju to pražnjenje. Veći protok nije isto što i izmjeren porast glasnoće.")}</p>
+      <p>${t("This is separate from the piston strike—not dB and not a suppressor prediction.", "To je odvojeno od udara pistona — nisu dB niti predviđanje učinka prigušivača.")}</p>
+      <p class="sound-measured">${t("Pressure at BB exit", "Tlak pri izlasku BB-a")}: <strong>${fmt(s.exitTime === null ? null : (s.exitPressure - s.ambientPressure) / 1e5, 2, "bar(g)")}</strong> · ${t("Gas at exit", "Plin pri izlasku")}: <strong>${fmt(s.exitGasMass === null ? null : s.exitGasMass * 1e6, 1, "mg")}</strong> · ${t("Discharged in run", "Ispušteno tijekom simulacije")}: <strong>${fmt(s.exitTime === null ? null : s.muzzleMass * 1e6, 1, "mg")}</strong>.</p>
+      <p>${s.dischargeComplete && baseline?.dischargeComplete ? t("Both runs relaxed to within 1% of atmospheric pressure.", "Obje simulacije približile su se atmosferskom tlaku unutar 1%.") : t("Discharge remains unresolved in one or both runs. Later outflow may change the observed comparison; unfinished discharge is not silence.", "Pražnjenje nije završeno u jednoj ili obje simulacije. Kasniji protok može promijeniti opaženu usporedbu; nezavršeno pražnjenje ne znači tišinu.")}</p></article>
+      </div></section>`;
+  }
+  const api = { thresholdPercent, timing, verdictText, timingMarkup, compare, soundQuantities, soundMarkup };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.PneumaticInsights = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
 
 
@@ -2119,6 +2292,7 @@
 (() => {
   "use strict";
   const P = globalThis.PneumaticPhysics, C = globalThis.PneumaticCalibration, O = globalThis.PneumaticOptimizer, B = globalThis.PneumaticPlayback;
+  const I = globalThis.PneumaticInsights;
   const $ = id => document.getElementById(id), finite = Number.isFinite;
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   let language = "en";
@@ -2194,7 +2368,7 @@
   const events = () => [
     ["engageTime", t("Pin enters head", "Ulazak pina u glavu"), ""],
     ["decelTime", t("Piston starts slowing", "Piston počinje usporavati"), ""],
-    ["usefulTime", `${Math.round(p.usefulFraction * 100)}% ${t("of peak BB energy", "vršne energije BB-a")}`, "useful"],
+    ["usefulTime", `${I.thresholdPercent(p.usefulFraction)}% ${t("of peak BB energy", "vršne energije BB-a")}`, "useful"],
     ["strongBrakeTime", t("Substantial slowing after entry", "Značajno usporavanje nakon ulaska"), "brake"],
     ["exitTime", t("BB exit", "Izlazak BB-a"), ""],
     ["preContactReversalTime", t("Reversal before contact (model)", "Povrat prije kontakta (model)"), ""],
@@ -2465,8 +2639,8 @@
     }
     const s = shot, retention = s.exitEnergy !== null && baseline?.valid && baseline.exitEnergy > 0 ? 100 * s.exitEnergy / baseline.exitEnergy : null;
     const diff = s.engageTime !== null && s.exitTime !== null ? (s.engageTime - s.exitTime) * 1000 : null;
-    const delta = s.strongBrakeTime !== null && s.usefulTime !== null ? (s.strongBrakeTime - s.usefulTime) * 1000 : null;
-    const verdict = delta === null ? t("Timing comparison unavailable", "Vremenska usporedba nije dostupna") : delta >= 0 ? t("Energy threshold reached before substantial slowing", "Prag energije dosegnut prije značajnog usporavanja") : t("Substantial slowing starts before the energy threshold", "Značajno usporavanje počinje prije praga energije");
+    const timing = I.timing(s, p), delta = timing.marginMs;
+    const verdict = I.verdictText(timing.verdict, t);
     const next = document.createElement("div");
     next.innerHTML = `<div class="readout-grid">
       ${metric(t("Cylinder / barrel volumes", "Volumeni cilindra / cijevi"), `${fmt(s.cylinderVolume * 1e6, 2)} / ${fmt(s.barrelVolume * 1e6, 2)}`, "cm³", "geometry")}
@@ -2482,8 +2656,7 @@
       <section class="panel timing-card"><div class="timing-head"><strong>${verdict}</strong><span>${fmt(delta, 2, "ms")}</span></div><p class="small-note">${t("The amber event is measured from the modeled acceleration after entry—not proof that all slowing is caused by the pin. Compression can slow a piston without an airbrake. Green marks a chosen share of maximum BB energy before exit, not a universal optimum.", "Jantarni događaj temelji se na modeliranom ubrzanju nakon ulaska — nije dokaz da je sve usporavanje uzrokovano pinom. Kompresija može usporiti piston i bez kočnice. Zelena označuje odabrani udio najveće energije BB-a prije izlaska, ne univerzalni optimum.")}</p><div class="event-list">${events().map(([key, label, cls]) => `<button type="button" data-event="${key}" class="${cls}" ${s[key] === null ? "disabled" : ""}>${label}<br><span class="mono">${stamp(s[key])}</span></button>`).join("")}</div></section>
       <section class="panel stage"><div class="stage-toolbar"><button class="primary-button" type="button" id="playButton">${t("Fire / play", "Opali / pokreni")}</button><button class="secondary-button" id="resetButton" type="button">${t("Reset", "Početak")}</button><input id="scrubber" aria-label="${t("Shot time", "Vrijeme opaljenja")}" type="range" min="0" max="1000" value="${fraction * 1000}"><span id="clock" class="clock mono"></span></div><canvas id="mechanism" role="img" aria-label="${t("Schematic piston, airbrake and BB positions; live numeric values below", "Shematski položaji pistona, pina i BB-a; brojčane vrijednosti ispod")}"></canvas><div id="phaseText" class="stage-status" aria-live="off"></div><div id="liveStrip" class="live-strip"></div><p class="results-note">${t("Schematic cutaway. Glow indicates modeled pressure; particles and trails illustrate flow and motion, not resolved gas dynamics or sound. Every cue pauses with model time. Signed arrows preserve reverse motion.", "Shematski presjek. Sjaj označuje modelirani tlak; čestice i tragovi ilustriraju protok i gibanje, ne detaljnu dinamiku plina ni zvuk. Sve se pauzira s vremenom modela. Strelice prikazuju i povratno gibanje.")}</p></section>
       <section class="panel graphs"><div class="graphs-header"><div><h2>${t("Shot traces", "Krivulje opaljenja")}</h2><p>${t("Pressure: amber cylinder, cyan behind BB. Events: green energy threshold, dashed amber slowing, cyan exit. Negative values remain visible.", "Tlak: jantarni cilindar, cijan iza BB-a. Događaji: zeleni prag energije, isprekidano jantarno usporavanje, cijan izlazak. Negativne vrijednosti ostaju vidljive.")}</p></div></div><div class="chart-grid">${[["pressureChart", t("Pressure vs time", "Tlak kroz vrijeme"), "bar(g)"], ["pistonChart", t("Piston velocity vs time", "Brzina pistona kroz vrijeme"), "m/s"], ["bbChart", t("BB velocity vs time", "Brzina BB-a kroz vrijeme"), "m/s"]].map(([id, label, units]) => `<div class="chart"><div class="chart-title"><span>${label}</span><span>${units} / ms</span></div><canvas id="${id}" role="img" aria-label="${label}; ${t("numeric values in live readouts; export full trace below", "brojčane vrijednosti u prikazu uživo; izvoz cijele krivulje ispod")}"></canvas></div>`).join("")}</div></section>
-      <div class="intensity-grid"><article class="intensity impact-primary"><div class="intensity-head"><strong>${t("Piston impact · mechanical strike", "Udar pistona · mehanički udarac")}</strong><output>${fmt(s.impactEnergy, 3, "J")}</output></div><p>${s.impactEnergy === null ? t("No contact occurred during this run. Impact intensity is unknown, not zero.", "Kontakt se nije dogodio tijekom simulacije. Jačina udara je nepoznata, a ne nula.") : `${t("First-contact piston speed", "Brzina pistona pri prvom kontaktu")}: ${fmt(s.pistonImpactVelocity, 2, "m/s")}.`}</p><p>${t("Remaining piston kinetic energy indicates how much energy reaches the mechanical strike. It does not determine peak force or loudness. The rubber bumper, spring vibration and body resonance change the sound. No universal 0–100 or dB scale is used.", "Preostala kinetička energija pistona pokazuje energiju koja dolazi do mehaničkog udara. Ne određuje vršnu silu ni glasnoću. Gumeni odbojnik, vibracije opruge i rezonancija tijela mijenjaju zvuk. Ne koristi se univerzalna ljestvica 0–100 ni dB.")}</p></article>
-      <article class="intensity"><div class="intensity-head"><strong>${t("Muzzle discharge · escaping air", "Pražnjenje na ustima · izlazak zraka")}</strong><output>${fmt(s.exitPressure === null ? null : (s.exitPressure - s.ambientPressure) / 1e5, 2, "bar(g)")}</output></div><p>${t("Peak muzzle outflow", "Vršni protok na ustima")}: ${fmt(s.exitTime === null ? null : s.peakOutflow * 1000, 2, "g/s")} · ${t("Discharged during run", "Ispušteno tijekom simulacije")}: ${fmt(s.exitTime === null ? null : s.muzzleMass * 1e6, 1, "mg")}.</p><p>${t("Gas inventory at exit", "Masa plina pri izlasku")}: ${fmt(s.exitGasMass === null ? null : s.exitGasMass * 1e6, 1, "mg")}. ${s.dischargeComplete ? t("Pressure relaxed within 1% of atmosphere.", "Tlak se približio atmosferi unutar 1%.") : t("Discharge may continue beyond the run.", "Pražnjenje se može nastaviti nakon simulacije.")}</p><p>${t("These are model quantities, not acoustic intensity or suppressor predictions.", "Ovo su veličine modela, a ne predviđanje akustičkog intenziteta ili prigušivača.")}</p></article></div>
+      ${I.soundMarkup(s, baseline, t, fmt)}
       <section class="panel insight"><div class="panel-heading"><h2>${t("Energy, verification and uncertainty", "Energija, provjera i nesigurnost")}</h2><span class="tag unknown">${t("not experimentally validated", "nije eksperimentalno potvrđeno")}</span></div><div class="assumption-grid"><span>${t("Maximum BB energy observed", "Najveća opažena energija BB-a")}</span><strong>${fmt(s.maxBbEnergy, 3, "J")}</strong><span>${t("Energy lost before exit", "Energija izgubljena prije izlaska")}</span><strong>${fmt(s.bbEnergyLoss, 3, "J")}</strong><span>${t("Positive / negative net BB work", "Pozitivan / negativan neto rad na BB-u")}</span><strong>${fmt(s.positiveBbWork, 3)} / ${fmt(s.negativeBbWork, 3, "J")}</strong><span>${t("Energy balance residual", "Odstupanje energetske bilance")}</span><strong>${fmt(s.energyResidual * 1000, 4, "mJ")}</strong><span>${t("Gas mass residual", "Odstupanje bilance mase plina")}</span><strong>${s.massResidual.toExponential(2)} kg</strong><span>${t("Ambient barrel sound-crossing scale", "Vrijeme prolaza zvuka kroz cijev pri okolišnim uvjetima")}</span><strong>${stamp(s.soundCrossingTime)}</strong></div>
       <p class="small-note">${t("A small numerical residual does not validate the physics. Two uniform-pressure gas volumes, approximate series duct losses, an effective leaky-piston BB and atmospheric pressure ahead of it are simplifications. Pressure waves, spring surge, detailed cup/bumper deformation and structural acoustics are not resolved. Sub-millisecond timing needs instrumented and spatial-flow validation.", "Malo numeričko odstupanje ne potvrđuje fizikalni model. Dva plinska volumena jednolikog tlaka, približni gubici u kanalima, BB kao efektivni propusni klip i atmosferski tlak ispred njega pojednostavljenja su. Tlačni valovi, valovi opruge, detaljna deformacija brtve/odbojnika i strukturna akustika nisu razriješeni. Vremenski odnos ispod milisekunde zahtijeva instrumentiranu i prostornu provjeru protoka.")}</p>
       <div class="fit-row"><button class="secondary-button" id="convergenceButton" type="button">${t("Check finer time steps", "Provjeri manje vremenske korake")}</button><button class="secondary-button" id="sensitivityButton" type="button">${t("Check input sensitivity", "Provjeri osjetljivost na ulaze")}</button><button class="secondary-button" id="exportRun" type="button">${t("Export setup and full trace", "Izvezi postavke i cijelu krivulju")}</button></div>
@@ -2499,9 +2672,11 @@
       compactMetric(t("Predicted exit", "Predviđeni izlazak"), fmt(s.exitEnergy, 3, "J"), `${fmt(fps(s.exitVelocity), 1, "fps")} · ${t("volume ratio", "omjer volumena")} ${fmt(s.ratio, 2)}`),
       compactMetric(t("Piston strike", "Udar pistona"), fmt(s.impactEnergy === null ? null : s.impactEnergy * 1000, 2, "mJ"), s.impactEnergy === null ? t("No contact recorded", "Kontakt nije zabilježen") : t("Contact energy · not dB", "Energija kontakta · ne dB")),
       compactMetric(t("Muzzle pressure", "Tlak na ustima"), fmt(s.exitPressure === null ? null : (s.exitPressure - s.ambientPressure) / 1e5, 2, "bar(g)"), `${t("Peak outflow", "Vršni protok")}: ${fmt(s.exitTime === null ? null : s.peakOutflow * 1000, 2, "g/s")}`),
-      compactMetric(t("Useful energy → slowing", "Korisna energija → usporavanje"), fmt(delta, 2, "ms"), delta === null ? t("Timing unavailable", "Vrijeme nije dostupno") : delta >= 0 ? t("Threshold reached first", "Prag je dosegnut prvi") : t("Slowing begins first", "Usporavanje počinje prvo"))
+      compactMetric(t("Useful energy → slowing", "Korisna energija → usporavanje"), fmt(delta, 2, "ms"), delta === null ? t("Timing unavailable", "Vrijeme nije dostupno") : delta === 0 ? t("Threshold and slowing coincide", "Prag i usporavanje se podudaraju") : delta > 0 ? t("Threshold reached first", "Prag je dosegnut prvi") : t("Slowing begins first", "Usporavanje počinje prvo"))
     ].join("");
     globalThis.PneumaticWorkspace.prepareResults(next, summary, {
+      timingHTML: I.timingMarkup(s, p, t, fmt, stamp),
+      explainSound: t("Piston impact & muzzle blast — what do these mean?", "Udar pistona i prasak na ustima — što to znači?"),
       live: t("Live values · pressure, velocity & spring", "Vrijednosti uživo · tlak, brzina i opruga"),
       help: t("Playback options & model notes", "Opcije prikaza i napomene modela"),
       flag: p.airbrakeLength ? t("Airbrake active · conditional model, not measured performance", "Zračna kočnica uključena · uvjetni model, ne izmjerene performanse") : t("No-airbrake reference · conditional model, not measured performance", "Referenca bez kočnice · uvjetni model, ne izmjerene performanse")
@@ -2692,6 +2867,11 @@
       else if (button.id === "resetButton") { stop(); setFrame(0); }
       else if (button.id === "convergenceButton") runDiagnostic("convergence");
       else if (button.id === "sensitivityButton") runDiagnostic("sensitivity");
+      else if (button.id === "explainSound") {
+        stop(); workspace.selectView("details"); $("workspaceBody").scrollTop = 0;
+        $("soundExplanations").focus({ preventScroll: true });
+        if (window.innerWidth <= 960) $("previewPanel").scrollIntoView({ block: "start" });
+      }
       else if (button.id === "exportRun") download("airsoft-pneumatic-run.json", { schemaVersion: 3, solverVersion: P.VERSION, identity: { selectedPlatform, component, springLabel, pinLabel }, provenance, setup: p, result: shot, baseline: { exitEnergy: baseline?.exitEnergy ?? null, impactEnergy: baseline?.impactEnergy ?? null }, limitations: "Unvalidated two-volume, leaky-piston model; not exact joules or dB; see docs/MODEL.md" });
     };
     results.oninput = event => {

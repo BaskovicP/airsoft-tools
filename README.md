@@ -39,6 +39,10 @@ On laptop/desktop-sized viewports, settings and results have independent scroll 
 
 Use **Shot**, **Graphs**, **Results**, **Optimize**, and **Chrono** to switch views directly. The compact Shot view shows the cutaway plus predicted exit energy, volume ratio, piston-contact energy, muzzle pressure/flow and useful-energy timing. Full telemetry and playback/model notes expand on demand. Playback and scrubbing remain available in Shot, Graphs and Results. Applying an optimizer choice opens Shot, selects the relevant settings category and replays it.
 
+The Shot view also includes a visual tuning-target bar: green = the selected share of peak BB energy, cyan = BB exit, amber = substantial slowing after pin entry. Its explicitly labeled linear event window may be shorter than the full shot; it is a static event comparison, not a playback-progress bar. Event buttons seek actual model time. Missing events have no marker, and the no-airbrake reference never invents a braking event. Coincident markers keep their true positions with separate dot lanes.
+
+**Piston impact & muzzle blast — what do these mean?** opens the explanatory cards at the top of Results. They distinguish the mechanical strike from escaping-air discharge, with actual modeled mJ and g/s rather than an arbitrary loudness index. The gradient bars compare each quantity with the same modeled inputs/mass and zero airbrake projection: 100% is that reference. The drawn scale ends at 200%, with any larger numerical ratio shown uncapped and the cap disclosed. Missing events, invalid baselines and zero baselines stay unavailable; none is labeled quiet. These ratios are not sound reduction, dB, peak force, durability or suppressor predictions. Outflow comparisons are peaks observed during each run; unfinished discharge remains explicitly unresolved.
+
 Short/narrow screens use normal page flow rather than a fixed-height workspace. Mobile **Settings / Preview** shortcuts jump and focus the relevant controls. Model warnings remain visible; hiding long explanations does not hide invalid inputs or missing-event notices. Open shot disclosures and selected categories/views survive parameter edits; chrono drafts remain intact.
 
 ### Animation and outputs
@@ -92,6 +96,7 @@ Searches are deterministic and capped at 60/120/240 combinations, can be cancell
 - `src/playback.js`: physical-time sampling, phase-paced playback and consistent drawing geometry;
 - `src/view.js`: keyed incremental DOM updates that preserve live canvases and readouts;
 - `src/workspace.js`: grouped settings, view navigation, compact result organization and scroll preservation;
+- `src/insights.js`: event-timing presentation and explicitly relative sound-contributor quantities/explanations;
 - `src/animation.js`: solver-driven cutaway rendering and schematic visual cues;
 - `src/app.js`: bilingual controls, playback, graphs and data UI.
 

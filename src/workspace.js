@@ -101,11 +101,20 @@
     if (incomplete) {
       const warning = doc.createElement("p"); warning.className = "shot-incomplete"; warning.setAttribute("role", "status"); warning.textContent = incomplete; stage.insertBefore(warning, flag.nextSibling);
     }
-    stage.append(glance, live, help);
+    if (caption.timingHTML) {
+      const wrapper = doc.createElement("div"); wrapper.innerHTML = caption.timingHTML;
+      stage.insertBefore(wrapper.children[0], stage.querySelector("#phaseText"));
+    }
+    stage.append(glance);
+    if (caption.explainSound) {
+      const explain = doc.createElement("button"); explain.id = "explainSound"; explain.type = "button"; explain.className = "sound-explain-link"; explain.textContent = caption.explainSound; stage.append(explain);
+    }
+    stage.append(live, help);
     stage.id = "workspace-shot"; stage.dataset.workspacePanel = "shot";
     graphs.id = "workspace-graphs"; graphs.dataset.workspacePanel = "graphs";
     const details = doc.createElement("section"); details.id = "workspace-details"; details.dataset.workspacePanel = "details";
     for (const child of Array.from(next.childNodes)) if (child !== stage && child !== graphs) details.append(child);
+    const sound = details.querySelector("#soundExplanations"); if (sound) details.prepend(sound);
     next.append(transport, stage, graphs, details);
   }
   const api = { mount, prepareResults, CATEGORIES, VIEWS };

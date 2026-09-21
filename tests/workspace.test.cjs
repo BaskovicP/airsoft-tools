@@ -104,15 +104,17 @@ test("prepared results retain one transport/canvas and keep incomplete warnings 
   const { doc, node } = documentFixture();
   const canvas = node("canvas", { id: "mechanism" }), live = node("div", { id: "liveStrip" }), transport = node("div", { class: "stage-toolbar" });
   const stage = node("section", { class: "stage" }, [node("p", { class: "playback-reference" }), transport, canvas, live, node("p", { class: "results-note" }), node("div", { class: "playback-options" })]);
-  const graphs = node("section", { class: "graphs" }), details = node("div", { class: "readout-grid" });
-  const next = node("div", {}, [details, stage, graphs]);
-  W.prepareResults(next, "<div><strong>2.3 J</strong></div>", { flag: "Model only", live: "Live values", help: "Options" }, "Missing contact");
+  const graphs = node("section", { class: "graphs" }), details = node("div", { class: "readout-grid" }), sound = node("section", { id: "soundExplanations" });
+  const next = node("div", {}, [details, sound, stage, graphs]);
+  W.prepareResults(next, "<div><strong>2.3 J</strong></div>", { flag: "Model only", live: "Live values", help: "Options", timingHTML: '<section id="shotTiming"></section>', explainSound: "Impact explained" }, "Missing contact");
   assert.equal(next.children[0], transport); assert.equal(transport.id, "workspace-transport");
   assert.equal(next.querySelector("#mechanism"), canvas); assert.equal(next.querySelectorAll("#mechanism").length, 1);
   assert.equal(next.querySelector("#liveStrip"), live); assert.equal(live.parentNode.id, "liveValuesDetails");
   assert.equal(next.querySelector(".shot-incomplete").parentNode, stage);
   assert.equal(details.parentNode.id, "workspace-details"); assert.equal(graphs.dataset.workspacePanel, "graphs");
   assert.equal(next.querySelector("#playbackDetails").getAttribute("data-preserve-open"), "");
+  assert.equal(next.querySelector("#shotTiming").parentNode, stage); assert.equal(next.querySelector("#explainSound").parentNode, stage);
+  assert.equal(next.querySelector("#workspace-details").children[0], sound);
 });
 
 test("full-render scroll snapshot restores both workspace panes", () => {

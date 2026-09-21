@@ -94,3 +94,14 @@ test("parameter preset paths and live frames cannot rebuild the results shell", 
   assert.doesNotMatch(functionSource("renderOptimizerResults"), /\brender\(\)/);
   assert.match(functionSource("setFrame"), /if \(!\$\("liveStrip"\)\.firstChild\)/);
 });
+
+test("impact explanation shortcut reveals Results and moves focus to the actual cards", () => {
+  const { context: c, nodes } = harness(); let view, focused = false, revealed = false;
+  c.workspace = { selectView: value => { view = value; } }; c.window = { innerWidth: 390 };
+  nodes.results.contains = () => true; nodes.workspaceBody = { scrollTop: 400 };
+  nodes.soundExplanations = { focus: () => { focused = true; } }; nodes.previewPanel = { scrollIntoView: () => { revealed = true; } };
+  vm.runInContext(functionSource("bindResults"), c); c.bindResults();
+  nodes.results.onclick({ target: { closest: () => ({ id: "explainSound", dataset: {} }) } });
+  assert.equal(view, "details"); assert.equal(focused, true); assert.equal(revealed, true);
+  assert.equal(nodes.workspaceBody.scrollTop, 0); assert.equal(c.playing, false);
+});
