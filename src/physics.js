@@ -1,7 +1,7 @@
 /* Pure, dependency-free conservative lumped model. See docs/MODEL.md. */
 (function (root) {
   "use strict";
-  const VERSION = "3.0.0";
+  const VERSION = "3.1.0";
   const R = 287.05, GAMMA = 1.4, CV = R / (GAMMA - 1), CP = CV + R;
   const area = d => Math.PI * (d / 2000) ** 2;
   const DEFAULTS = Object.freeze({
@@ -12,11 +12,26 @@
     deadVolume: .55, breechVolume: .45, dischargeCoefficient: .75,
     pistonLeak: .005, nozzleLeak: .005, bbLeakCoefficient: .15,
     springStiffness: 550, springPreload: 50, springMass: 0, springCurve: [],
+    springLengthMode: 0, springFreeLength: 0, springInstalledLength: 0, springCutLength: 0,
+    springActiveCoils: 0, springRemovedCoils: 0, springSolidLength: 0,
     pistonFriction: 3.2, sealFriction: .01, rearDamping: 0, bbBreakaway: 1.35, barrelDrag: .11,
     restitution: .05, heatTransfer: 0, ambientPressure: 101.3, airTemperature: 20,
     usefulFraction: .95, decelThreshold: 1000, maxTime: 60
   });
   function normalize(raw = {}) { return { ...DEFAULTS, ...raw }; }
+  // Lengths are axial mm, not wire length. Rate scaling is a uniform-coil estimate.
+  // Installed length is the seat separation at front contact, after any spacers.
+  function springState(p) {
+    const lengths = p.springLengthMode === 1;
+    const cut = lengths ? p.springCutLength : 0;
+    const freeLength = lengths ? p.springFreeLength - cut : null;
+    const preload = lengths ? freeLength - p.springInstalledLength : p.springPreload;
+    const rateRatio = cut > 0 ? p.springActiveCoils / (p.springActiveCoils - p.springRemovedCoils) : 1;
+    return { freeLength, preload, cockedCompression: preload + p.strokeLength,
+      cockedLength: lengths ? p.springInstalledLength - p.strokeLength : null,
+      stiffness: p.springStiffness * rateRatio, rateRatio,
+      coilBindChecked: lengths && p.springSolidLength > 0 };
+  }
   function validate(raw) {
     const p = normalize(raw), errors = [];
     const positive = ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "headBore", "headLength", "nozzleBore", "nozzleLength", "deadVolume", "breechVolume", "ambientPressure", "maxTime"];
@@ -30,10 +45,21 @@
     if (p.airbrakeTipDiameter > p.airbrakeDiameter || p.airbrakeTaper > p.airbrakeLength && p.airbrakeLength > 0) errors.push("pin:profile");
     if (!(p.dischargeCoefficient > 0 && p.dischargeCoefficient <= 1) || !(p.bbLeakCoefficient >= 0 && p.bbLeakCoefficient <= 1) || !(p.restitution >= 0 && p.restitution <= 1)) errors.push("coefficient:range");
     if (!(p.usefulFraction > 0 && p.usefulFraction <= 1) || p.airTemperature <= -273.15 || p.maxTime > 250) errors.push("range:invalid");
+    if (![0, 1].includes(p.springLengthMode)) errors.push("spring:mode");
+    for (const key of ["springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
+    const spring = springState(p);
+    if (p.springLengthMode === 1) {
+      if (!(p.springFreeLength > 0 && p.springInstalledLength > p.strokeLength && spring.freeLength > 0)) errors.push("spring:lengths");
+      if (spring.preload < 0) errors.push("spring:slack");
+      if (p.springCutLength > 0 && !(p.springActiveCoils > 0 && p.springRemovedCoils < p.springActiveCoils)) errors.push("spring:coils");
+      if (p.springCutLength === 0 && p.springRemovedCoils > 0) errors.push("spring:cut-length");
+      if (p.springSolidLength > 0 && spring.cockedLength <= p.springSolidLength) errors.push("spring:coil-bind");
+      if (p.springCutLength > 0 && p.springCurve?.length) errors.push("spring:cut-curve");
+    }
     if (!Array.isArray(p.springCurve)) errors.push("spring:curve");
     else if (p.springCurve.length) {
       if (p.springCurve.length < 2 || p.springCurve.some((v, i, a) => !Array.isArray(v) || v.length !== 2 || !v.every(Number.isFinite) || v[0] < 0 || v[1] < 0 || i > 0 && v[0] <= a[i - 1][0])) errors.push("spring:curve");
-      else if (p.springCurve[0][0] > p.springPreload || p.springCurve.at(-1)[0] < p.springPreload + p.strokeLength) errors.push("spring:coverage");
+      else if (p.springCurve[0][0] > spring.preload || p.springCurve.at(-1)[0] < spring.cockedCompression) errors.push("spring:coverage");
     }
     if (!errors.length) {
       const g = geometry(p, p.strokeLength / 1000, 0);
@@ -68,8 +94,8 @@
     };
   }
   function springForce(p, x) {
-    const c = p.springPreload + p.strokeLength - x * 1000;
-    if (!p.springCurve?.length) return p.springStiffness * Math.max(0, c) / 1000;
+    const spring = springState(p), c = spring.preload + p.strokeLength - x * 1000;
+    if (!p.springCurve?.length) return spring.stiffness * Math.max(0, c) / 1000;
     const pairs = p.springCurve;
     for (let i = 1; i < pairs.length; i++) if (c <= pairs[i][0]) {
       const a = pairs[i - 1], b = pairs[i];
@@ -80,8 +106,9 @@
   function springEnergy(p, x) {
     const end = p.strokeLength / 1000;
     const points = [x, end];
+    const spring = springState(p);
     for (const pair of p.springCurve || []) {
-      const at = (p.springPreload + p.strokeLength - pair[0]) / 1000;
+      const at = (spring.preload + p.strokeLength - pair[0]) / 1000;
       if (at > x && at < end) points.push(at);
     }
     points.sort((a, b) => a - b);
@@ -265,7 +292,7 @@
       dischargeComplete: exited && Math.abs(final.pc - pa) < .01 * pa && Math.abs(final.pb - pa) < .01 * pa
     };
   }
-  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, geometry, pinVolume, pinDiameter, springForce, springEnergy, massFlow, passage, simulate };
+  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, geometry, pinVolume, pinDiameter, springState, springForce, springEnergy, massFlow, passage, simulate };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PneumaticPhysics = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

@@ -2,6 +2,7 @@
   "use strict";
   const P = typeof module !== "undefined" && module.exports ? require("./physics.js") : root.PneumaticPhysics;
   const SCHEMA = 3, KEY = "ssg10-pneumatic-lab-v3", OLD_KEY = "ssg10-pneumatic-lab-v2";
+  const LENGTH_FIELDS = ["springLengthMode", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"];
   const fps = v => v / .3048;
   const energy = (mass, speed) => .5 * mass / 1000 * (speed * .3048) ** 2;
   function reference() {
@@ -12,14 +13,17 @@
     const mass = Number(row.bbMass ?? row.mass ?? row.setup?.bbMass), speed = Number(row.fps ?? row.velocityFps);
     if (!(mass > 0 && mass <= 2 && speed > 0 && speed <= 2000)) return null;
     const sigma = Number(row.sigma ?? 1);
-    const setupComplete = row.setup && Object.keys(P.DEFAULTS).every(k => Object.hasOwn(row.setup, k));
+    // v3.0 had no length mode: only add inactive defaults to a complete old snapshot.
+    // Preserve confirmation/role/version; the old solver version remains fit-ineligible.
+    const previousComplete = row.solverVersion === "3.0.0" && row.setup && LENGTH_FIELDS.every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => !LENGTH_FIELDS.includes(k)).every(k => Object.hasOwn(row.setup, k));
+    const setupComplete = row.setup && (previousComplete || Object.keys(P.DEFAULTS).every(k => Object.hasOwn(row.setup, k)));
     const setup = !legacy && setupComplete && P.validate(row.setup).length === 0 ? P.normalize(row.setup) : null;
     const provenance = Object.fromEntries(Object.entries(row.provenance || {}).filter(([k, v]) => ["geometry", "spring"].includes(k) && ["assumed", "measured"].includes(v)));
     const confirmed = row.confirmed === true && Boolean(setup);
     const role = confirmed && ["train", "validation"].includes(row.role) ? row.role : "reference";
     return { id: String(row.id || `measurement-${Math.random().toString(36).slice(2)}`).slice(0, 100), bbMass: mass, fps: speed, sigma: sigma > 0 && sigma <= 100 ? sigma : 1,
       role, setup, confirmed, provenance, notes: String(row.notes || "").slice(0, 2000), solverVersion: legacy ? null : String(row.solverVersion || ""),
-      legacySetup: legacy ? row.setup || null : row.legacySetup || null };
+      legacySetup: legacy || !setup || previousComplete ? row.setup || row.legacySetup || null : row.legacySetup || null };
   }
   function decode(data) {
     const raw = typeof data === "string" ? JSON.parse(data) : data;
@@ -30,12 +34,18 @@
     return { schemaVersion: SCHEMA, solverVersion: P.VERSION, measurements: rows.map(r => cleanRecord(r, legacy)).filter(Boolean), migrated: legacy };
   }
   function encode(rows) { return { schemaVersion: SCHEMA, solverVersion: P.VERSION, measurements: rows }; }
-  function eligible(row) { return row.confirmed && row.setup && row.solverVersion === P.VERSION && row.provenance?.geometry === "measured" && row.provenance?.spring === "measured" && ["train", "validation"].includes(row.role); }
+  function eligible(row) { return row.confirmed && row.setup && !(row.setup.springLengthMode === 1 && row.setup.springCutLength > 0) && row.solverVersion === P.VERSION && row.provenance?.geometry === "measured" && row.provenance?.spring === "measured" && ["train", "validation"].includes(row.role); }
   function groups(rows) {
     const map = new Map();
     for (const r of rows) {
       const setup = { ...r.setup, bbMass: r.bbMass };
-      const identity = Object.fromEntries(Object.entries(setup).filter(([k]) => !["dischargeCoefficient", "maxTime", "decelThreshold", "usefulFraction"].includes(k)));
+      const identity = Object.fromEntries(Object.entries(setup).filter(([k]) => !["dischargeCoefficient", "maxTime", "decelThreshold", "usefulFraction", ...LENGTH_FIELDS].includes(k)));
+      // Only the force/compression law enters the ODE. Hidden inputs and alternate
+      // ways of entering that same law cannot manufacture independent conditions.
+      const spring = P.springState(setup);
+      identity.springPreload = spring.preload;
+      if (setup.springCurve.length) delete identity.springStiffness;
+      else identity.springStiffness = spring.stiffness;
       const key = JSON.stringify(identity);
       if (!map.has(key)) map.set(key, { setup, rows: [] });
       map.get(key).setup.maxTime = Math.max(map.get(key).setup.maxTime, setup.maxTime);
@@ -87,6 +97,6 @@
       boundReached: best.coefficient < .101 || best.coefficient > .999,
       weaklyConstrained: profile.filter(v => v.weightedMSE <= best.weightedMSE + 1).some(v => Math.abs(v.coefficient - best.coefficient) > .15) };
   }
-  const api = { SCHEMA, KEY, OLD_KEY, reference, cleanRecord, decode, encode, eligible, energy, fitLoss };
+  const api = { SCHEMA, KEY, OLD_KEY, reference, cleanRecord, decode, encode, eligible, energy, groups, fitLoss };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.PneumaticCalibration = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

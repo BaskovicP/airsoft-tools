@@ -1,4 +1,4 @@
-# Implemented model v3 — scope and verification
+# Implemented model v3.1 — scope and verification
 
 This release replaces the v2 pressure/airbrake heuristics with a conservative **two-volume, quasi-steady-flow engineering approximation**. It does not claim experimental SSG10 accuracy or implement every higher-fidelity item in the research plan. All quantities below are SI internally.
 
@@ -45,7 +45,28 @@ Piston/nozzle leakage inputs are *effective* areas including loss coefficients. 
 
 ## Mechanics, short stroking and contact
 
-A spring is either linear `F=k(preload+S−x)` or linearly interpolated measured force/compression pairs covering the complete installed range. Spring energy is the integral of that force; spring labels never multiply output. Preload is compression remaining at the front contact position, not an extra spacer of assumed zero baseline. Users must translate actual spring free/installed lengths and spacer geometry into these inputs.
+A spring is either linear `F=k(preload+S−x)` or linearly interpolated measured force/compression pairs covering the complete installed range. Spring energy is the integral of that force; spring labels never multiply output. Preload is compression remaining at the front contact position, not an extra spacer of assumed zero baseline.
+
+### Optional length / cut mode
+
+Direct preload remains the default and is unchanged. Length mode derives it from measurements. In the following equations lengths are meters (the UI accepts mm), `L0` is unloaded length before a hypothetical cut, `c` is the reduction in unloaded axial length, `Lf=L0−c`, and `Hf` is the actual spring-seat separation at front contact after accounting for spacers:
+
+```text
+Hcocked = Hf − S
+preload = Lf − Hf             (replaces the direct input)
+compression(x) = preload + S − x
+kcut = k0 Na / (Na − Nremoved)
+F(x) = kcut compression(x)
+Wavailable = kcut/2 [(preload+S)² − preload²]
+```
+
+The active-coil ratio is an **estimate**, conditional on unchanged wire/material, mean diameter and effective end support, and a uniform linear active section. It follows `k=Gd⁴/(8D³Na)`. Free length alone cannot determine rate or removed active turns. A cut can raise rate while reducing preload and available work. Progressive contact between coils, changed end seating, fatigue, yielding and spring surge are not resolved. See [Gutekunst engineering catalogue](https://www.federnshop.com/download/pdf/gutekunst-federnkatalog-2013-e.pdf) and [Newcomb active-coil definitions](https://newcombspring.com/resources/helical-spring-active-coils).
+
+Cut length is not wire length. Original active count must be positive for a cut estimate, with removed count smaller than the original. Zero removed active turns assumes only inactive end material was removed with unchanged effective support; that assumption needs checking. Spring mass is the **remaining installed mass**, not automatically scaled by length or active-coil ratio.
+
+Reject nonpositive remaining free length, nonpositive cocked seat gap, slack at the front (`Lf<Hf`), and cocked seat separation at/below known remaining solid height. Equality `Lf=Hf` is allowed: zero front load without a slack interval. Unknown solid height remains explicit and disables the coil-bind check; a positive gap is not an engineering safety margin. Solid height depends on total turns and end treatment, not just active count. [Newcomb solid-height guidance](https://www.newcombspring.com/resources/compression-spring-solid-height)
+
+A measured force curve uses derived compression for coverage and force integration. Reject a simultaneous nonzero hypothetical cut: a pre-cut curve cannot be silently treated as a post-cut measurement. For an already modified measured spring, enter its current free length and force curve with cut/removal zero. The measured curve overrides linear rate. Rate measurements at known loaded lengths provide evidence rather than an M-rating. [Newcomb rate measurement](https://www.newcombspring.com/resources/compression-spring-rate)
 
 Effective moving mass is piston assembly mass plus optional spring mass/3. That is a uniform spring-deformation approximation, not spring-surge mechanics. Displayed piston momentum and first-contact kinetic energy use the actual piston assembly mass; contact dissipation in the integration uses effective moving mass.
 
@@ -81,13 +102,17 @@ Sensitivity runs vary head and shaft diameters ±0.02 mm and spring force ±5% i
 
 Schema v3 preserves old v2 rows as reference-only with the original setup archived separately. Old drive/efficiency fits are never reused. The supplied measurement has no invented configuration. Energy is calculated from the measured mass/speed using exact `1 fps = 0.3048 m/s`.
 
+Complete v3.0 snapshots missing all seven length-mode fields receive inactive defaults (`springLengthMode=0`) and retain confirmation, role and original solver version, with the original snapshot also archived. The old version remains fit-ineligible. Incomplete snapshots are not filled with invented hardware. Hypothetical nonzero cuts remain ineligible even if a user checks measured provenance. Calibration grouping canonicalizes the actual spring force law: hidden length fields, inactive direct preload and stiffness overridden by a curve do not create independent conditions.
+
 Rows require an explicit boolean confirmation, complete valid parameter snapshot, current solver version and declared measured geometry/masses/spring before training/validation eligibility. Confirmation is a user assertion, not automatic verification. Notes carry BB batch/hop/chrono/environment details. The importer validates finite values and escapes text on display; legacy schemas never silently become calibrated records.
 
 A bounded one-parameter Cd fit minimizes mean squared residual normalized by each entered chrono uncertainty. Repeated identical physical setups share predictions, but each measurement contributes separately. Solver time/threshold settings and Cd itself do not manufacture distinct physical conditions. Fit results show training/held-out RMSE, failures, bounds and a coarse weak-constraint/profile diagnostic. Held-out shots never determine Cd. No formal confidence interval, multi-parameter identifiability or timing calibration is claimed. Dataset mutations invalidate the displayed fit; applying it requires an explicit action.
 
 ## Hardware optimizer
 
-The optimizer is a bounded discrete search over explicitly unlocked hardware groups. Cylinder locks cover bore, stroke and cylinder residual volume; barrel locks cover length and diameter; head locks cover both passage sections and downstream storage. Other groups cover piston mass, airbrake geometry, measured/linear spring inputs and BB mass/diameter. All unlisted quantities, including weather, empirical losses, heat transfer, restitution and timing thresholds, remain fixed. A measured spring curve cannot be scaled or replaced by the optimizer; stiffness and spring mass remain fixed with that curve, and only preload can vary within its measured coverage.
+The optimizer is a bounded discrete search over explicitly unlocked hardware groups. Cylinder locks cover bore, stroke and cylinder residual volume; barrel locks cover length and diameter; head locks cover both passage sections and downstream storage. Other groups cover piston mass, airbrake geometry, measured/linear spring inputs and BB mass/diameter. All unlisted quantities, including weather, empirical losses, heat transfer, restitution and timing thresholds, remain fixed. A measured spring curve cannot be scaled or replaced by the optimizer; its rate, mass, free length and cut/coil properties stay fixed. Direct preload or front-seat separation may vary within the applicable mode and measured compression coverage.
+
+Length mode permits explicitly supplied free/seat/cut lengths and coil counts when no force curve is present. The mode itself cannot be optimized, and inactive inputs cannot be searched. Remaining solid height stays fixed so a search cannot disable a known coil-bind constraint. Invalid or slack combinations are rejected by the same solver validation. Candidate lists are hypothetical independent dimensions, not a catalogue of matched cuts/coils/masses: actual compatibility and remaining mass/solid-height measurements must be checked for each modification.
 
 Every evaluation uses a common 250 ms observation limit, independently of the ordinary display limit. This does not change the physical input snapshot. The reference's exit energy sets fixed inclusive 95–105% bounds. Eligible candidates need valid integration, exit, contact, completed discharge, finite metrics and an absolute energy residual no greater than 0.1% of initial available spring work. Missing impact is unknown, not zero. Efficiency is exit BB energy divided by initial available spring work, not by spring energy released at an arbitrary stopping time.
 

@@ -1,7 +1,7 @@
 /* Pure, dependency-free conservative lumped model. See docs/MODEL.md. */
 (function (root) {
   "use strict";
-  const VERSION = "3.0.0";
+  const VERSION = "3.1.0";
   const R = 287.05, GAMMA = 1.4, CV = R / (GAMMA - 1), CP = CV + R;
   const area = d => Math.PI * (d / 2000) ** 2;
   const DEFAULTS = Object.freeze({
@@ -12,11 +12,26 @@
     deadVolume: .55, breechVolume: .45, dischargeCoefficient: .75,
     pistonLeak: .005, nozzleLeak: .005, bbLeakCoefficient: .15,
     springStiffness: 550, springPreload: 50, springMass: 0, springCurve: [],
+    springLengthMode: 0, springFreeLength: 0, springInstalledLength: 0, springCutLength: 0,
+    springActiveCoils: 0, springRemovedCoils: 0, springSolidLength: 0,
     pistonFriction: 3.2, sealFriction: .01, rearDamping: 0, bbBreakaway: 1.35, barrelDrag: .11,
     restitution: .05, heatTransfer: 0, ambientPressure: 101.3, airTemperature: 20,
     usefulFraction: .95, decelThreshold: 1000, maxTime: 60
   });
   function normalize(raw = {}) { return { ...DEFAULTS, ...raw }; }
+  // Lengths are axial mm, not wire length. Rate scaling is a uniform-coil estimate.
+  // Installed length is the seat separation at front contact, after any spacers.
+  function springState(p) {
+    const lengths = p.springLengthMode === 1;
+    const cut = lengths ? p.springCutLength : 0;
+    const freeLength = lengths ? p.springFreeLength - cut : null;
+    const preload = lengths ? freeLength - p.springInstalledLength : p.springPreload;
+    const rateRatio = cut > 0 ? p.springActiveCoils / (p.springActiveCoils - p.springRemovedCoils) : 1;
+    return { freeLength, preload, cockedCompression: preload + p.strokeLength,
+      cockedLength: lengths ? p.springInstalledLength - p.strokeLength : null,
+      stiffness: p.springStiffness * rateRatio, rateRatio,
+      coilBindChecked: lengths && p.springSolidLength > 0 };
+  }
   function validate(raw) {
     const p = normalize(raw), errors = [];
     const positive = ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "headBore", "headLength", "nozzleBore", "nozzleLength", "deadVolume", "breechVolume", "ambientPressure", "maxTime"];
@@ -30,10 +45,21 @@
     if (p.airbrakeTipDiameter > p.airbrakeDiameter || p.airbrakeTaper > p.airbrakeLength && p.airbrakeLength > 0) errors.push("pin:profile");
     if (!(p.dischargeCoefficient > 0 && p.dischargeCoefficient <= 1) || !(p.bbLeakCoefficient >= 0 && p.bbLeakCoefficient <= 1) || !(p.restitution >= 0 && p.restitution <= 1)) errors.push("coefficient:range");
     if (!(p.usefulFraction > 0 && p.usefulFraction <= 1) || p.airTemperature <= -273.15 || p.maxTime > 250) errors.push("range:invalid");
+    if (![0, 1].includes(p.springLengthMode)) errors.push("spring:mode");
+    for (const key of ["springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
+    const spring = springState(p);
+    if (p.springLengthMode === 1) {
+      if (!(p.springFreeLength > 0 && p.springInstalledLength > p.strokeLength && spring.freeLength > 0)) errors.push("spring:lengths");
+      if (spring.preload < 0) errors.push("spring:slack");
+      if (p.springCutLength > 0 && !(p.springActiveCoils > 0 && p.springRemovedCoils < p.springActiveCoils)) errors.push("spring:coils");
+      if (p.springCutLength === 0 && p.springRemovedCoils > 0) errors.push("spring:cut-length");
+      if (p.springSolidLength > 0 && spring.cockedLength <= p.springSolidLength) errors.push("spring:coil-bind");
+      if (p.springCutLength > 0 && p.springCurve?.length) errors.push("spring:cut-curve");
+    }
     if (!Array.isArray(p.springCurve)) errors.push("spring:curve");
     else if (p.springCurve.length) {
       if (p.springCurve.length < 2 || p.springCurve.some((v, i, a) => !Array.isArray(v) || v.length !== 2 || !v.every(Number.isFinite) || v[0] < 0 || v[1] < 0 || i > 0 && v[0] <= a[i - 1][0])) errors.push("spring:curve");
-      else if (p.springCurve[0][0] > p.springPreload || p.springCurve.at(-1)[0] < p.springPreload + p.strokeLength) errors.push("spring:coverage");
+      else if (p.springCurve[0][0] > spring.preload || p.springCurve.at(-1)[0] < spring.cockedCompression) errors.push("spring:coverage");
     }
     if (!errors.length) {
       const g = geometry(p, p.strokeLength / 1000, 0);
@@ -68,8 +94,8 @@
     };
   }
   function springForce(p, x) {
-    const c = p.springPreload + p.strokeLength - x * 1000;
-    if (!p.springCurve?.length) return p.springStiffness * Math.max(0, c) / 1000;
+    const spring = springState(p), c = spring.preload + p.strokeLength - x * 1000;
+    if (!p.springCurve?.length) return spring.stiffness * Math.max(0, c) / 1000;
     const pairs = p.springCurve;
     for (let i = 1; i < pairs.length; i++) if (c <= pairs[i][0]) {
       const a = pairs[i - 1], b = pairs[i];
@@ -80,8 +106,9 @@
   function springEnergy(p, x) {
     const end = p.strokeLength / 1000;
     const points = [x, end];
+    const spring = springState(p);
     for (const pair of p.springCurve || []) {
-      const at = (p.springPreload + p.strokeLength - pair[0]) / 1000;
+      const at = (spring.preload + p.strokeLength - pair[0]) / 1000;
       if (at > x && at < end) points.push(at);
     }
     points.sort((a, b) => a - b);
@@ -265,7 +292,7 @@
       dischargeComplete: exited && Math.abs(final.pc - pa) < .01 * pa && Math.abs(final.pb - pa) < .01 * pa
     };
   }
-  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, geometry, pinVolume, pinDiameter, springForce, springEnergy, massFlow, passage, simulate };
+  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, geometry, pinVolume, pinDiameter, springState, springForce, springEnergy, massFlow, passage, simulate };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PneumaticPhysics = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
@@ -275,6 +302,7 @@
   "use strict";
   const P = typeof module !== "undefined" && module.exports ? require("./physics.js") : root.PneumaticPhysics;
   const SCHEMA = 3, KEY = "ssg10-pneumatic-lab-v3", OLD_KEY = "ssg10-pneumatic-lab-v2";
+  const LENGTH_FIELDS = ["springLengthMode", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"];
   const fps = v => v / .3048;
   const energy = (mass, speed) => .5 * mass / 1000 * (speed * .3048) ** 2;
   function reference() {
@@ -285,14 +313,17 @@
     const mass = Number(row.bbMass ?? row.mass ?? row.setup?.bbMass), speed = Number(row.fps ?? row.velocityFps);
     if (!(mass > 0 && mass <= 2 && speed > 0 && speed <= 2000)) return null;
     const sigma = Number(row.sigma ?? 1);
-    const setupComplete = row.setup && Object.keys(P.DEFAULTS).every(k => Object.hasOwn(row.setup, k));
+    // v3.0 had no length mode: only add inactive defaults to a complete old snapshot.
+    // Preserve confirmation/role/version; the old solver version remains fit-ineligible.
+    const previousComplete = row.solverVersion === "3.0.0" && row.setup && LENGTH_FIELDS.every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => !LENGTH_FIELDS.includes(k)).every(k => Object.hasOwn(row.setup, k));
+    const setupComplete = row.setup && (previousComplete || Object.keys(P.DEFAULTS).every(k => Object.hasOwn(row.setup, k)));
     const setup = !legacy && setupComplete && P.validate(row.setup).length === 0 ? P.normalize(row.setup) : null;
     const provenance = Object.fromEntries(Object.entries(row.provenance || {}).filter(([k, v]) => ["geometry", "spring"].includes(k) && ["assumed", "measured"].includes(v)));
     const confirmed = row.confirmed === true && Boolean(setup);
     const role = confirmed && ["train", "validation"].includes(row.role) ? row.role : "reference";
     return { id: String(row.id || `measurement-${Math.random().toString(36).slice(2)}`).slice(0, 100), bbMass: mass, fps: speed, sigma: sigma > 0 && sigma <= 100 ? sigma : 1,
       role, setup, confirmed, provenance, notes: String(row.notes || "").slice(0, 2000), solverVersion: legacy ? null : String(row.solverVersion || ""),
-      legacySetup: legacy ? row.setup || null : row.legacySetup || null };
+      legacySetup: legacy || !setup || previousComplete ? row.setup || row.legacySetup || null : row.legacySetup || null };
   }
   function decode(data) {
     const raw = typeof data === "string" ? JSON.parse(data) : data;
@@ -303,12 +334,18 @@
     return { schemaVersion: SCHEMA, solverVersion: P.VERSION, measurements: rows.map(r => cleanRecord(r, legacy)).filter(Boolean), migrated: legacy };
   }
   function encode(rows) { return { schemaVersion: SCHEMA, solverVersion: P.VERSION, measurements: rows }; }
-  function eligible(row) { return row.confirmed && row.setup && row.solverVersion === P.VERSION && row.provenance?.geometry === "measured" && row.provenance?.spring === "measured" && ["train", "validation"].includes(row.role); }
+  function eligible(row) { return row.confirmed && row.setup && !(row.setup.springLengthMode === 1 && row.setup.springCutLength > 0) && row.solverVersion === P.VERSION && row.provenance?.geometry === "measured" && row.provenance?.spring === "measured" && ["train", "validation"].includes(row.role); }
   function groups(rows) {
     const map = new Map();
     for (const r of rows) {
       const setup = { ...r.setup, bbMass: r.bbMass };
-      const identity = Object.fromEntries(Object.entries(setup).filter(([k]) => !["dischargeCoefficient", "maxTime", "decelThreshold", "usefulFraction"].includes(k)));
+      const identity = Object.fromEntries(Object.entries(setup).filter(([k]) => !["dischargeCoefficient", "maxTime", "decelThreshold", "usefulFraction", ...LENGTH_FIELDS].includes(k)));
+      // Only the force/compression law enters the ODE. Hidden inputs and alternate
+      // ways of entering that same law cannot manufacture independent conditions.
+      const spring = P.springState(setup);
+      identity.springPreload = spring.preload;
+      if (setup.springCurve.length) delete identity.springStiffness;
+      else identity.springStiffness = spring.stiffness;
       const key = JSON.stringify(identity);
       if (!map.has(key)) map.set(key, { setup, rows: [] });
       map.get(key).setup.maxTime = Math.max(map.get(key).setup.maxTime, setup.maxTime);
@@ -360,7 +397,7 @@
       boundReached: best.coefficient < .101 || best.coefficient > .999,
       weaklyConstrained: profile.filter(v => v.weightedMSE <= best.weightedMSE + 1).some(v => Math.abs(v.coefficient - best.coefficient) > .15) };
   }
-  const api = { SCHEMA, KEY, OLD_KEY, reference, cleanRecord, decode, encode, eligible, energy, fitLoss };
+  const api = { SCHEMA, KEY, OLD_KEY, reference, cleanRecord, decode, encode, eligible, energy, groups, fitLoss };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.PneumaticCalibration = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
 
@@ -376,13 +413,18 @@
     head: ["headBore", "headLength", "nozzleBore", "nozzleLength", "breechVolume"],
     piston: ["pistonMass"],
     airbrake: ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper"],
-    spring: ["springStiffness", "springPreload", "springMass"],
+    spring: ["springStiffness", "springPreload", "springMass", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils"],
     bb: ["bbMass", "bbDiameter"]
   });
-  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
+  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], springFreeLength: [0,500], springInstalledLength: [0,500], springCutLength: [0,400], springActiveCoils: [0,200], springRemovedCoils: [0,200], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
   const WEIGHTS = Object.freeze({ balanced: [.35,.2,.15,.30], quiet: [.45,.25,.2,.10], efficient: [.15,.10,.05,.70] });
   const HORIZON_MS = 250;
   const clone = v => JSON.parse(JSON.stringify(v));
+  function fixedReason(p, key) {
+    if (p.springCurve.length && ["springStiffness", "springMass", "springFreeLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"].includes(key)) return "measured-spring";
+    if (p.springLengthMode === 1 && key === "springPreload" || p.springLengthMode !== 1 && ["springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"].includes(key)) return "spring-mode";
+    return null;
+  }
   function parseValues(text) {
     if (typeof text !== "string" || !text.trim()) throw new Error("optimizer:values");
     const tokens = text.trim().split(/[,;\s]+/);
@@ -404,7 +446,8 @@
       for (const key of keys) {
         const entries = config.values?.[key] || [base[key]];
         if (!Array.isArray(entries) || entries.length > 12 || entries.length === 0 || entries.some(v => !Number.isFinite(v) || v < LIMITS[key][0] || v > LIMITS[key][1])) throw new Error(`optimizer:values:${key}`);
-        if (base.springCurve.length && ["springStiffness", "springMass"].includes(key) && entries.some(v => v !== base[key])) throw new Error("optimizer:measured-spring");
+        const fixed = fixedReason(base, key);
+        if (fixed && entries.some(v => v !== base[key])) throw new Error(`optimizer:${fixed}`);
         const values = [...new Set([base[key], ...entries])];
         if (values.length > 1) { dimensions.push({ key, values }); total *= values.length; }
         if (!Number.isSafeInteger(total)) throw new Error("optimizer:space-too-large");
@@ -472,6 +515,7 @@
     for (const key of Object.keys(P.DEFAULTS)) {
       if (JSON.stringify(candidate.params[key]) !== JSON.stringify(next[key])) {
         if (!allowed.has(key)) throw new Error("optimizer:locked-change");
+        if (fixedReason(next, key)) throw new Error("optimizer:fixed-spring");
         next[key] = clone(candidate.params[key]);
       }
     }
@@ -504,7 +548,7 @@
       total: space.total, evaluated: indices.length, exhaustive: indices.length === space.total, rejected, eligible: candidates.length,
       frontier: rank(candidates, priority), noVariables: space.dimensions.length === 0 };
   }
-  const api = { VERSION, GROUPS, LIMITS, WEIGHTS, HORIZON_MS, parseValues, searchSpace, candidateAt, sampleIndices, assess, dominates, rank, changesFrom, applyCandidate, search };
+  const api = { VERSION, GROUPS, LIMITS, WEIGHTS, HORIZON_MS, fixedReason, parseValues, searchSpace, candidateAt, sampleIndices, assess, dominates, rank, changesFrom, applyCandidate, search };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.PneumaticOptimizer = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
 
@@ -544,9 +588,15 @@
     airbrakeTaper: ["Tapered tip length", "Duljina konusnog vrha", "mm", 0, 10, .1],
     deadVolume: ["Cylinder-side residual cavity", "Preostali volumen na strani cilindra", "cm³", .05, 5, .01],
     breechVolume: ["Head / nozzle / breech storage", "Volumen glave, mlaznice i komore", "cm³", .05, 5, .01],
-    springStiffness: ["Spring stiffness (linear mode)", "Krutost opruge (linearni model)", "N/m", 0, 4000, 10],
+    springStiffness: ["Spring stiffness before any simulated cut", "Krutost opruge prije simuliranog skraćivanja", "N/m", 0, 4000, 10],
     springPreload: ["Spring compression at front contact", "Stlačenje opruge pri prednjem kontaktu", "mm", 0, 150, .5],
-    springMass: ["Spring mass (⅓ effective-mass approximation)", "Masa opruge (aproksimacija ⅓ efektivne mase)", "g", 0, 100, .1],
+    springMass: ["Installed spring mass (after any cut)", "Masa ugrađene opruge (nakon skraćivanja)", "g", 0, 100, .1],
+    springFreeLength: ["Unloaded spring length before simulated cut", "Slobodna duljina opruge prije simuliranog skraćivanja", "mm", 0, 500, .5],
+    springInstalledLength: ["Spring-seat distance at piston front contact", "Razmak oslonaca opruge pri prednjem kontaktu pistona", "mm", 0, 500, .5],
+    springCutLength: ["Free length removed by cutting", "Smanjenje slobodne duljine rezanjem", "mm", 0, 400, .5],
+    springActiveCoils: ["Active coils before cutting (0 = unknown)", "Aktivni zavoji prije rezanja (0 = nepoznato)", "turns", 0, 200, .25],
+    springRemovedCoils: ["Active coils removed (0 = inactive ends only)", "Uklonjeni aktivni zavoji (0 = samo neaktivni krajevi)", "turns", 0, 200, .25],
+    springSolidLength: ["Remaining spring solid height (0 = unknown)", "Duljina skraćene potpuno stisnute opruge (0 = nepoznato)", "mm", 0, 500, .5],
     pistonFriction: ["Piston sliding / static friction", "Klizno / statičko trenje pistona", "N", 0, 20, .1],
     sealFriction: ["Pressure-dependent seal friction factor", "Faktor trenja brtve ovisan o tlaku", "", 0, .2, .001],
     rearDamping: ["Rear vent / mechanical drag coefficient", "Koeficijent stražnjeg / mehaničkog otpora", "N·s/m", 0, 5, .01],
@@ -595,12 +645,49 @@
     if (current || old) {
       measurements = C.decode(current || old).measurements;
       if (!current) status = ["Old measurements preserved as unverified references; previous fits were discarded.", "Stara mjerenja sačuvana su kao nepotvrđene reference; prijašnje prilagodbe nisu prenesene."];
+      else if (measurements.some(row => row.legacySetup || row.setup && row.solverVersion !== P.VERSION)) status = ["Previous solver snapshots and shot metadata are preserved. Older-version shots are excluded from the current fit; record confirmed measurements with the current spring inputs.", "Konfiguracije i podaci hitaca prijašnjeg rješavača sačuvani su. Hici starije verzije isključeni su iz trenutačne prilagodbe; zabilježite potvrđena mjerenja s trenutačnim ulazima opruge."];
     } else measurements = [C.reference()];
   } catch (_) { measurements = [C.reference()]; status = ["Stored data could not be read. It has not been overwritten.", "Pohranjeni podaci nisu čitljivi. Nisu prebrisani."]; }
   function languageSwitch() { return `<div class="language-switch" role="group" aria-label="${t("Language", "Jezik")}"><button type="button" data-lang="en" aria-pressed="${language === "en"}">English</button><button type="button" data-lang="hr" aria-pressed="${language === "hr"}">Hrvatski</button></div>`; }
   function field(key) {
     const [en, hr, unit, min, max, step] = fields[key];
-    return `<div class="control"><label for="${key}"><span>${t(en, hr)}</span><span class="mono">${unit}</span></label><div class="field-entry"><input data-range="${key}" aria-label="${t(en, hr)}" type="range" min="${min}" max="${max}" step="${step}" value="${p[key]}"><input id="${key}" data-number="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${p[key]}" required></div></div>`;
+    return `<div class="control"><label for="${key}"><span>${t(en, hr)}</span><span class="mono">${unit === "turns" ? t("turns", "zavoja") : unit}</span></label><div class="field-entry"><input data-range="${key}" aria-label="${t(en, hr)}" type="range" min="${min}" max="${max}" step="${step}" value="${p[key]}"><input id="${key}" data-number="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${p[key]}" required></div></div>`;
+  }
+  function springMarkup() {
+    return `<details id="springDetails" ${p.springLengthMode ? "open" : ""}><summary>${t("Spring length, cutting & mechanical losses", "Duljina i skraćivanje opruge te mehanički gubici")}</summary>
+      <label class="provenance"><input id="springLengthMode" type="checkbox" ${p.springLengthMode ? "checked" : ""}>${t("Calculate from spring lengths / simulate cutting", "Računaj iz duljina opruge / simuliraj skraćivanje")}</label>
+      <p class="field-help">${t("Off: enter compression directly. On: length measurements replace that input. Zero lengths mean unknown; no SSG10 dimensions are assumed. Measure the front-contact seat distance after spacers—do not subtract them again.", "Isključeno: izravno unesite stlačenje. Uključeno: zamjenjuju ga izmjerene duljine. Nulte duljine znače nepoznato; dimenzije SSG10 nisu pretpostavljene. Razmak oslonaca pri prednjem kontaktu mjerite s odstojnicima — ne oduzimajte ih ponovno.")}</p>
+      <div id="springLengthFields" ${p.springLengthMode ? "" : "hidden"}>${["springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"].map(field).join("")}
+      <p class="field-help">${t("Cut length is the reduction in unloaded axial length, not wire length. Count removed active coils separately; length alone cannot tell us the new stiffness. More active coils removed → higher estimated stiffness, but shorter free length → less installed compression. Actual output can go down despite higher stiffness.", "Duljina reza je smanjenje slobodne uzdužne duljine, ne duljina žice. Uklonjene aktivne zavoje unesite zasebno; sama duljina ne određuje novu krutost. Više uklonjenih aktivnih zavoja → veća procijenjena krutost, ali kraća opruga → manje ugrađeno stlačenje. Izlazna energija može pasti unatoč većoj krutosti.")}</p>
+      <p class="field-help">${t("Cutting is an estimate for uniform linear coils with unchanged wire, diameter and effective end support. Progressive coils and changed ends need new force measurements. Solid height must describe the remaining spring; a positive clearance is not a certified safety margin. Slack/unseating is outside this model.", "Skraćivanje je procjena za jednolike linearne zavoje uz istu žicu, promjer i efektivni oslonac krajeva. Progresivni zavoji i promijenjeni krajevi traže novo mjerenje sile. Duljina potpuno stisnute opruge mora opisivati preostalu oprugu; pozitivan zazor nije potvrđena sigurnosna margina. Labava opruga i gubitak kontakta izvan su ovog modela.")}</p></div>
+      ${["springStiffness", "springPreload", "springMass"].map(field).join("")}<div id="springSummary" class="small-note" role="status"></div>
+      <p class="field-help">${t("Weigh the remaining spring: mass is not inferred from length. The optional moving-mass approximation is one third of the entered spring mass.", "Izvažite preostalu oprugu: masa se ne izvodi iz duljine. Neobavezna aproksimacija pomične mase iznosi trećinu unesene mase opruge.")}</p>
+      <label for="springCurve">${t("Optional measured force curve: compression mm, force N (one pair per line)", "Neobavezna izmjerena krivulja: stlačenje mm, sila N (jedan par po retku)")}</label><textarea id="springCurve" rows="4" placeholder="50, 27.5&#10;100, 55&#10;140, 77">${p.springCurve.map(v => v.join(", ")).join("\n")}</textarea>
+      <p class="field-help">${t("A curve replaces linear stiffness and must cover the installed compression range. It cannot be reused for a simulated cut. For an already cut, measured spring, enter its current free length and force curve with cut length and removed coils set to zero. Estimated cuts are excluded from calibration fitting.", "Krivulja zamjenjuje linearnu krutost i mora pokrivati raspon ugrađenog stlačenja. Ne može se ponovno koristiti za simulirani rez. Za već skraćenu i izmjerenu oprugu unesite trenutačnu slobodnu duljinu i krivulju sile, a rez i uklonjene zavoje postavite na nulu. Procijenjeni rezovi ne koriste se za kalibracijsku prilagodbu.")}</p>
+      ${provenanceControl("spring", "I have measured the spring force and installed compression", "Izmjerio/la sam silu opruge i ugrađeno stlačenje")}
+      ${["pistonFriction", "sealFriction", "rearDamping", "restitution"].map(field).join("")}</details>`;
+  }
+  function syncSpringControls() {
+    if (!$("springLengthFields")) return;
+    $("springLengthFields").hidden = p.springLengthMode !== 1;
+    for (const key of ["springPreload", "springStiffness"]) {
+      const disabled = key === "springPreload" ? p.springLengthMode === 1 : Boolean(p.springCurve.length);
+      $(key).disabled = disabled; document.querySelector(`[data-range="${key}"]`).disabled = disabled;
+      if (key === "springPreload") {
+        const value = disabled ? P.springState(p).preload : p.springPreload;
+        $(key).value = finite(value) ? value : ""; document.querySelector(`[data-range="${key}"]`).value = finite(value) ? value : 0;
+      }
+    }
+    for (const key of O.GROUPS.spring) {
+      const input = $("opt-" + key);
+      if (input) {
+        const fixed = O.fixedReason(p, key);
+        input.disabled = optimizer.locks.spring || Boolean(fixed);
+        input.value = fixed ? String(p[key]) : optimizer.values[key];
+        const note = input.parentElement.querySelector("small");
+        if (note) note.hidden = !fixed;
+      }
+    }
   }
   function group(en, hr, keys, help = "") { return `<section class="control-group"><p class="group-label">${t(en, hr)}</p>${keys.map(field).join("")}${help ? `<p class="field-help">${help}</p>` : ""}</section>`; }
   function provenanceControl(key, en, hr) { return `<label class="provenance"><input type="checkbox" data-provenance="${key}" ${provenance[key] === "measured" ? "checked" : ""}>${t(en, hr)}</label>`; }
@@ -626,12 +713,11 @@
         ${group("Moving masses", "Pomične mase", ["pistonMass", "bbMass", "bbDiameter"])}<div class="preset-row">${[58, 65, 68, 72, 76, 82].map(m => `<button class="preset" type="button" data-mass="${m}" aria-pressed="${p.pistonMass === m}">${m} g</button>`).join("")}</div>
         <details open><summary>${t("Head and airbrake geometry", "Geometrija glave i zračne kočnice")}</summary><p class="field-help">${t("Pneumatic cushioning: the pin restricts airflow. Cylinder pressure rises relative to the air behind the BB, opposing piston motion. The rubber bumper then absorbs any remaining contact energy. These are separate effects.", "Pneumatsko ublažavanje: pin ograničava protok. Tlak u cilindru raste u odnosu na tlak iza BB-a i suprotstavlja se gibanju pistona. Gumeni odbojnik zatim apsorbira preostalu kontaktnu energiju. To su odvojeni učinci.")}</p><label for="pinLabel">${t("Installed AMP pin", "Ugrađeni AMP pin")}</label><select id="pinLabel">${[["custom", "Measured / custom", "Izmjeren / prilagođen"], ["plug", "Plug / no airbrake", "Čep / bez zračne kočnice"], ["short", "Short pin — enter measured size", "Kratki pin — unesite dimenzije"], ["medium", "Medium pin — enter measured size", "Srednji pin — unesite dimenzije"], ["long", "Long pin — enter measured size", "Dugi pin — unesite dimenzije"]].map(([v, en, hr]) => `<option value="${v}" ${pinLabel === v ? "selected" : ""}>${t(en, hr)}</option>`).join("")}</select>
         ${["headBore", "headLength", "nozzleBore", "nozzleLength", "airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "deadVolume", "breechVolume"].map(field).join("")}<p class="small-note" id="clearanceNote"></p><p class="field-help">${t("Internal diameters—not the outer head diameter. Model: straight shaft with tapered tip and two stepped head passages. Storage volumes are total cavity volumes, before subtracting the pin; count each cavity once. Bumper thickness affects the entered contact plane/stroke.", "Unutarnji promjeri — ne vanjski promjer glave. Model: ravno tijelo pina s konusnim vrhom i dva provrta glave. Volumeni su ukupni volumeni šupljina prije oduzimanja pina; svaku šupljinu računajte jednom. Debljina odbojnika utječe na unesenu ravninu kontakta / hod.")}</p>${provenanceControl("geometry", "I have measured the geometry and assembled masses", "Izmjerio/la sam geometriju i mase sklopova")}</details>
-        <details><summary>${t("Spring and mechanical losses", "Opruga i mehanički gubici")}</summary>${["springStiffness", "springPreload", "springMass", "pistonFriction", "sealFriction", "rearDamping", "restitution"].map(field).join("")}
-        <label for="springCurve">${t("Optional measured force curve: compression mm, force N (one pair per line)", "Neobavezna izmjerena krivulja: stlačenje mm, sila N (jedan par po retku)")}</label><textarea id="springCurve" rows="4" placeholder="50, 27.5&#10;100, 55&#10;140, 77">${p.springCurve.map(v => v.join(", ")).join("\n")}</textarea><p class="field-help">${t("A supplied curve replaces linear stiffness and must cover preload through full cocked compression. Clear it to use stiffness × compression. Restitution is a simplified bumper model; peak contact force and sound are not calculated.", "Unesena krivulja zamjenjuje linearnu krutost i mora pokriti raspon od prednaprezanja do punog zapinjanja. Izbrišite je za model krutost × stlačenje. Koeficijent odskoka pojednostavljen je model odbojnika; vršna sila kontakta i zvuk se ne računaju.")}</p>${provenanceControl("spring", "I have measured the spring force and installed compression", "Izmjerio/la sam silu opruge i ugrađeno stlačenje")}</details>
+        ${springMarkup()}
         <details><summary>${t("Airflow, friction and environment", "Protok, trenje i okoliš")}</summary>${["dischargeCoefficient", "pistonLeak", "nozzleLeak", "bbLeakCoefficient", "bbBreakaway", "barrelDrag", "heatTransfer", "ambientPressure", "airTemperature"].map(field).join("")}<p class="field-help">${t("Leak areas include their discharge coefficient. Zero heat conductance is an adiabatic starting approximation. All loss coefficients need evidence; they are not efficiency percentages.", "Površine curenja uključuju koeficijent protoka. Nulta toplinska vodljivost početna je adijabatska aproksimacija. Svi koeficijenti gubitaka zahtijevaju potvrdu; nisu postoci učinkovitosti.")}</p></details>
         <details><summary>${t("Timing criteria and solver", "Vremenski kriteriji i rješavač")}</summary>${["usefulFraction", "decelThreshold", "maxTime"].map(field).join("")}<p class="field-help">${t("Adaptive midpoint integration, maximum step 0.01 ms. Thresholds are user conventions, not physical switches. The model can end before contact or complete discharge.", "Adaptivna integracija metodom srednje točke, najveći korak 0,01 ms. Pragovi su dogovoreni kriteriji, a ne fizikalne sklopke. Model može završiti prije kontakta ili potpunog pražnjenja.")}</p></details>
       </aside><section class="main">${optimizerMarkup()}<div id="results"></div>${calibrationMarkup()}</section></div></main>`;
-    bindLanguage(); bindControls(); bindOptimizer(); updateResults(); renderMeasurements(); renderOptimizerResults();
+    bindLanguage(); bindControls(); bindOptimizer(); syncSpringControls(); updateResults(); renderMeasurements(); renderOptimizerResults();
   }
   function calibrationMarkup() {
     return `<details class="panel calibration" id="calibrationPanel"><summary>${t("Calibration · actual chrono measurements", "Kalibracija · stvarna mjerenja kronografom")}</summary><div class="calibration-body"><p class="calibration-intro">${t("Your 0.46 g / 330 fps observation is a reference until its full setup is recorded. Energy is derived from mass and velocity, not an independent measurement. Record each shot. All data stays in this browser unless you export it.", "Mjerenje 0,46 g / 330 fps ostaje referenca dok se ne zabilježi potpuna konfiguracija. Energija se izvodi iz mase i brzine, nije neovisno mjerenje. Zabilježite svaki hitac. Podaci ostaju u ovom pregledniku osim ako ih izvezete.")}</p>
@@ -657,8 +743,8 @@
       <div id="optimizerBody" ${optimizer.open ? "" : "hidden"}><p class="optimizer-target">${t("Performance constraint: keep 95–105% of this setup’s predicted BB exit energy.", "Uvjet performansi: zadrži 95–105% predviđene izlazne energije BB-a trenutačne konfiguracije.")}</p>
       <p class="small-note">${t("Checked = frozen. Enter actual available choices separated by commas; use a dot for decimals. The current value is always included. Example piston masses and pin lengths are hypothetical—not verified compatible AMP parts. Changing geometry can require new sealing/friction measurements.", "Označeno = zamrznuto. Unesite stvarno dostupne vrijednosti odvojene zarezima; decimalni znak je točka. Trenutačna vrijednost uvijek je uključena. Primjeri masa pistona i duljina pina hipotetski su — nisu potvrđeni kompatibilni AMP dijelovi. Promjena geometrije može zahtijevati novo mjerenje brtvljenja i trenja.")}</p>
       <div class="optimizer-locks">${Object.entries(O.GROUPS).map(([group, keys]) => `<fieldset class="optimizer-part"><legend><label><input type="checkbox" data-opt-lock="${group}" ${optimizer.locks[group] ? "checked" : ""}>${t("Freeze", "Zamrzni")} ${t(...labels[group])}</label></legend><details ${!optimizer.locks[group] ? "open" : ""}><summary>${t("Candidate values", "Vrijednosti kandidata")}</summary>${keys.map(key => {
-        const fixedCurve = p.springCurve.length && ["springStiffness", "springMass"].includes(key);
-        return `<label class="optimizer-field" for="opt-${key}"><span>${t(fields[key][0], fields[key][1])} (${fields[key][2]})</span><input type="text" id="opt-${key}" data-opt-values="${key}" value="${esc(fixedCurve ? String(p[key]) : optimizer.values[key])}" ${optimizer.locks[group] || fixedCurve ? "disabled" : ""} maxlength="180">${fixedCurve ? `<small>${t("Fixed with the measured spring curve; preload may vary within its measured range.", "Fiksno uz izmjerenu krivulju opruge; prednaprezanje može varirati unutar izmjerenog raspona.")}</small>` : ""}</label>`;
+        const fixedSpring = O.fixedReason(p, key);
+        return `<label class="optimizer-field" for="opt-${key}"><span>${t(fields[key][0], fields[key][1])} (${fields[key][2] === "turns" ? t("turns", "zavoja") : fields[key][2]})</span><input type="text" id="opt-${key}" data-opt-values="${key}" value="${esc(fixedSpring ? String(p[key]) : optimizer.values[key])}" ${optimizer.locks[group] || fixedSpring ? "disabled" : ""} maxlength="180"><small ${fixedSpring ? "" : "hidden"}>${t("Fixed by the spring input mode or measured curve. Enable length mode in Setup to search spring lengths.", "Fiksno zbog načina unosa opruge ili izmjerene krivulje. Za pretragu duljina uključite taj način u Postavkama.")}</small></label>`;
       }).join("")}</details></fieldset>`).join("")}</div>
       <div class="optimizer-options"><label>${t("Ranking preference", "Prioritet rangiranja")}<select id="optimizerPriority">${[["balanced", "Balanced trade-off", "Uravnotežen kompromis"], ["quiet", "Lower sound contributors", "Niži doprinosi zvuku"], ["efficient", "Higher energy efficiency", "Viša energetska učinkovitost"]].map(([value, en, hr]) => `<option value="${value}" ${optimizer.priority === value ? "selected" : ""}>${t(en, hr)}</option>`).join("")}</select></label><label>${t("Maximum combinations", "Najviše kombinacija")}<select id="optimizerBudget">${[60, 120, 240].map(v => `<option ${optimizer.budget === v ? "selected" : ""}>${v}</option>`).join("")}</select></label></div>
       <p class="small-note">${t("Weather, fitted airflow/leakage, friction, damping and timing criteria stay fixed. Every candidate uses the same 250 ms observation limit, allowing delayed contact/discharge. Efficiency = BB exit energy ÷ initial available spring work. Rankings compare impact energy, peak muzzle airflow, exit pressure and efficiency—not dB or guaranteed loudness.", "Vrijeme, prilagođeni protok/curenje, trenje, prigušenje i vremenski kriteriji ostaju fiksni. Svaki kandidat koristi isti prozor promatranja od 250 ms za kasni kontakt/pražnjenje. Učinkovitost = izlazna energija BB-a ÷ početni raspoloživi rad opruge. Rangiranje uspoređuje energiju udara, vršni protok, izlazni tlak i učinkovitost — ne dB ni zajamčenu glasnoću.")}</p>
@@ -677,7 +763,7 @@
     $("toggleOptimizer").addEventListener("click", e => { optimizer.open = !optimizer.open; $("optimizerBody").hidden = !optimizer.open; e.currentTarget.setAttribute("aria-expanded", String(optimizer.open)); });
     document.querySelectorAll("[data-opt-lock]").forEach(box => box.addEventListener("change", () => {
       const group = box.dataset.optLock; optimizer.locks[group] = box.checked; invalidateOptimizer();
-      for (const key of O.GROUPS[group]) $("opt-" + key).disabled = box.checked || Boolean(p.springCurve.length && ["springStiffness", "springMass"].includes(key));
+      for (const key of O.GROUPS[group]) $("opt-" + key).disabled = box.checked || Boolean(O.fixedReason(p, key));
       box.closest("fieldset").querySelector("details").open = !box.checked;
     }));
     document.querySelectorAll("[data-opt-values]").forEach(input => input.addEventListener("input", () => { optimizer.values[input.dataset.optValues] = input.value; invalidateOptimizer(); }));
@@ -690,7 +776,7 @@
       if (!shot) recalculate();
       const base = clone(p), config = { locks: clone(optimizer.locks), values: {}, budget: optimizer.budget, priority: optimizer.priority };
       try {
-        for (const [group, keys] of Object.entries(O.GROUPS)) if (!config.locks[group]) for (const key of keys) config.values[key] = p.springCurve.length && ["springStiffness", "springMass"].includes(key) ? [p[key]] : O.parseValues(optimizer.values[key]);
+        for (const [group, keys] of Object.entries(O.GROUPS)) if (!config.locks[group]) for (const key of keys) config.values[key] = O.fixedReason(p, key) ? [p[key]] : O.parseValues(optimizer.values[key]);
         O.searchSpace(base, config);
       } catch (_) { optimizer.status = ["Check candidate lists: up to 12 numbers per field, within the normal control ranges. Use decimal dots. Confirm the starting setup is valid.", "Provjerite popise: do 12 brojeva po polju, unutar uobičajenih raspona kontrola. Koristite decimalnu točku. Početna konfiguracija mora biti valjana."]; $("optimizerStatus").textContent = t(...optimizer.status); return; }
       optimizer.cancelled = false; optimizer.running = true; optimizer.result = null;
@@ -748,8 +834,29 @@
     }));
   }
   function metric(label, value, note, kind = "model") { return `<article class="readout"><div class="topline"><span>${label}</span><span class="tag ${kind}">${kind === "geometry" ? t("geometry", "geometrija") : t("model", "model")}</span></div><strong>${value}</strong><small>${note}</small></article>`; }
+  function updateSpringSummary() {
+    if (!$("springSummary")) return;
+    const s = P.springState(p), errors = P.validate(p).filter(v => v.startsWith("spring"));
+    const messages = {
+      "spring:lengths": ["Enter positive free length and a front seat distance greater than the stroke.", "Unesite pozitivnu slobodnu duljinu i razmak prednjih oslonaca veći od hoda."],
+      "spring:slack": ["The resulting spring is shorter than the front seat distance. Unseating/recontact is not modeled.", "Dobivena opruga kraća je od razmaka oslonaca pri prednjem kontaktu. Gubitak i ponovni kontakt nisu modelirani."],
+      "spring:coils": ["A cut estimate needs the original active-coil count and fewer removed active coils. Do not infer these from length alone.", "Procjena reza traži početni broj aktivnih zavoja i manji broj uklonjenih. Ne izvodite ih samo iz duljine."],
+      "spring:cut-length": ["Enter the free-length reduction when active coils have been removed.", "Unesite smanjenje slobodne duljine ako su uklonjeni aktivni zavoji."],
+      "spring:coil-bind": ["Coil bind: the cocked seat distance is at or below the entered solid height.", "Potpuno stiskanje zavoja: razmak oslonaca zapete opruge manji je ili jednak duljini potpuno stisnute opruge."],
+      "spring:cut-curve": ["An uncut force curve cannot predict a cut spring. Clear it to estimate, or enter the already-cut measured spring with cut/removal set to zero.", "Krivulja neskraćene opruge ne predviđa skraćenu. Izbrišite je za procjenu ili unesite već skraćenu izmjerenu oprugu uz nulti rez i uklonjene zavoje."],
+      "spring:coverage": ["The measured curve must cover front compression through full cocked compression.", "Izmjerena krivulja mora pokriti stlačenje pri prednjem kontaktu do punog zapinjanja."]
+    };
+    $("springSummary").innerHTML = errors.length ? `<p class="lab-warning" role="alert">${errors.map(code => esc(messages[code] ? t(...messages[code]) : code)).join(" ")}</p>` : `<div class="spring-summary">
+      ${p.springLengthMode ? `<p>${t("Resulting free length", "Dobivena slobodna duljina")}: <strong>${fmt(s.freeLength, 1, "mm")}</strong></p><p>${t("Cocked seat distance", "Razmak oslonaca pri zapinjanju")}: <strong>${fmt(s.cockedLength, 1, "mm")}</strong></p>` : ""}
+      <p>${t("Compression · front / cocked", "Stlačenje · prednji kontakt / zapeto")}: <strong>${fmt(s.preload, 1)} / ${fmt(s.cockedCompression, 1)} mm</strong></p>
+      <p>${p.springCurve.length ? t("Measured force curve active", "Aktivna izmjerena krivulja sile") : `${t("Effective stiffness", "Efektivna krutost")}: <strong>${fmt(s.stiffness, 1, "N/m")}</strong>${p.springLengthMode && p.springCutLength > 0 ? ` · ${t("cut estimate", "procjena reza")}` : ""}`}</p>
+      <p>${t("Force · front / cocked", "Sila · prednji kontakt / zapeto")}: <strong>${fmt(P.springForce(p, p.strokeLength / 1000), 2)} / ${fmt(P.springForce(p, 0), 2)} N</strong></p>
+      <p>${t("Available spring work", "Raspoloživi rad opruge")}: <strong>${fmt(P.springEnergy(p, 0), 3, "J")}</strong> · ${t("not BB exit energy", "nije izlazna energija BB-a")}</p>
+      <p>${s.coilBindChecked ? `${t("Cocked clearance above solid height", "Zazor zapete opruge iznad potpuno stisnute duljine")}: ${fmt(s.cockedLength - p.springSolidLength, 1, "mm")}` : t("Coil bind not checked — solid height / seat geometry unknown.", "Potpuno stiskanje zavoja nije provjereno — nepoznata duljina / geometrija oslonaca.")}</p></div>`;
+  }
   function updateResults() {
     if (!$("results")) return;
+    updateSpringSummary();
     const g = P.geometry(p, 0, 0), before = Math.max(0, p.strokeLength - p.airbrakeLength);
     $("shortStrokeDynamic").textContent = t(`Swept volume: ${(g.sweptVolume * 1e6).toFixed(2)} cm³. Before pin entry: ${before.toFixed(1)} mm / ${(g.ac * before * 1000).toFixed(2)} cm³.`, `Radni volumen: ${(g.sweptVolume * 1e6).toFixed(2)} cm³. Prije ulaska pina: ${before.toFixed(1)} mm / ${(g.ac * before * 1000).toFixed(2)} cm³.`);
     $("clearanceNote").textContent = t(`Full-shaft radial clearance: ${g.gap.toFixed(3)} mm; annular area: ${(g.annulus * 1e6).toFixed(3)} mm². This is geometry, not a flow rate.`, `Radijalni zazor uz tijelo pina: ${g.gap.toFixed(3)} mm; prstenasta površina: ${(g.annulus * 1e6).toFixed(3)} mm². To je geometrija, a ne protok.`);
@@ -809,19 +916,27 @@
     $("toggleControls").addEventListener("click", e => { const closed = document.querySelector(".controls-panel").classList.toggle("is-collapsed"); e.currentTarget.setAttribute("aria-expanded", String(!closed)); });
     document.querySelectorAll("[data-number], [data-range]").forEach(input => input.addEventListener("input", () => {
       const key = input.dataset.number || input.dataset.range;
+      const previous = p[key];
       p[key] = input.value === "" ? NaN : Number(input.value);
+      if (optimizer && key.startsWith("spring") && optimizer.values[key] === String(previous)) optimizer.values[key] = String(p[key]);
       const pair = input.dataset.number ? document.querySelector(`[data-range="${key}"]`) : $(key);
       pair.value = input.value;
       selectedPlatform = "custom"; $("platformPreset").value = "custom";
-      if (["springStiffness", "springPreload", "springMass"].includes(key)) provenance.spring = "assumed";
+      if (key.startsWith("spring")) { provenance.spring = "assumed"; invalidateFit(); }
       else if (["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "headBore", "headLength", "nozzleBore", "nozzleLength", "airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "deadVolume", "breechVolume"].includes(key)) provenance.geometry = "assumed";
       document.querySelectorAll("[data-provenance]").forEach(box => { box.checked = provenance[box.dataset.provenance] === "measured"; });
       $("measurementConfirm").checked = false;
       document.querySelectorAll("[data-mass]").forEach(button => button.setAttribute("aria-pressed", Number(button.dataset.mass) === p.pistonMass));
-      scheduleCalculation();
+      syncSpringControls(); scheduleCalculation();
     }));
     document.querySelectorAll("[data-provenance]").forEach(box => box.addEventListener("change", () => { provenance[box.dataset.provenance] = box.checked ? "measured" : "assumed"; }));
     document.querySelectorAll("[data-mass]").forEach(button => button.addEventListener("click", () => { $("pistonMass").value = button.dataset.mass; $("pistonMass").dispatchEvent(new Event("input", { bubbles: true })); }));
+    $("springLengthMode").addEventListener("change", e => {
+      p.springLengthMode = e.target.checked ? 1 : 0;
+      provenance.spring = "assumed"; document.querySelector('[data-provenance="spring"]').checked = false;
+      $("measurementConfirm").checked = false; selectedPlatform = "custom"; $("platformPreset").value = "custom";
+      invalidateFit(); syncSpringControls(); scheduleCalculation();
+    });
     $("platformPreset").addEventListener("change", event => {
       selectedPlatform = event.target.value;
       const v = platforms[selectedPlatform];
@@ -842,7 +957,7 @@
     });
     $("springCurve").addEventListener("change", e => {
       p.springCurve = e.target.value.trim() ? e.target.value.trim().split(/\n+/).map(line => line.trim().split(/[,;\s]+/).map(Number)) : [];
-      provenance.spring = "assumed"; document.querySelector('[data-provenance="spring"]').checked = false; $("measurementConfirm").checked = false; scheduleCalculation();
+      provenance.spring = "assumed"; document.querySelector('[data-provenance="spring"]').checked = false; $("measurementConfirm").checked = false; invalidateFit(); syncSpringControls(); scheduleCalculation();
     });
     const energyReadout = () => { $("measurementEnergy").textContent = `${t("Derived energy", "Izvedena energija")}: ${fmt(C.energy(Number($("measurementMass").value), Number($("measurementFps").value)), 3, "J")}`; };
     $("measurementMass").addEventListener("input", energyReadout); $("measurementFps").addEventListener("input", energyReadout); energyReadout();
@@ -987,7 +1102,9 @@
       [t("Piston momentum", "Količina gibanja pistona"), fmt(f.pistonV * p.pistonMass / 1000, 3, "kg·m/s")],
       [t("BB velocity", "Brzina BB-a"), fmt(f.bbV, 2, "m/s")],
       [t("BB acceleration", "Ubrzanje BB-a"), fmt(f.bbA, 0, "m/s²")],
-      [t("Head airflow", "Protok kroz glavu"), fmt(f.flow * 1000, 3, "g/s")]
+      [t("Head airflow", "Protok kroz glavu"), fmt(f.flow * 1000, 3, "g/s")],
+      [t("Spring compression", "Stlačenje opruge"), fmt(P.springState(p).cockedCompression - f.pistonX * 1000, 1, "mm")],
+      [t("Spring force", "Sila opruge"), fmt(P.springForce(p, f.pistonX), 2, "N")]
     ].map(([label, value]) => `<div class="live-item"><span>${label}</span><strong>${value}</strong></div>`).join("");
     drawMechanism(f); drawCharts(f.t);
   }

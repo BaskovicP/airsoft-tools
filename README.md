@@ -2,7 +2,7 @@
 
 Standalone English/Croatian tools for exploring spring-airsoft pneumatic timing. Open `index.html` directly—no server, account, network access or runtime dependencies are required. The first screen is a tool menu; the pneumatic timing lab is its first tool.
 
-## Physics model v3
+## Physics model v3.1
 
 The lab now solves connected cylinder and behind-BB gas volumes with mass/energy accounting, compressible reversible flow, head/airbrake restriction, spring force, signed piston/BB motion, leakage and post-exit discharge. It exposes integration/conservation diagnostics, step-refinement checks and explicit input-sensitivity scenarios.
 
@@ -16,11 +16,22 @@ The lab now solves connected cylinder and behind-BB gas volumes with mass/energy
 - Cylinder residual and downstream storage volumes (each cavity counted once).
 - Any piston mass from 5–300 g; quick buttons for 58, 65, 68, 72, 76 and 82 g.
 - Spring stiffness/preload or a user-entered force/compression curve. M110–M220 are identity labels only, not hidden power multipliers.
+- Optional spring free/installed lengths and a cut-spring estimate; derived preload, active-coil rate adjustment and known-solid-height checks.
 - Seal and nozzle leakage, BB clearance leakage, hop release/moving resistance, seal friction, approximate bumper restitution, optional spring effective mass, heat exchange, air temperature and pressure.
 
 AMP / Tridos Ultimate is the user's identified assembly; Scorpion remains a separate identity option. AMP pin selections do not invent dimensions. The Tridos listing says nominal 71 g, while AMP lists 69 g without a brake / 72 g with its longest pin. Weigh the actual assembly. Current 4 mm head / 3.8 mm pin example dimensions are **not verified AMP specifications**.
 
 Platform starting points include SSG10, a forward-cocked-position −20 mm short-stroke comparison, TAC-41P/Lite Sport, SRS A2 16/22-inch, VSR-10 Pro/G-Spec and APS2/L96. Internal dimensions remain editable assumptions unless measured. Short stroking with a front stop or changed spring/piston geometry requires entering the corresponding actual measurements.
+
+### Spring length and cutting
+
+Open **Spring length, cutting & mechanical losses** and enable **Calculate from spring lengths / simulate cutting**. Enter unloaded length, the distance between the spring seats with the piston at front contact (already including spacers), and the axial free-length reduction from cutting. Length mode replaces direct preload; it does not add a second preload. No real spring lengths are supplied as defaults.
+
+For a hypothetical cut, also enter original and removed **active** coils. The model reduces free length while estimating the higher rate of the shorter active section; it does not assume that output energy scales with spring length. The panel shows resulting length, front/cocked compression and force, stiffness and available spring work. Live force/compression appear beneath the animation, and the new force law feeds the existing pressure, velocity, impact and discharge calculations.
+
+The estimate assumes uniform linear active coils with unchanged wire, diameter and end support. Count changes are independent inputs, not inferred from free length. Progressive coils or modified ends need a new measured force curve. Enter the remaining spring mass separately. Optional remaining solid height allows rejecting coil-bound geometry; zero means **coil bind not checked**. Slack/unseating is not simulated. None of these checks certifies a real modification as safe or compatible.
+
+A pre-cut measured curve cannot be reused for a hypothetical cut. For an already cut and measured spring, use its **current** free length, mass and curve with cut/removal set to zero. Hypothetical cut estimates are not eligible for chrono fitting. Spring length/cut choices join the optimizer when length mode is enabled and the spring is unlocked; solid height remains a fixed constraint, not an optimization variable. The optimizer still preserves 95–105% of starting predicted energy.
 
 ### Animation and outputs
 
@@ -40,6 +51,7 @@ Contact speed/kinetic energy and muzzle pressure/gas inventory/discharge replace
 - Fit only one shared bounded head discharge coefficient. Repeats improve repeatability information, not the number of identifiable parameters.
 - Report training and held-out errors, parameter-bound/weak-constraint warnings, and export the fit profile/residuals.
 - Preserve old v2 records as unverified references and discard old fitted coefficients.
+- Preserve complete v3.0 setup snapshots/roles when adding inactive length defaults; retain their original solver version and exclude them from new fits. Original snapshots remain in exports.
 - JSON import/export; full setup and shot-trace export; local storage only.
 - Limits: 2,000 records and 32 distinct configurations per fit. Export a backup before deleting measurements.
 

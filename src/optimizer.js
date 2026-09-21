@@ -9,13 +9,18 @@
     head: ["headBore", "headLength", "nozzleBore", "nozzleLength", "breechVolume"],
     piston: ["pistonMass"],
     airbrake: ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper"],
-    spring: ["springStiffness", "springPreload", "springMass"],
+    spring: ["springStiffness", "springPreload", "springMass", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils"],
     bb: ["bbMass", "bbDiameter"]
   });
-  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
+  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], springFreeLength: [0,500], springInstalledLength: [0,500], springCutLength: [0,400], springActiveCoils: [0,200], springRemovedCoils: [0,200], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
   const WEIGHTS = Object.freeze({ balanced: [.35,.2,.15,.30], quiet: [.45,.25,.2,.10], efficient: [.15,.10,.05,.70] });
   const HORIZON_MS = 250;
   const clone = v => JSON.parse(JSON.stringify(v));
+  function fixedReason(p, key) {
+    if (p.springCurve.length && ["springStiffness", "springMass", "springFreeLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"].includes(key)) return "measured-spring";
+    if (p.springLengthMode === 1 && key === "springPreload" || p.springLengthMode !== 1 && ["springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"].includes(key)) return "spring-mode";
+    return null;
+  }
   function parseValues(text) {
     if (typeof text !== "string" || !text.trim()) throw new Error("optimizer:values");
     const tokens = text.trim().split(/[,;\s]+/);
@@ -37,7 +42,8 @@
       for (const key of keys) {
         const entries = config.values?.[key] || [base[key]];
         if (!Array.isArray(entries) || entries.length > 12 || entries.length === 0 || entries.some(v => !Number.isFinite(v) || v < LIMITS[key][0] || v > LIMITS[key][1])) throw new Error(`optimizer:values:${key}`);
-        if (base.springCurve.length && ["springStiffness", "springMass"].includes(key) && entries.some(v => v !== base[key])) throw new Error("optimizer:measured-spring");
+        const fixed = fixedReason(base, key);
+        if (fixed && entries.some(v => v !== base[key])) throw new Error(`optimizer:${fixed}`);
         const values = [...new Set([base[key], ...entries])];
         if (values.length > 1) { dimensions.push({ key, values }); total *= values.length; }
         if (!Number.isSafeInteger(total)) throw new Error("optimizer:space-too-large");
@@ -105,6 +111,7 @@
     for (const key of Object.keys(P.DEFAULTS)) {
       if (JSON.stringify(candidate.params[key]) !== JSON.stringify(next[key])) {
         if (!allowed.has(key)) throw new Error("optimizer:locked-change");
+        if (fixedReason(next, key)) throw new Error("optimizer:fixed-spring");
         next[key] = clone(candidate.params[key]);
       }
     }
@@ -137,6 +144,6 @@
       total: space.total, evaluated: indices.length, exhaustive: indices.length === space.total, rejected, eligible: candidates.length,
       frontier: rank(candidates, priority), noVariables: space.dimensions.length === 0 };
   }
-  const api = { VERSION, GROUPS, LIMITS, WEIGHTS, HORIZON_MS, parseValues, searchSpace, candidateAt, sampleIndices, assess, dominates, rank, changesFrom, applyCandidate, search };
+  const api = { VERSION, GROUPS, LIMITS, WEIGHTS, HORIZON_MS, fixedReason, parseValues, searchSpace, candidateAt, sampleIndices, assess, dominates, rank, changesFrom, applyCandidate, search };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.PneumaticOptimizer = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
