@@ -7,7 +7,10 @@ const sourcePath = resolve(projectRoot, "index.html");
 const outputDirectory = resolve(projectRoot, "dist");
 const cloudflareDirectory = resolve(projectRoot, "cloudflare");
 
-const source = await readFile(sourcePath, "utf8");
+const template = await readFile(resolve(projectRoot, "src/page.html"), "utf8");
+const modules = await Promise.all(["physics.js", "calibration.js", "app.js"].map(name => readFile(resolve(projectRoot, "src", name), "utf8")));
+const source = template.replace("/* BUNDLED_APP */", () => modules.join("\n\n"));
+await writeFile(sourcePath, source);
 const styleMatch = source.match(/<style>([\s\S]*?)<\/style>/);
 const scriptMatch = source.match(/<script>([\s\S]*?)<\/script>\s*<\/body>/);
 

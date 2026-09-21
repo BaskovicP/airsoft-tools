@@ -1,111 +1,99 @@
 # Airsoft Tools
 
-A standalone, single-file interactive explainer for comparing cylinder, barrel, piston, BB and airbrake timing across spring-powered airsoft sniper configurations.
+Standalone English/Croatian tools for exploring spring-airsoft pneumatic timing. Open `index.html` directly—no server, account, network access or runtime dependencies are required. The first screen is a tool menu; the pneumatic timing lab is its first tool.
 
-The interface can be switched between English and Croatian. The selected language is remembered locally in the browser.
+## Physics model v3
 
-The app opens on an Airsoft Tools menu. The pneumatic timing lab is the first available tool, and the menu is structured so additional tools can be added later without changing the lab itself. The lab includes an **All tools** control for returning to the menu.
+The lab now solves connected cylinder and behind-BB gas volumes with mass/energy accounting, compressible reversible flow, head/airbrake restriction, spring force, signed piston/BB motion, leakage and post-exit discharge. It exposes integration/conservation diagnostics, step-refinement checks and explicit input-sensitivity scenarios.
 
-## Rifle and configuration presets
+**This is still an unvalidated lumped model, not an exact SSG10 predictor.** Numerical convergence does not establish real-world accuracy. Pressure waves, a resolved spherical BB/ahead-gas flow, detailed cup/bumper deformation and structural acoustics are not implemented. See [model equations, limitations and validation](docs/MODEL.md) and the [original physics accuracy plan](docs/PHYSICS_ACCURACY_PLAN.md).
 
-The selector includes these starting configurations:
+### Geometry and mechanics
 
-- SSG10 reference and a derived 20 mm short-stroke comparison;
-- TAC-41P and TAC-41 Lite Sport;
-- SRS A2 16-inch and 22-inch;
-- VSR-10 Pro/clone and G-Spec baselines;
-- a generic APS2/L96 baseline;
-- Custom, selected automatically whenever a control is changed.
+- Fixed cylinder bore; stroke changes swept volume without resizing the cylinder.
+- Head receiving-bore and downstream nozzle diameters/lengths.
+- Airbrake projection, shaft diameter, tip diameter and taper; dynamic overlap, clearance and pin displacement.
+- Cylinder residual and downstream storage volumes (each cavity counted once).
+- Any piston mass from 5–300 g; quick buttons for 58, 65, 68, 72, 76 and 82 g.
+- Spring stiffness/preload or a user-entered force/compression curve. M110–M220 are identity labels only, not hidden power multipliers.
+- Seal and nozzle leakage, BB clearance leakage, hop release/moving resistance, seal friction, approximate bumper restitution, optional spring effective mass, heat exchange, air temperature and pressure.
 
-Published barrel and volume geometry is identified in the preset notes. Internal stroke, piston mass, airbrake state, and generic-platform values that are not established by published specifications are deliberately labeled as editable assumptions. Selecting a preset with no configured airbrake hides the airbrake event instead of presenting an invented braking time.
+AMP / Tridos Ultimate is the user's identified assembly; Scorpion remains a separate identity option. AMP pin selections do not invent dimensions. The Tridos listing says nominal 71 g, while AMP lists 69 g without a brake / 72 g with its longest pin. Weigh the actual assembly. Current 4 mm head / 3.8 mm pin example dimensions are **not verified AMP specifications**.
 
-Selecting an SSG10 configuration also enables an SSG10 spring selector from M110 through M220. Manufacturer reference energies are shown for context, while the simulation uses their relative 0.20 g energy ratio against M150 as a heuristic drive multiplier. These values are not treated as exact output predictions, and chrono calibration records the selected spring with each measurement.
+Platform starting points include SSG10, a forward-cocked-position −20 mm short-stroke comparison, TAC-41P/Lite Sport, SRS A2 16/22-inch, VSR-10 Pro/G-Spec and APS2/L96. Internal dimensions remain editable assumptions unless measured. Short stroking with a front stop or changed spring/piston geometry requires entering the corresponding actual measurements.
 
-## Extended physics controls
+### Animation and outputs
 
-Piston mass is continuously adjustable from 5 g to 300 g in 0.1 g increments; the quick mass buttons remain available as shortcuts. The advanced panel also models:
+The animation uses solver states, independent cylinder/BB pressure colors and signed arrows. Three graphs show both pressures, piston velocity and BB velocity, including negative values.
 
-- spring preload and spring condition;
-- piston friction, seal efficiency, cylinder-head/nozzle dead volume, and nozzle flow efficiency/pressure response;
-- compression exponent and a separate chamber-to-barrel pressure response;
-- actual BB diameter, hop/bucking breakaway force, moving barrel drag, and BB air-transfer efficiency;
-- ambient pressure and air temperature effects on pressure and flow timing.
+Clickable events show entry, initial deceleration, a user-defined substantial-deceleration threshold after entry, the selected share of maximum pre-exit BB energy (95% by default), BB exit, rebound and contact. A deceleration after entry is not automatically caused entirely by the airbrake. The no-pin comparison keeps piston mass fixed but changes occupied gas volume.
 
-Every advanced input updates the shot calculation, animation, graphs, impact/blast indices, and timing metrics. A live influence panel compares the current result with the same geometry, masses, spring, and airbrake under baseline advanced assumptions. Calibration snapshots preserve all advanced inputs.
+Missing exits and contacts remain unavailable. A timeout does not become muzzle velocity or a soft impact. The useful-energy timing goal is unavailable until an exit occurs.
 
-The airbrake control now explains the pneumatic cushion directly in the interface: a stronger modeled cushion traps more air near the cylinder head, decelerates the piston sooner, and usually leaves less kinetic energy for the final mechanical strike. The sound section keeps that piston-impact contribution separate from the compressed-air muzzle blast. Both are relative 0–100 heuristic indices—not acoustic dB measurements—and the impact card adds a plain-language landing severity for easier comparison.
+Contact speed/kinetic energy and muzzle pressure/gas inventory/discharge replace arbitrary 0–100 sound indices. They are conditional model quantities—not peak impact force, perceived loudness, exact real-world Joules or dB.
 
-The usable-stroke control also explains short stroking. In the model, reducing stroke reduces total swept cylinder volume and—when airbrake rod length stays unchanged—reduces both the piston travel and swept-air volume between the cocked position and airbrake entry. A live note calculates that pre-entry travel and volume for the current setup; the SSG10 short-stroke preset documents its 65→45 mm travel and approximately 27.4→19.0 cm³ pre-entry-volume change.
+### Calibration and data
 
-Published references: [SSG10 barrel](https://us.novritsch.com/product/ssg10-precision-inner-barrel-standard/), [SSG10 spring chart](https://us.novritsch.com/product/ssg-spring/), [TAC-41P](https://www.silverback-airsoft.com/t41p), [TAC-41 Lite Sport](https://www.silverback-airsoft.com/t41ls), [SRS A2 16-inch](https://www.silverback-airsoft.com/blt-13), [SRS 22-inch barrel](https://www.silverback-airsoft.com/ibl-a578), and [VSR-10 G-Spec](https://www.tokyo-marui.co.jp/products/aircocking/boltaction/73).
+- The supplied 0.46 g / 330 fps observation starts as reference-only with an unknown setup; its ≈2.327 J is derived, not an independent measurement.
+- Record individual shots with setup snapshots, notes, chrono uncertainty and training/held-out/reference roles.
+- Explicitly confirm the shot's setup and independently measured geometry/masses and spring data before fitting.
+- Fit only one shared bounded head discharge coefficient. Repeats improve repeatability information, not the number of identifiable parameters.
+- Report training and held-out errors, parameter-bound/weak-constraint warnings, and export the fit profile/residuals.
+- Preserve old v2 records as unverified references and discard old fitted coefficients.
+- JSON import/export; full setup and shot-trace export; local storage only.
+- Limits: 2,000 records and 32 distinct configurations per fit. Export a backup before deleting measurements.
 
-## Run the standalone app locally
+## Source and tests
 
-Open `index.html` directly in a modern browser. No build, package install, network connection or web server is required.
+`index.html` is generated but checked in so it opens standalone. Edit these sources, not its generated inline bundle:
 
-If the browser restricts local storage on `file://` pages, serve the folder locally instead:
+- `src/page.html`: shared page shell/styles;
+- `src/physics.js`: pure solver, also loadable by Node;
+- `src/calibration.js`: record validation, migration and one-parameter fitting;
+- `src/app.js`: bilingual controls, canvas animation, graphs and data UI.
 
-```sh
-python3 -m http.server 8000
-```
-
-Then open `http://127.0.0.1:8000`.
-
-## Cloudflare deployment
-
-The repository includes the same Cloudflare-ready pattern as the Spiritual Progress Questionnaire project:
-
-- `dist/` contains deployment-ready static assets;
-- `wrangler.jsonc` deploys `dist/` through Cloudflare Workers Static Assets;
-- `dist/_headers` applies restrictive security and privacy headers;
-- `airsoft-tools-cloudflare.zip` is ready for drag-and-drop upload;
-- `.openai/hosting.json` identifies `dist/` as the static output directory.
-
-The root `index.html` remains a standalone single-file version. The build separates its inline CSS and JavaScript into `dist/styles.css` and `dist/app.js`, allowing Cloudflare to use a stricter script policy without changing the local version.
-
-Rebuild the deployment output after changing `index.html`:
+Run:
 
 ```sh
 npm run build
-```
-
-Rebuild both `dist/` and the direct-upload ZIP:
-
-```sh
+npm test
 npm run package:cloudflare
 ```
 
-### Cloudflare Workers with Git integration
+There are no npm dependencies to install. Tests cover geometry/work invariants, flow/choking/laminar limits, invalid setups, missing events, rebound and BB deceleration, leakage/heat accounting, timestep refinement, synthetic calibration, migration and standalone/build parity. Tests are numerical/source checks, not browser visual QA or experimental validation.
 
-Connect the GitHub repository in **Workers & Pages → Create application → Import a repository** and use:
+For a local HTTP preview, optionally run `python3 -m http.server 8000`, then open `http://127.0.0.1:8000`.
 
+## Cloudflare deployment
+
+The established deployment stays unchanged:
+
+- `dist/`: static HTML/CSS/JS plus security headers;
+- `wrangler.jsonc`: Cloudflare Workers Static Assets;
+- `airsoft-tools-cloudflare.zip`: direct-upload archive;
+- `.openai/hosting.json`: identifies `dist` as static output.
+
+The build generates the standalone root HTML and separates the exact same inline code into `dist/app.js` and styles into `dist/styles.css`. The hosted build uses a restrictive script policy and no external requests.
+
+### Workers Git integration
+
+- Repository: `BaskovicP/airsoft-tools`
 - Production branch: `master`
-- Build command: `npm run build`
-- Deploy command: `npx wrangler deploy`
-- Non-production branch deploy command: `npx wrangler versions upload`
-- Root directory: `/`
+- Build: `npm run build`
+- Deploy: `npx wrangler deploy`
+- Non-production deploy: `npx wrangler versions upload`
+- Root: `/`
 
-The Worker name in `wrangler.jsonc` is `airsoft-tools`.
+### Pages Git integration
 
-### Cloudflare Pages with Git integration
-
-Alternatively, create a Pages project connected to the repository and use:
-
-- Production branch: `master`
-- Framework preset: `None`
-- Build command: `npm run build`
-- Build output directory: `dist`
+Use production branch `master`, framework `None`, build command `npm run build`, output `dist`.
 
 ### Direct upload
 
-Upload `airsoft-tools-cloudflare.zip` through **Workers & Pages → Create application → Get started → Drag and drop your files**. The archive contains `index.html`, `styles.css`, `app.js`, `_headers`, and `.assetsignore` at its root.
+Run `npm run package:cloudflare` and upload `airsoft-tools-cloudflare.zip`. The archive contains only deployment assets at its root. Pushing GitHub does not by itself prove that a connected Cloudflare deployment succeeded.
 
-To preview the generated Cloudflare build locally:
+## Sources
 
-```sh
-python3 -m http.server 4173 --directory dist
-```
+Product identity: [Tridos AMP kit](https://tridos.design/products/ultimate-ssg10-vsr10-piston-cylinder-head-kit), [AMP manufacturer](https://amp-machine.com/shop/p/am-ultimate-vsr-piston-cylinder-head-71g-stainless-steel-one-piece-piston-with-airbrake-and-high-flow-cylinder-head-with-rubber-damper).
 
-## Model boundary
-
-The app separates direct geometry calculations, conditional physics-model outputs, heuristic comparison indices, and unknown or fitted parameters. It is not a replacement for a chronograph, pressure instrumentation, acoustic measurement or safe mechanical inspection. Calibration measurements are stored only in the browser's local storage.
+Physics methods: [Do Duc et al., internal ballistics](https://cris.technion.ac.il/en/publications/the-internal-ballistics-of-airguns/), [NASA compressible flow](https://www.grc.nasa.gov/www/k-12/airplane/mflchk.html). More references and measurement requirements are in the physics plan.
