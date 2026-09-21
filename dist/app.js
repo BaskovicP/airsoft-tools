@@ -4,7 +4,7 @@
       const $ = (id) => document.getElementById(id);
       const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
       const lerp = (a, b, t) => a + (b - a) * t;
-      const pistonMasses = [58, 65, 68, 72, 76, 82];
+      const pistonMasses = [45, 50, 58, 65, 68, 72, 76, 82];
       const FPS_PER_MPS = 3.28084;
       const ATM = 101325;
       const STORAGE_KEY = "ssg10-pneumatic-lab-v2";
@@ -13,11 +13,14 @@
       const STATIC_HR = {
         "INTERACTIVE INTERNAL-BALLISTICS EXPLAINER": "INTERAKTIVNI PRIKAZ UNUTARNJE BALISTIKE",
         "SSG10 Pneumatic Timing Lab": "SSG10 laboratorij pneumatskog tempiranja",
+        "Spring Sniper Pneumatic Timing Lab": "Laboratorij pneumatike opružnih snajpera",
         "See when a Stalker Scorpion-style weighted piston builds useful pressure, when its airbrake begins cushioning, and whether the BB has already received most of its acceleration.": "Pogledajte kada otežani piston tipa Stalker Scorpion stvara koristan tlak, kada njegova zračna kočnica počinje ublažavati udar i je li BB već dobio većinu ubrzanja.",
+        "Compare SSG10, TAC-41, SRS, VSR and L96-style systems to see when a weighted piston builds useful pressure, when an airbrake begins cushioning, and whether the BB has already received most of its acceleration.": "Usporedite sustave SSG10, TAC-41, SRS, VSR i L96 kako biste vidjeli kada otežani piston stvara koristan tlak, kada zračna kočnica počinje ublažavati udar i je li BB već dobio većinu ubrzanja.",
         "Interpretation boundary:": "Granice tumačenja:",
         "this is a simplified comparative model—not a chronograph, pressure transducer, acoustic meter, or claim of exact real-world joules or dB. Calibration improves agreement only inside the measured setup range.": "ovo je pojednostavljeni usporedni model — nije kronograf, senzor tlaka ni mjerač zvuka te ne tvrdi da daje točne stvarne joule ili dB. Kalibracija poboljšava podudaranje samo unutar raspona izmjerenih konfiguracija.",
         "Language": "Jezik",
         "editable inputs": "podesivi ulazi",
+        "verify internals": "provjerite unutrašnjost",
         "geometry": "geometrija",
         "model": "model",
         "heuristic": "heuristika",
@@ -25,13 +28,23 @@
         "0–100 index": "indeks 0–100",
         "timing interpretation": "tumačenje vremenskog odnosa",
         "Setup": "Postavke",
+        "Platform starting point": "Početna konfiguracija platforme",
+        "Rifle / configuration preset": "Predložak replike / konfiguracije",
+        "SSG10 reference": "SSG10 referentna konfiguracija",
+        "SSG10 short-stroke (−20 mm)": "SSG10 skraćeni hod (−20 mm)",
+        "VSR-10 Pro / clone baseline": "VSR-10 Pro / klon, osnovna konfiguracija",
+        "VSR-10 G-Spec baseline": "VSR-10 G-Spec, osnovna konfiguracija",
+        "APS2 / L96 baseline": "APS2 / L96, osnovna konfiguracija",
+        "Custom setup": "Prilagođena konfiguracija",
         "EDITABLE INPUTS": "PODESIVI ULAZI",
         "AIR SYSTEM": "ZRAČNI SUSTAV",
         "Cylinder swept volume": "Radni volumen cilindra",
         "Inner-barrel length": "Duljina unutarnje cijevi",
         "Inner-barrel diameter": "Promjer unutarnje cijevi",
+        "Usable piston stroke": "Iskoristivi hod pistona",
         "MOVING MASS": "POKRETNA MASA",
         "Stalker Scorpion piston mass": "Masa Stalker Scorpion pistona",
+        "Piston mass": "Masa pistona",
         "Piston mass presets": "Zadane mase pistona",
         "BB mass": "Masa BB-a",
         "AIRBRAKE": "ZRAČNA KOČNICA",
@@ -71,6 +84,7 @@
         "CYLINDER HEAD / NOZZLE": "GLAVA CILINDRA / MLAZNICA",
         "INNER BARREL": "UNUTARNJA CIJEV",
         "Animated SSG10 firing cycle": "Animirani ciklus opaljenja SSG10",
+        "Animated spring-sniper firing cycle": "Animirani ciklus opaljenja opružnog snajpera",
         "A spring drives a piston through a cylinder, compressing air that moves a BB through the barrel. An airbrake rod enters the cylinder head and creates a pneumatic cushion.": "Opruga pokreće piston kroz cilindar i komprimira zrak koji potiskuje BB kroz cijev. Šipka zračne kočnice ulazi u glavu cilindra i stvara pneumatski jastuk.",
         "PISTON v": "v PISTONA",
         "PRESSURE BEHIND BB": "TLAK IZA BB-a",
@@ -96,9 +110,12 @@
         "Estimated muzzle-blast intensity": "Procijenjeni intenzitet praska na ustima cijevi",
         "Heuristic index derived from modeled residual gauge pressure and gas volume at BB exit. It is not dB or a suppressor prediction.": "Heuristički indeks izveden iz modeliranog preostalog relativnog tlaka i volumena plina pri izlasku BB-a. Nije dB niti predviđanje učinka prigušivača.",
         "What this Scorpion configuration is doing": "Kako se ponaša ova Scorpion konfiguracija",
+        "What this piston configuration is doing": "Kako se ponaša ova konfiguracija pistona",
         "TIMING INTERPRETATION": "TUMAČENJE VREMENSKOG ODNOSA",
         "Calibration mode — add real SSG10 chrono measurements": "Kalibracija — dodajte stvarna kronografska mjerenja SSG10",
+        "Calibration mode — add real chrono measurements": "Kalibracija — dodajte stvarna kronografska mjerenja",
         "Each measurement stores a snapshot of the current barrel, cylinder, piston and airbrake setup. “Fit unknowns” adjusts only the effective spring-drive scale and seal/flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.": "Svako mjerenje sprema trenutačnu konfiguraciju cijevi, cilindra, pistona i zračne kočnice. „Prilagodi nepoznanice” podešava samo efektivnu skalu pogona opruge i učinkovitost brtvljenja/protoka. Jedna točka može usidriti ukupnu skalu; za određivanje obiju nepoznanica potrebne su različite mase BB-a i konfiguracije. Podaci ostaju u lokalnoj pohrani ovog preglednika.",
+        "Each measurement stores a snapshot of the current barrel, cylinder, piston stroke, piston mass and airbrake setup. “Fit unknowns” adjusts only the effective spring-drive scale and seal/flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.": "Svako mjerenje sprema trenutačnu konfiguraciju cijevi, cilindra, hoda i mase pistona te zračne kočnice. „Prilagodi nepoznanice” podešava samo efektivnu skalu pogona opruge i učinkovitost brtvljenja/protoka. Jedna točka može usidriti ukupnu skalu; za određivanje obiju nepoznanica potrebne su različite mase BB-a i konfiguracije. Podaci ostaju u lokalnoj pohrani ovog preglednika.",
         "BB mass (g)": "Masa BB-a (g)",
         "Measured velocity (fps)": "Izmjerena brzina (fps)",
         "Energy (J, derived)": "Energija (J, izvedena)",
@@ -124,8 +141,10 @@
         en: {
           "play.fire": "Fire / play", "play.pause": "Pause", "play.resume": "Resume", "play.replay": "Replay",
           "timing.before": "Airbrake enters before BB exit", "timing.after": "Airbrake enters after BB exit",
+          "timing.disabled": "Disabled", "timing.none": "No pneumatic cushion configured",
           "goal.overlap": "Timing overlap: BB is still gaining substantial energy",
           "goal.after": "Strong cushion begins after BB exit",
+          "goal.none": "No strong airbrake event in this preset",
           "goal.near": "{percent}% of modeled exit energy gained first — near target",
           "goal.close": "{percent}% gained first — close, with overlap",
           "phase.1": "1 · Trigger release — spring unloads and accelerates the piston",
@@ -135,6 +154,7 @@
           "phase.5": "5 · Pneumatic cushion rapidly decelerates the piston while the BB is still in the barrel",
           "phase.6": "6 · BB exits — residual compressed air expands from the muzzle",
           "phase.7": "7 · Cushion bleeds down — piston completes its final low-speed travel",
+          "phase.7.noBrake": "7 · Residual pressure vents — the uncushioned piston completes its travel",
           "phase.8": "8 · Piston reaches the cylinder head — impact depends on its remaining kinetic energy",
           "interpret.entryBefore": "The rod enters {time} ms before exit",
           "interpret.entryAfter": "The rod enters {time} ms after exit",
@@ -144,6 +164,7 @@
           "interpret.massLight": "This lighter piston changes direction more readily and carries less momentum into the head, but may build a shorter pressure impulse for a heavy BB.",
           "interpret.massReference": "The 72 g piston is the reference preset: changing mass will shift both pressure timing and the momentum that the airbrake must remove.",
           "interpret.compare": "Compare presets and airbrake lengths by watching the amber and cyan markers move; treat the result as a tuning hypothesis to verify on a chronograph.",
+          "interpret.noBrake": "This starting preset has no active airbrake; add rod length and cushion effect to explore braking timing.",
           "fit.loaded": "A supplied 0.46 g / 330 fps / ≈2.33 J reference point is loaded.",
           "fit.empty": "Add at least one chrono measurement first.",
           "fit.running": "Fitting simplified unknowns…",
@@ -151,15 +172,27 @@
           "fit.many": "Fit across {count} points: drive {drive}×, flow {flow}%, RMS velocity error {error}%.",
           "fit.ready": "{count} measurement{suffix} ready to fit.",
           "fit.reset": "Calibration reset to the supplied 0.46 g / 330 fps reference point.",
-          "measurement.setup": "{length} mm × {diameter} · {mass} g piston · {brakeLength} mm / {effect}% brake",
+          "measurement.setup": "{length} mm × {diameter} · {stroke} mm stroke · {mass} g piston · {brakeLength} mm / {effect}% brake",
           "measurement.remove": "Remove", "measurement.delete": "Delete measurement",
-          "model.energy": "{fps} fps · ≈{energy} J model estimate"
+          "model.energy": "{fps} fps · ≈{energy} J model estimate",
+          "preset.ssg10": "Published 430 × 6.01 mm barrel; cylinder, stroke, piston and airbrake values are the current SSG10 model defaults.",
+          "preset.ssg10-short": "Derived comparison: the same modeled cylinder bore with 20 mm less stroke reduces swept volume from 35.8 to 27.4 cm³. This is not a universal short-stroke recipe.",
+          "preset.tac41p": "Published baseline: 41 cm³ usable bolt volume and a 510 × 6.05 mm barrel. Stroke, piston mass and no-airbrake state are editable starting assumptions.",
+          "preset.tac41ls": "Published baseline: 41 cm³ usable bolt volume and a 330 × 6.05 mm barrel. Stroke, piston mass and no-airbrake state are editable starting assumptions.",
+          "preset.srs16": "Published baseline: 41 cm³ air displacement, 23.8 mm cylinder bore and a 420 × 6.05 mm barrel. Piston mass and no-airbrake state are starting assumptions.",
+          "preset.srs22": "Published baseline: 41 cm³ air displacement and a 578 × 6.05 mm barrel. Stroke, piston mass and no-airbrake state are starting assumptions.",
+          "preset.vsr-pro": "Published 430 mm barrel length; stock bore, cylinder volume, stroke and piston mass are approximate baseline values because VSR builds vary.",
+          "preset.vsr-gspec": "Published 303 mm barrel length; stock bore, cylinder volume, stroke and piston mass are approximate baseline values because VSR builds vary.",
+          "preset.l96": "Generic APS2 / L96 starting point. Variants differ substantially, so every internal value is approximate and should be replaced with measured dimensions.",
+          "preset.custom": "Manual setup. The values below no longer match a complete predefined platform profile."
         },
         hr: {
           "play.fire": "Opali / pokreni", "play.pause": "Pauziraj", "play.resume": "Nastavi", "play.replay": "Ponovi",
           "timing.before": "Zračna kočnica ulazi prije izlaska BB-a", "timing.after": "Zračna kočnica ulazi nakon izlaska BB-a",
+          "timing.disabled": "Isključeno", "timing.none": "Nije postavljen pneumatski jastuk",
           "goal.overlap": "Vremensko preklapanje: BB još uvijek dobiva znatan dio energije",
           "goal.after": "Snažno ublažavanje počinje nakon izlaska BB-a",
+          "goal.none": "U ovom predlošku nema događaja snažnog kočenja",
           "goal.near": "{percent}% modelirane izlazne energije ostvareno je ranije — blizu cilja",
           "goal.close": "{percent}% ostvareno je ranije — blizu, uz preklapanje",
           "phase.1": "1 · Otpuštanje okidača — opruga se rasterećuje i ubrzava piston",
@@ -169,6 +202,7 @@
           "phase.5": "5 · Pneumatski jastuk brzo usporava piston dok je BB još u cijevi",
           "phase.6": "6 · BB izlazi — preostali komprimirani zrak širi se iz usta cijevi",
           "phase.7": "7 · Jastuk se odzračuje — piston dovršava posljednji dio hoda malom brzinom",
+          "phase.7.noBrake": "7 · Preostali tlak izlazi — piston bez jastuka završava svoj hod",
           "phase.8": "8 · Piston doseže glavu cilindra — udar ovisi o preostaloj kinetičkoj energiji",
           "interpret.entryBefore": "Šipka ulazi {time} ms prije izlaska",
           "interpret.entryAfter": "Šipka ulazi {time} ms nakon izlaska",
@@ -178,6 +212,7 @@
           "interpret.massLight": "Ovaj lakši piston lakše mijenja brzinu i donosi manju količinu gibanja prema glavi, ali za teški BB može stvarati kraći impuls tlaka.",
           "interpret.massReference": "Piston od 72 g referentna je postavka: promjena mase pomiče vrijeme tlaka i količinu gibanja koju zračna kočnica mora ukloniti.",
           "interpret.compare": "Usporedite mase i duljine zračne kočnice prateći pomicanje jantarne i cijan oznake; rezultat smatrajte hipotezom za podešavanje koju treba provjeriti kronografom.",
+          "interpret.noBrake": "Ovaj početni predložak nema aktivnu zračnu kočnicu; dodajte duljinu šipke i učinak jastuka kako biste istražili vrijeme kočenja.",
           "fit.loaded": "Učitana je zadana referentna točka 0,46 g / 330 fps / ≈2,33 J.",
           "fit.empty": "Najprije dodajte barem jedno kronografsko mjerenje.",
           "fit.running": "Prilagođavanje pojednostavljenih nepoznanica…",
@@ -185,10 +220,69 @@
           "fit.many": "Prilagodba na {count} točaka: pogon {drive}×, protok {flow}%, RMS pogreška brzine {error}%.",
           "fit.ready": "Broj mjerenja spremnih za prilagodbu: {count}.",
           "fit.reset": "Kalibracija je vraćena na zadanu referentnu točku 0,46 g / 330 fps.",
-          "measurement.setup": "{length} mm × {diameter} · piston {mass} g · kočnica {brakeLength} mm / {effect}%",
+          "measurement.setup": "{length} mm × {diameter} · hod {stroke} mm · piston {mass} g · kočnica {brakeLength} mm / {effect}%",
           "measurement.remove": "Ukloni", "measurement.delete": "Izbriši mjerenje",
-          "model.energy": "{fps} fps · ≈{energy} J, procjena modela"
+          "model.energy": "{fps} fps · ≈{energy} J, procjena modela",
+          "preset.ssg10": "Objavljeni podaci za cijev: 430 × 6,01 mm; vrijednosti cilindra, hoda, pistona i zračne kočnice trenutačne su zadane vrijednosti SSG10 modela.",
+          "preset.ssg10-short": "Izvedena usporedba: isti modelirani promjer cilindra s 20 mm kraćim hodom smanjuje radni volumen s 35,8 na 27,4 cm³. Ovo nije univerzalna uputa za skraćivanje hoda.",
+          "preset.tac41p": "Objavljena osnova: 41 cm³ iskoristivog volumena cilindra i cijev 510 × 6,05 mm. Hod, masa pistona i stanje bez zračne kočnice početne su pretpostavke koje možete mijenjati.",
+          "preset.tac41ls": "Objavljena osnova: 41 cm³ iskoristivog volumena cilindra i cijev 330 × 6,05 mm. Hod, masa pistona i stanje bez zračne kočnice početne su pretpostavke koje možete mijenjati.",
+          "preset.srs16": "Objavljena osnova: 41 cm³ istisnine zraka, provrt cilindra 23,8 mm i cijev 420 × 6,05 mm. Masa pistona i stanje bez zračne kočnice početne su pretpostavke.",
+          "preset.srs22": "Objavljena osnova: 41 cm³ istisnine zraka i cijev 578 × 6,05 mm. Hod, masa pistona i stanje bez zračne kočnice početne su pretpostavke.",
+          "preset.vsr-pro": "Objavljena duljina cijevi je 430 mm; provrt, volumen cilindra, hod i masa pistona približne su početne vrijednosti jer se VSR konfiguracije razlikuju.",
+          "preset.vsr-gspec": "Objavljena duljina cijevi je 303 mm; provrt, volumen cilindra, hod i masa pistona približne su početne vrijednosti jer se VSR konfiguracije razlikuju.",
+          "preset.l96": "Opća početna točka za APS2 / L96. Varijante se znatno razlikuju, pa su sve unutarnje vrijednosti približne i treba ih zamijeniti izmjerenim dimenzijama.",
+          "preset.custom": "Ručna konfiguracija. Vrijednosti u nastavku više ne odgovaraju cjelovitom unaprijed zadanom profilu platforme."
         }
+      };
+
+      const PLATFORM_PRESETS = {
+        ssg10: {
+          cylinderVolume: 35.8, strokeLength: 85, barrelLength: 430, barrelDiameter: 6.01,
+          pistonMass: 72, bbMass: 0.46, airbrakeLength: 20, airbrakeEffect: 72,
+          noteKey: "preset.ssg10"
+        },
+        "ssg10-short": {
+          cylinderVolume: 27.4, strokeLength: 65, barrelLength: 430, barrelDiameter: 6.01,
+          pistonMass: 72, bbMass: 0.46, airbrakeLength: 20, airbrakeEffect: 72,
+          noteKey: "preset.ssg10-short"
+        },
+        tac41p: {
+          cylinderVolume: 41, strokeLength: 92, barrelLength: 510, barrelDiameter: 6.05,
+          pistonMass: 58, bbMass: 0.46, airbrakeLength: 0, airbrakeEffect: 0,
+          noteKey: "preset.tac41p"
+        },
+        tac41ls: {
+          cylinderVolume: 41, strokeLength: 92, barrelLength: 330, barrelDiameter: 6.05,
+          pistonMass: 58, bbMass: 0.46, airbrakeLength: 0, airbrakeEffect: 0,
+          noteKey: "preset.tac41ls"
+        },
+        srs16: {
+          cylinderVolume: 41, strokeLength: 92, barrelLength: 420, barrelDiameter: 6.05,
+          pistonMass: 58, bbMass: 0.46, airbrakeLength: 0, airbrakeEffect: 0,
+          noteKey: "preset.srs16"
+        },
+        srs22: {
+          cylinderVolume: 41, strokeLength: 92, barrelLength: 578, barrelDiameter: 6.05,
+          pistonMass: 58, bbMass: 0.46, airbrakeLength: 0, airbrakeEffect: 0,
+          noteKey: "preset.srs22"
+        },
+        "vsr-pro": {
+          cylinderVolume: 31.8, strokeLength: 80, barrelLength: 430, barrelDiameter: 6.08,
+          pistonMass: 45, bbMass: 0.40, airbrakeLength: 0, airbrakeEffect: 0,
+          noteKey: "preset.vsr-pro"
+        },
+        "vsr-gspec": {
+          cylinderVolume: 31.8, strokeLength: 80, barrelLength: 303, barrelDiameter: 6.08,
+          pistonMass: 45, bbMass: 0.40, airbrakeLength: 0, airbrakeEffect: 0,
+          noteKey: "preset.vsr-gspec"
+        },
+        l96: {
+          cylinderVolume: 30, strokeLength: 80, barrelLength: 490, barrelDiameter: 6.03,
+          pistonMass: 45, bbMass: 0.40, airbrakeLength: 0, airbrakeEffect: 0,
+          noteKey: "preset.l96"
+        },
+        custom: { noteKey: "preset.custom" }
       };
 
       let language = "en";
@@ -232,10 +326,12 @@
         cylinderVolume: $("cylinderVolume"),
         barrelLength: $("barrelLength"),
         barrelDiameter: $("barrelDiameter"),
+        strokeLength: $("strokeLength"),
         bbMass: $("bbMass"),
         airbrakeLength: $("airbrakeLength"),
         airbrakeEffect: $("airbrakeEffect")
       };
+      const platformPreset = $("platformPreset");
 
       let pistonMass = 72;
       let modelUnknowns = { driveScale: 0.325, flowEfficiency: 0.88 };
@@ -246,6 +342,47 @@
       let playStart = 0;
       let currentFraction = 0;
       let measurements = [];
+      let applyingPreset = false;
+
+      function updatePresetNote() {
+        const preset = PLATFORM_PRESETS[platformPreset.value] || PLATFORM_PRESETS.custom;
+        $("presetNote").textContent = tr(preset.noteKey);
+      }
+
+      function syncMassPresetButtons() {
+        document.querySelectorAll("#massPresets .preset").forEach((button) => {
+          button.setAttribute("aria-pressed", +button.dataset.mass === pistonMass ? "true" : "false");
+        });
+      }
+
+      function markSetupAsCustom() {
+        if (applyingPreset) return;
+        platformPreset.value = "custom";
+        updatePresetNote();
+      }
+
+      function applyPlatformPreset(id) {
+        const preset = PLATFORM_PRESETS[id];
+        if (!preset || id === "custom") {
+          platformPreset.value = "custom";
+          updatePresetNote();
+          return;
+        }
+        applyingPreset = true;
+        inputs.cylinderVolume.value = preset.cylinderVolume;
+        inputs.strokeLength.value = preset.strokeLength;
+        inputs.barrelLength.value = preset.barrelLength;
+        inputs.barrelDiameter.value = preset.barrelDiameter;
+        inputs.bbMass.value = preset.bbMass;
+        inputs.airbrakeLength.value = preset.airbrakeLength;
+        inputs.airbrakeEffect.value = preset.airbrakeEffect;
+        pistonMass = preset.pistonMass;
+        platformPreset.value = id;
+        syncMassPresetButtons();
+        applyingPreset = false;
+        updatePresetNote();
+        updateSimulation();
+      }
 
       function updatePlayButtonLabel() {
         const key = playing
@@ -261,7 +398,7 @@
       function applyLanguage(nextLanguage) {
         language = MESSAGES[nextLanguage] ? nextLanguage : "en";
         document.documentElement.lang = language;
-        document.title = language === "hr" ? STATIC_HR["SSG10 Pneumatic Timing Lab"] : "SSG10 Pneumatic Timing Lab";
+        document.title = language === "hr" ? STATIC_HR["Spring Sniper Pneumatic Timing Lab"] : "Spring Sniper Pneumatic Timing Lab";
         try { localStorage.setItem(LANGUAGE_KEY, language); } catch (_) { /* no-op */ }
         document.querySelectorAll("[data-language]").forEach((button) => {
           button.setAttribute("aria-pressed", button.dataset.language === language ? "true" : "false");
@@ -272,13 +409,13 @@
           switcher: "Jezik", controls: "Kontrole simulacije", presets: "Zadane mase pistona",
           timing: "Cilj vremenskog usklađivanja", stage: "Animirani ciklus opaljenja",
           scrubber: "Pomicanje kroz ciklus opaljenja", live: "Vrijednosti tijekom opaljenja",
-          graphs: "Grafovi opaljenja uživo", insight: "Tumačenje trenutačne Stalker Scorpion konfiguracije",
+          graphs: "Grafovi opaljenja uživo", insight: "Tumačenje trenutačne konfiguracije pistona",
           energy: "Energija u joulima"
         } : {
           switcher: "Language", controls: "Simulation controls", presets: "Piston mass presets",
           timing: "Timing objective", stage: "Animated firing cycle",
           scrubber: "Scrub through firing cycle", live: "Live firing values",
-          graphs: "Live firing graphs", insight: "Current Stalker Scorpion interpretation",
+          graphs: "Live firing graphs", insight: "Current piston-configuration interpretation",
           energy: "Energy in joules"
         };
         document.querySelector(".language-switch").setAttribute("aria-label", labels.switcher);
@@ -296,6 +433,7 @@
 
         updatePlayButtonLabel();
         setFitStatus(fitStatusState.key, fitStatusState.vars);
+        updatePresetNote();
         if (shot) {
           updateOutputs(currentParams());
           updateMetrics();
@@ -309,6 +447,7 @@
           cylinderVolume: +inputs.cylinderVolume.value,
           barrelLength: +inputs.barrelLength.value,
           barrelDiameter: +inputs.barrelDiameter.value,
+          strokeLength: +inputs.strokeLength.value,
           pistonMass,
           bbMass: +inputs.bbMass.value,
           airbrakeLength: +inputs.airbrakeLength.value,
@@ -324,6 +463,7 @@
           cylinderVolume: p.cylinderVolume,
           barrelLength: p.barrelLength,
           barrelDiameter: p.barrelDiameter,
+          strokeLength: p.strokeLength,
           pistonMass: p.pistonMass,
           bbMass: p.bbMass,
           airbrakeLength: p.airbrakeLength,
@@ -333,7 +473,7 @@
 
       function simulate(raw, lightweight = false) {
         const p = { ...raw };
-        const stroke = 0.085;
+        const stroke = (p.strokeLength || 85) / 1000;
         const cylinderVolume = p.cylinderVolume * 1e-6;
         const cylinderArea = cylinderVolume / stroke;
         const barrelLength = p.barrelLength / 1000;
@@ -393,7 +533,7 @@
           let brakeForce = 0;
           let brakeProgress = 0;
 
-          if (p.airbrakeLength > 0 && pistonX >= engagementX && !pistonHit) {
+          if (p.airbrakeLength > 0 && p.airbrakeEffect > 0 && pistonX >= engagementX && !pistonHit) {
             if (engageTime === null) {
               engageTime = t;
               momentumAtEngage = pistonMassKg * pistonV;
@@ -533,7 +673,8 @@
           button.setAttribute("aria-pressed", mass === pistonMass ? "true" : "false");
           button.addEventListener("click", () => {
             pistonMass = mass;
-            [...host.children].forEach((b) => b.setAttribute("aria-pressed", b === button ? "true" : "false"));
+            syncMassPresetButtons();
+            markSetupAsCustom();
             updateSimulation();
           });
           host.appendChild(button);
@@ -544,6 +685,7 @@
         $("cylinderVolumeOut").textContent = `${p.cylinderVolume.toFixed(1)} cm³`;
         $("barrelLengthOut").textContent = `${p.barrelLength} mm`;
         $("barrelDiameterOut").textContent = `${p.barrelDiameter.toFixed(2)} mm`;
+        $("strokeLengthOut").textContent = `${p.strokeLength} mm`;
         $("pistonMassOut").textContent = `${p.pistonMass} g`;
         $("bbMassOut").textContent = `${p.bbMass.toFixed(2)} g`;
         $("airbrakeLengthOut").textContent = `${p.airbrakeLength} mm`;
@@ -554,6 +696,7 @@
 
       function updateMetrics() {
         const s = shot;
+        const hasAirbrake = s.params.airbrakeLength > 0 && s.params.airbrakeEffect > 0;
         const fps = s.exitVelocity * FPS_PER_MPS;
         const retention = noBrakeShot.exitEnergy > 0 ? clamp(s.exitEnergy / noBrakeShot.exitEnergy, 0, 1.2) : 0;
         const timingDelta = (s.engageTime - s.exitTime) * 1000;
@@ -563,12 +706,16 @@
         $("volumeRatioMetric").textContent = `${s.ratio.toFixed(2)} : 1`;
         $("velocityMetric").textContent = `${s.exitVelocity.toFixed(1)} m/s`;
         $("energyMetric").textContent = tr("model.energy", { fps: fps.toFixed(0), energy: s.exitEnergy.toFixed(2) });
-        $("preBrakeMetric").textContent = `${Math.round(clamp(s.preBrakeShare, 0, 1) * 100)}%`;
+        $("preBrakeMetric").textContent = hasAirbrake ? `${Math.round(clamp(s.preBrakeShare, 0, 1) * 100)}%` : "—";
         $("peakPressureMetric").textContent = `${((s.peakPressure - ATM) / 1e5).toFixed(2)} bar(g)`;
         $("retentionMetric").textContent = `${Math.round(retention * 100)}%`;
-        $("momentumMetric").textContent = `${s.momentumAtEngage.toFixed(3)} kg·m/s`;
-        $("timingMetric").textContent = `${timingDelta >= 0 ? "+" : ""}${timingDelta.toFixed(2)} ms`;
-        $("timingSubMetric").textContent = tr(timingDelta < 0 ? "timing.before" : "timing.after");
+        $("momentumMetric").textContent = hasAirbrake ? `${s.momentumAtEngage.toFixed(3)} kg·m/s` : "—";
+        $("timingMetric").textContent = hasAirbrake
+          ? `${timingDelta >= 0 ? "+" : ""}${timingDelta.toFixed(2)} ms`
+          : tr("timing.disabled");
+        $("timingSubMetric").textContent = hasAirbrake
+          ? tr(timingDelta < 0 ? "timing.before" : "timing.after")
+          : tr("timing.none");
 
         $("impactValue").textContent = `${Math.round(s.impactIndex)} / 100`;
         $("impactMeter").style.width = `${s.impactIndex}%`;
@@ -576,18 +723,20 @@
         $("blastMeter").style.width = `${s.blastIndex}%`;
 
         const achieved = clamp(s.preBrakeShare, 0, 1);
-        let verdict = tr("goal.overlap");
-        if (strongDelta >= 0) verdict = tr("goal.after");
-        else if (achieved >= 0.93) verdict = tr("goal.near", { percent: Math.round(achieved * 100) });
-        else if (achieved >= 0.8) verdict = tr("goal.close", { percent: Math.round(achieved * 100) });
+        let verdict = hasAirbrake ? tr("goal.overlap") : tr("goal.none");
+        if (hasAirbrake && strongDelta >= 0) verdict = tr("goal.after");
+        else if (hasAirbrake && achieved >= 0.93) verdict = tr("goal.near", { percent: Math.round(achieved * 100) });
+        else if (hasAirbrake && achieved >= 0.8) verdict = tr("goal.close", { percent: Math.round(achieved * 100) });
         $("goalVerdict").textContent = verdict;
 
         const entryRelation = timingDelta < 0
           ? tr("interpret.entryBefore", { time: Math.abs(timingDelta).toFixed(2) })
           : tr("interpret.entryAfter", { time: timingDelta.toFixed(2) });
-        const brakeRelation = strongDelta >= 0
-          ? tr("interpret.brakeAfter", { entry: entryRelation, time: strongDelta.toFixed(2) })
-          : tr("interpret.brakeBefore", { time: Math.abs(strongDelta).toFixed(2), percent: Math.round(achieved * 100) });
+        const brakeRelation = !hasAirbrake
+          ? tr("interpret.noBrake")
+          : strongDelta >= 0
+            ? tr("interpret.brakeAfter", { entry: entryRelation, time: strongDelta.toFixed(2) })
+            : tr("interpret.brakeBefore", { time: Math.abs(strongDelta).toFixed(2), percent: Math.round(achieved * 100) });
         const massRelation = s.params.pistonMass > 72
           ? tr("interpret.massHeavy")
           : s.params.pistonMass < 72
@@ -595,12 +744,13 @@
             : tr("interpret.massReference");
         $("interpretationText").textContent = `${brakeRelation} ${massRelation} ${tr("interpret.compare")}`;
 
-        const timelineEnd = Math.max(s.exitTime, s.strongBrakeTime, 0.001) * 1.12;
+        const timelineEnd = Math.max(s.exitTime, hasAirbrake ? s.strongBrakeTime : 0, 0.001) * 1.12;
         const brakePct = clamp(s.strongBrakeTime / timelineEnd * 100, 1, 99);
         const exitPct = clamp(s.exitTime / timelineEnd * 100, 1, 99);
         $("brakeTimingMarker").style.left = `${brakePct}%`;
+        $("brakeTimingMarker").style.display = hasAirbrake ? "block" : "none";
         $("exitTimingMarker").style.left = `${exitPct}%`;
-        $("timingFill").style.width = `${Math.min(brakePct, exitPct)}%`;
+        $("timingFill").style.width = `${hasAirbrake ? Math.min(brakePct, exitPct) : exitPct}%`;
       }
 
       function updateSimulation() {
@@ -651,13 +801,16 @@
       }
 
       function phaseFor(frame) {
+        const hasAirbrake = shot.params.airbrakeLength > 0 && shot.params.airbrakeEffect > 0;
         if (frame.t < 0.00065) return tr("phase.1");
         if (frame.bbV < 0.2) return tr("phase.2");
-        if (frame.t < shot.engageTime) return tr("phase.3");
-        if (frame.t < shot.strongBrakeTime) return tr("phase.4");
-        if (frame.t < shot.exitTime) return tr("phase.5");
+        if (!frame.bbExited) {
+          if (!hasAirbrake || frame.t < shot.engageTime) return tr("phase.3");
+          if (frame.t < shot.strongBrakeTime) return tr("phase.4");
+          return tr("phase.5");
+        }
         if (frame.t < shot.exitTime + 0.0022) return tr("phase.6");
-        if (!frame.pistonHit) return tr("phase.7");
+        if (!frame.pistonHit) return tr(hasAirbrake ? "phase.7" : "phase.7.noBrake");
         return tr("phase.8");
       }
 
@@ -666,6 +819,7 @@
         currentFraction = clamp(fraction, 0, 1);
         const time = currentFraction * shot.duration;
         const frame = findFrame(time);
+        const hasAirbrake = shot.params.airbrakeLength > 0 && shot.params.airbrakeEffect > 0;
         const pistonStart = 105;
         const pistonEnd = 436;
         const pistonScreen = lerp(pistonStart, pistonEnd, frame.pistonX / shot.stroke);
@@ -681,6 +835,7 @@
 
         $("pistonGroup").setAttribute("transform", `translate(${pistonScreen} 0)`);
         $("airbrakeRod").setAttribute("x2", 58 + rodLength);
+        $("airbrakeRod").setAttribute("opacity", hasAirbrake ? 1 : 0);
         $("spring").setAttribute("d", springPath(springEnd));
         $("cylinderAir").setAttribute("x", airStart);
         $("cylinderAir").setAttribute("width", airWidth);
@@ -703,6 +858,8 @@
         $("engagementGuide").setAttribute("x1", engagementScreen);
         $("engagementGuide").setAttribute("x2", engagementScreen);
         $("engagementLabel").setAttribute("x", engagementScreen);
+        $("engagementGuide").setAttribute("opacity", hasAirbrake ? .7 : 0);
+        $("engagementLabel").setAttribute("opacity", hasAirbrake ? 1 : 0);
 
         $("phaseText").textContent = phaseFor(frame);
         $("clock").textContent = `${(time * 1000).toFixed(2)} ms`;
@@ -777,6 +934,7 @@
         const x = (t) => pad.l + t / shot.duration * plotW;
         const y = (v) => pad.t + plotH - v / maxY * plotH;
         const colors = chartColors();
+        const hasAirbrake = shot.params.airbrakeLength > 0 && shot.params.airbrakeEffect > 0;
 
         ctx.clearRect(0, 0, w, h);
         ctx.fillStyle = colors.bg;
@@ -802,12 +960,17 @@
           ctx.fillText((shot.duration * 1000 * i / 4).toFixed(1), xx, h - pad.b + 7);
         }
 
-        const shadeStart = x(Math.min(shot.strongBrakeTime, shot.exitTime));
-        const shadeEnd = x(Math.max(shot.strongBrakeTime, shot.exitTime));
-        ctx.fillStyle = "rgba(255, 191, 105, .06)";
-        ctx.fillRect(shadeStart, pad.t, shadeEnd - shadeStart, plotH);
+        if (hasAirbrake) {
+          const shadeStart = x(Math.min(shot.strongBrakeTime, shot.exitTime));
+          const shadeEnd = x(Math.max(shot.strongBrakeTime, shot.exitTime));
+          ctx.fillStyle = "rgba(255, 191, 105, .06)";
+          ctx.fillRect(shadeStart, pad.t, shadeEnd - shadeStart, plotH);
+        }
 
-        [[shot.strongBrakeTime, colors.amber], [shot.exitTime, colors.cyan]].forEach(([eventTime, eventColor]) => {
+        const events = hasAirbrake
+          ? [[shot.strongBrakeTime, colors.amber], [shot.exitTime, colors.cyan]]
+          : [[shot.exitTime, colors.cyan]];
+        events.forEach(([eventTime, eventColor]) => {
           ctx.save();
           ctx.strokeStyle = eventColor;
           ctx.setLineDash([4, 4]);
@@ -864,6 +1027,7 @@
               cylinderVolume: 35.8,
               barrelLength: 430,
               barrelDiameter: 6.01,
+              strokeLength: 85,
               pistonMass: 72,
               bbMass: 0.46,
               airbrakeLength: 20,
@@ -885,6 +1049,7 @@
           const setupText = tr("measurement.setup", {
             length: m.setup.barrelLength,
             diameter: m.setup.barrelDiameter.toFixed(2),
+            stroke: m.setup.strokeLength || 85,
             mass: m.setup.pistonMass,
             brakeLength: m.setup.airbrakeLength,
             effect: Math.round(m.setup.airbrakeEffect * 100)
@@ -958,7 +1123,11 @@
         });
       }
 
-      Object.values(inputs).forEach((input) => input.addEventListener("input", updateSimulation));
+      Object.values(inputs).forEach((input) => input.addEventListener("input", () => {
+        markSetupAsCustom();
+        updateSimulation();
+      }));
+      platformPreset.addEventListener("change", () => applyPlatformPreset(platformPreset.value));
       $("playButton").addEventListener("click", togglePlay);
       $("resetButton").addEventListener("click", () => { stopAnimation(); setFrame(0); });
       $("scrubber").addEventListener("input", (event) => { stopAnimation(); setFrame(+event.target.value / 1000); });

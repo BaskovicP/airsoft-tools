@@ -2,7 +2,7 @@
   "name": "airsoft-tools",
   "version": "1.0.0",
   "private": true,
-  "description": "Standalone bilingual SSG10 pneumatic timing simulator",
+  "description": "Standalone bilingual spring-airsoft-sniper pneumatic timing simulator",
   "scripts": {
     "build": "node scripts/build-cloudflare.mjs",
     "package:cloudflare": "npm run build && cd dist && zip -FS -r ../airsoft-tools-cloudflare.zip ."

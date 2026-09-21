@@ -170,6 +170,17 @@
     .control { margin-top: 15px; }
     .control:first-child { margin-top: 0; }
 
+    .preset-note {
+      min-height: 44px;
+      margin: 9px 0 0;
+      padding: 9px 10px;
+      border-left: 2px solid var(--purple);
+      background: rgba(185, 160, 255, .045);
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
     .control label {
       display: flex;
       align-items: baseline;

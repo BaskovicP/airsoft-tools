@@ -4,8 +4,8 @@
   <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="Interactive bilingual SSG10 pneumatic timing simulator for comparing piston, barrel, BB and airbrake behavior.">
-  <title>SSG10 Pneumatic Timing Lab</title>
+<meta name="description" content="Interactive bilingual spring-airsoft-sniper simulator for comparing piston, barrel, BB and airbrake timing.">
+  <title>Spring Sniper Pneumatic Timing Lab</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -13,8 +13,8 @@
     <header>
       <div>
         <p class="eyebrow">Interactive internal-ballistics explainer</p>
-        <h1>SSG10 Pneumatic Timing Lab</h1>
-        <p class="lede">See when a Stalker Scorpion-style weighted piston builds useful pressure, when its airbrake begins cushioning, and whether the BB has already received most of its acceleration.</p>
+        <h1>Spring Sniper Pneumatic Timing Lab</h1>
+        <p class="lede">Compare SSG10, TAC-41, SRS, VSR and L96-style systems to see when a weighted piston builds useful pressure, when an airbrake begins cushioning, and whether the BB has already received most of its acceleration.</p>
       </div>
       <div class="header-side">
         <div class="language-switch" role="group" aria-label="Language">
@@ -33,6 +33,26 @@
         </div>
 
         <section class="control-group">
+          <p class="group-label">Platform starting point</p>
+          <div class="control">
+            <label for="platformPreset"><span>Rifle / configuration preset</span><span class="tag unknown">verify internals</span></label>
+            <select id="platformPreset">
+              <option value="ssg10">SSG10 reference</option>
+              <option value="ssg10-short">SSG10 short-stroke (−20 mm)</option>
+              <option value="tac41p">TAC-41P 510 mm</option>
+              <option value="tac41ls">TAC-41 Lite Sport 330 mm</option>
+              <option value="srs16">SRS A2 16-inch</option>
+              <option value="srs22">SRS A2 22-inch</option>
+              <option value="vsr-pro">VSR-10 Pro / clone baseline</option>
+              <option value="vsr-gspec">VSR-10 G-Spec baseline</option>
+              <option value="l96">APS2 / L96 baseline</option>
+              <option value="custom">Custom setup</option>
+            </select>
+            <p class="preset-note" id="presetNote"></p>
+          </div>
+        </section>
+
+        <section class="control-group">
           <p class="group-label">Air system</p>
           <div class="control">
             <label for="cylinderVolume"><span>Cylinder swept volume</span><output id="cylinderVolumeOut"></output></label>
@@ -46,12 +66,16 @@
             <label for="barrelDiameter"><span>Inner-barrel diameter</span><output id="barrelDiameterOut"></output></label>
             <input id="barrelDiameter" type="range" min="5.95" max="6.20" step="0.01" value="6.01">
           </div>
+          <div class="control">
+            <label for="strokeLength"><span>Usable piston stroke</span><output id="strokeLengthOut"></output></label>
+            <input id="strokeLength" type="range" min="50" max="100" step="1" value="85">
+          </div>
         </section>
 
         <section class="control-group">
           <p class="group-label">Moving mass</p>
           <div class="control">
-            <label><span>Stalker Scorpion piston mass</span><output id="pistonMassOut"></output></label>
+            <label><span>Piston mass</span><output id="pistonMassOut"></output></label>
             <div class="preset-row" id="massPresets" aria-label="Piston mass presets"></div>
           </div>
           <div class="control">
@@ -141,7 +165,7 @@
           </div>
           <div class="stage-viewport">
             <svg id="mechanism" viewBox="0 0 1200 330" role="img" aria-labelledby="mechanismTitle mechanismDesc">
-              <title id="mechanismTitle">Animated SSG10 firing cycle</title>
+              <title id="mechanismTitle">Animated spring-sniper firing cycle</title>
               <desc id="mechanismDesc">A spring drives a piston through a cylinder, compressing air that moves a BB through the barrel. An airbrake rod enters the cylinder head and creates a pneumatic cushion.</desc>
               <defs>
                 <linearGradient id="airGradient" x1="0" x2="1">
@@ -257,15 +281,15 @@
           </article>
         </div>
 
-        <section class="panel insight" aria-label="Current Stalker Scorpion interpretation">
-          <div class="panel-heading"><h2>What this Scorpion configuration is doing</h2><span class="tag model">timing interpretation</span></div>
+        <section class="panel insight" aria-label="Current piston configuration interpretation">
+          <div class="panel-heading"><h2>What this piston configuration is doing</h2><span class="tag model">timing interpretation</span></div>
           <p id="interpretationText">—</p>
         </section>
 
         <details class="panel calibration" id="calibrationPanel">
-          <summary>Calibration mode — add real SSG10 chrono measurements</summary>
+          <summary>Calibration mode — add real chrono measurements</summary>
           <div class="calibration-body">
-            <p class="calibration-intro">Each measurement stores a snapshot of the current barrel, cylinder, piston and airbrake setup. “Fit unknowns” adjusts only the effective spring-drive scale and seal/flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.</p>
+            <p class="calibration-intro">Each measurement stores a snapshot of the current barrel, cylinder, piston stroke, piston mass and airbrake setup. “Fit unknowns” adjusts only the effective spring-drive scale and seal/flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.</p>
             <form class="measurement-form" id="measurementForm">
               <label><span>BB mass (g)</span><input id="measurementMass" type="number" min="0.10" max="1" step="0.01" value="0.46" required></label>
               <label><span>Measured velocity (fps)</span><input id="measurementFps" type="number" min="1" max="1000" step="1" value="330" required></label>

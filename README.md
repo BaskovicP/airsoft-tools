@@ -1,8 +1,23 @@
-# SSG10 Pneumatic Timing Lab
+# Spring Sniper Pneumatic Timing Lab
 
-A standalone, single-file interactive explainer for comparing SSG10 cylinder, barrel, piston, BB and airbrake timing.
+A standalone, single-file interactive explainer for comparing cylinder, barrel, piston, BB and airbrake timing across spring-powered airsoft sniper configurations.
 
 The interface can be switched between English and Croatian. The selected language is remembered locally in the browser.
+
+## Rifle and configuration presets
+
+The selector includes these starting configurations:
+
+- SSG10 reference and a derived 20 mm short-stroke comparison;
+- TAC-41P and TAC-41 Lite Sport;
+- SRS A2 16-inch and 22-inch;
+- VSR-10 Pro/clone and G-Spec baselines;
+- a generic APS2/L96 baseline;
+- Custom, selected automatically whenever a control is changed.
+
+Published barrel and volume geometry is identified in the preset notes. Internal stroke, piston mass, airbrake state, and generic-platform values that are not established by published specifications are deliberately labeled as editable assumptions. Selecting a preset with no configured airbrake hides the airbrake event instead of presenting an invented braking time.
+
+Published geometry references: [SSG10 barrel](https://us.novritsch.com/product/ssg10-precision-inner-barrel-standard/), [TAC-41P](https://www.silverback-airsoft.com/t41p), [TAC-41 Lite Sport](https://www.silverback-airsoft.com/t41ls), [SRS A2 16-inch](https://www.silverback-airsoft.com/blt-13), [SRS 22-inch barrel](https://www.silverback-airsoft.com/ibl-a578), and [VSR-10 G-Spec](https://www.tokyo-marui.co.jp/products/aircocking/boltaction/73).
 
 ## Run the standalone app locally
 
