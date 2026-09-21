@@ -4,12 +4,54 @@
   <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="Interactive bilingual spring-airsoft-sniper simulator for comparing piston, barrel, BB and airbrake timing.">
-  <title>Spring Sniper Pneumatic Timing Lab</title>
+<meta name="description" content="A bilingual collection of interactive airsoft setup and physics tools.">
+  <title>Airsoft Tools</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <main class="app">
+  <main class="tool-hub" id="toolHub">
+    <div class="hub-shell">
+      <nav class="hub-nav" aria-label="Tool menu header">
+        <div class="hub-brand">
+          <span class="hub-brand-mark" aria-hidden="true">AT</span>
+          <span>Airsoft Tools</span>
+        </div>
+        <div class="language-switch" role="group" aria-label="Language">
+          <button type="button" data-language="en" aria-pressed="true">English</button>
+          <button type="button" data-language="hr" aria-pressed="false">Hrvatski</button>
+        </div>
+      </nav>
+
+      <div class="hub-content">
+        <div class="hub-intro">
+          <p class="eyebrow">Interactive workshop</p>
+          <h1>Airsoft Tools</h1>
+          <p>Select a focused tool to explore your setup. More tools can be added here as the collection grows.</p>
+        </div>
+
+        <p class="hub-count">1 tool available</p>
+        <div class="tool-grid">
+          <a class="tool-card" id="openPneumaticLab" href="#pneumatic-timing" aria-labelledby="pneumaticToolTitle">
+            <span class="tool-icon" aria-hidden="true">
+              <svg viewBox="0 0 48 48" fill="none">
+                <path d="M6 30h7l4-13 6 21 5-27 5 19h9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M6 8h36M6 40h36" stroke="currentColor" stroke-opacity=".22" stroke-width="1"/>
+              </svg>
+            </span>
+            <span class="tool-copy">
+              <span class="tool-status">Available</span>
+              <h2 id="pneumaticToolTitle">Spring Sniper Pneumatic Timing Lab</h2>
+              <p>Compare piston, cylinder, barrel, BB and airbrake timing with live animation, graphs and chrono calibration.</p>
+            </span>
+            <span class="tool-arrow" aria-hidden="true">→</span>
+          </a>
+        </div>
+        <p class="hub-footnote">Additional calculators and setup tools will appear in this menu later.</p>
+      </div>
+    </div>
+  </main>
+
+  <main class="app" id="labApp" hidden>
     <header>
       <div>
         <p class="eyebrow">Interactive internal-ballistics explainer</p>
@@ -17,9 +59,12 @@
         <p class="lede">Compare SSG10, TAC-41, SRS, VSR and L96-style systems to see when a weighted piston builds useful pressure, when an airbrake begins cushioning, and whether the BB has already received most of its acceleration.</p>
       </div>
       <div class="header-side">
-        <div class="language-switch" role="group" aria-label="Language">
-          <button type="button" data-language="en" aria-pressed="true">English</button>
-          <button type="button" data-language="hr" aria-pressed="false">Hrvatski</button>
+        <div class="header-actions">
+          <button class="menu-button" id="backToTools" type="button">← All tools</button>
+          <div class="language-switch" role="group" aria-label="Language">
+            <button type="button" data-language="en" aria-pressed="true">English</button>
+            <button type="button" data-language="hr" aria-pressed="false">Hrvatski</button>
+          </div>
         </div>
         <div class="header-note"><strong>Interpretation boundary:</strong> this is a simplified comparative model—not a chronograph, pressure transducer, acoustic meter, or claim of exact real-world joules or dB. Calibration improves agreement only inside the measured setup range.</div>
       </div>

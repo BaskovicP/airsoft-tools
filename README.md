@@ -1,8 +1,10 @@
-# Spring Sniper Pneumatic Timing Lab
+# Airsoft Tools
 
 A standalone, single-file interactive explainer for comparing cylinder, barrel, piston, BB and airbrake timing across spring-powered airsoft sniper configurations.
 
 The interface can be switched between English and Croatian. The selected language is remembered locally in the browser.
+
+The app opens on an Airsoft Tools menu. The pneumatic timing lab is the first available tool, and the menu is structured so additional tools can be added later without changing the lab itself. The lab includes an **All tools** control for returning to the menu.
 
 ## Rifle and configuration presets
 

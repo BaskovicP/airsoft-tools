@@ -12,6 +12,14 @@
 
       const STATIC_HR = {
         "INTERACTIVE INTERNAL-BALLISTICS EXPLAINER": "INTERAKTIVNI PRIKAZ UNUTARNJE BALISTIKE",
+        "Airsoft Tools": "Airsoft alati",
+        "Interactive workshop": "Interaktivna radionica",
+        "Select a focused tool to explore your setup. More tools can be added here as the collection grows.": "Odaberite alat za istraživanje svoje konfiguracije. Ovdje se mogu dodavati novi alati kako zbirka bude rasla.",
+        "1 tool available": "Dostupan je 1 alat",
+        "Available": "Dostupno",
+        "Compare piston, cylinder, barrel, BB and airbrake timing with live animation, graphs and chrono calibration.": "Usporedite vremenski odnos pistona, cilindra, cijevi, BB-a i zračne kočnice uz animaciju, grafove i kalibraciju kronografom.",
+        "Additional calculators and setup tools will appear in this menu later.": "Dodatni kalkulatori i alati za konfiguraciju kasnije će se pojaviti u ovom izborniku.",
+        "← All tools": "← Svi alati",
         "SSG10 Pneumatic Timing Lab": "SSG10 laboratorij pneumatskog tempiranja",
         "Spring Sniper Pneumatic Timing Lab": "Laboratorij pneumatike opružnih snajpera",
         "See when a Stalker Scorpion-style weighted piston builds useful pressure, when its airbrake begins cushioning, and whether the BB has already received most of its acceleration.": "Pogledajte kada otežani piston tipa Stalker Scorpion stvara koristan tlak, kada njegova zračna kočnica počinje ublažavati udar i je li BB već dobio većinu ubrzanja.",
@@ -332,6 +340,8 @@
         airbrakeEffect: $("airbrakeEffect")
       };
       const platformPreset = $("platformPreset");
+      const toolHub = $("toolHub");
+      const labApp = $("labApp");
 
       let pistonMass = 72;
       let modelUnknowns = { driveScale: 0.325, flowEfficiency: 0.88 };
@@ -343,6 +353,35 @@
       let currentFraction = 0;
       let measurements = [];
       let applyingPreset = false;
+      let launchedFromMenu = false;
+
+      function updateDocumentTitle() {
+        if (labApp.hidden) {
+          document.title = language === "hr" ? "Airsoft alati" : "Airsoft Tools";
+        } else {
+          document.title = language === "hr" ? STATIC_HR["Spring Sniper Pneumatic Timing Lab"] : "Spring Sniper Pneumatic Timing Lab";
+        }
+      }
+
+      function showToolMenu() {
+        stopAnimation();
+        labApp.hidden = true;
+        toolHub.hidden = false;
+        updateDocumentTitle();
+        window.scrollTo(0, 0);
+      }
+
+      function showPneumaticLab(pushHistory = true) {
+        toolHub.hidden = true;
+        labApp.hidden = false;
+        updateDocumentTitle();
+        window.scrollTo(0, 0);
+        if (pushHistory) {
+          launchedFromMenu = true;
+          history.pushState({ view: "pneumatic-timing" }, "", "#pneumatic-timing");
+        }
+        requestAnimationFrame(() => drawAllCharts());
+      }
 
       function updatePresetNote() {
         const preset = PLATFORM_PRESETS[platformPreset.value] || PLATFORM_PRESETS.custom;
@@ -398,7 +437,7 @@
       function applyLanguage(nextLanguage) {
         language = MESSAGES[nextLanguage] ? nextLanguage : "en";
         document.documentElement.lang = language;
-        document.title = language === "hr" ? STATIC_HR["Spring Sniper Pneumatic Timing Lab"] : "Spring Sniper Pneumatic Timing Lab";
+        updateDocumentTitle();
         try { localStorage.setItem(LANGUAGE_KEY, language); } catch (_) { /* no-op */ }
         document.querySelectorAll("[data-language]").forEach((button) => {
           button.setAttribute("aria-pressed", button.dataset.language === language ? "true" : "false");
@@ -410,15 +449,19 @@
           timing: "Cilj vremenskog usklađivanja", stage: "Animirani ciklus opaljenja",
           scrubber: "Pomicanje kroz ciklus opaljenja", live: "Vrijednosti tijekom opaljenja",
           graphs: "Grafovi opaljenja uživo", insight: "Tumačenje trenutačne konfiguracije pistona",
-          energy: "Energija u joulima"
+          energy: "Energija u joulima", hubNav: "Zaglavlje izbornika alata",
+          openTool: "Otvori laboratorij pneumatike opružnih snajpera"
         } : {
           switcher: "Language", controls: "Simulation controls", presets: "Piston mass presets",
           timing: "Timing objective", stage: "Animated firing cycle",
           scrubber: "Scrub through firing cycle", live: "Live firing values",
           graphs: "Live firing graphs", insight: "Current piston-configuration interpretation",
-          energy: "Energy in joules"
+          energy: "Energy in joules", hubNav: "Tool menu header",
+          openTool: "Open the Spring Sniper Pneumatic Timing Lab"
         };
-        document.querySelector(".language-switch").setAttribute("aria-label", labels.switcher);
+        document.querySelectorAll(".language-switch").forEach((switcher) => switcher.setAttribute("aria-label", labels.switcher));
+        document.querySelector(".hub-nav").setAttribute("aria-label", labels.hubNav);
+        $("openPneumaticLab").setAttribute("aria-label", labels.openTool);
         document.querySelector(".controls-panel").setAttribute("aria-label", labels.controls);
         $("massPresets").setAttribute("aria-label", labels.presets);
         $("timingTrack").closest("section").setAttribute("aria-label", labels.timing);
@@ -1128,6 +1171,26 @@
         updateSimulation();
       }));
       platformPreset.addEventListener("change", () => applyPlatformPreset(platformPreset.value));
+      $("openPneumaticLab").addEventListener("click", (event) => {
+        event.preventDefault();
+        showPneumaticLab(true);
+      });
+      $("backToTools").addEventListener("click", () => {
+        if (launchedFromMenu) {
+          launchedFromMenu = false;
+          history.back();
+        } else {
+          history.replaceState({ view: "tools" }, "", `${location.pathname}${location.search}`);
+          showToolMenu();
+        }
+      });
+      window.addEventListener("popstate", () => {
+        if (location.hash === "#pneumatic-timing") showPneumaticLab(false);
+        else {
+          launchedFromMenu = false;
+          showToolMenu();
+        }
+      });
       $("playButton").addEventListener("click", togglePlay);
       $("resetButton").addEventListener("click", () => { stopAnimation(); setFrame(0); });
       $("scrubber").addEventListener("input", (event) => { stopAnimation(); setFrame(+event.target.value / 1000); });
@@ -1181,4 +1244,5 @@
       renderMeasurements();
       updateSimulation();
       applyLanguage(language);
+      if (location.hash === "#pneumatic-timing") showPneumaticLab(false);
     })();

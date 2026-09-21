@@ -4,8 +4,8 @@
   <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="Interactive bilingual spring-airsoft-sniper simulator for comparing piston, barrel, BB and airbrake timing.">
-  <title>Spring Sniper Pneumatic Timing Lab</title>
+<meta name="description" content="A bilingual collection of interactive airsoft setup and physics tools.">
+  <title>Airsoft Tools</title>
   <style>
     :root {
       --bg: #090d10;
@@ -29,6 +29,7 @@
     }
 
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
 
     body {
       margin: 0;
@@ -41,6 +42,195 @@
 
     button, input, select { font: inherit; }
     button { color: inherit; }
+
+    .tool-hub {
+      width: min(1180px, calc(100% - 40px));
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 28px 0 52px;
+    }
+
+    .hub-shell {
+      display: flex;
+      min-height: calc(100vh - 80px);
+      flex-direction: column;
+    }
+
+    .hub-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .hub-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 11px;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -.01em;
+    }
+
+    .hub-brand-mark {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border: 1px solid rgba(93, 228, 231, .35);
+      border-radius: 10px;
+      background: linear-gradient(145deg, rgba(93, 228, 231, .16), rgba(121, 169, 255, .04));
+      color: var(--cyan);
+      font-family: var(--mono);
+      font-size: 12px;
+      box-shadow: inset 0 1px rgba(255, 255, 255, .06), 0 12px 35px rgba(0, 0, 0, .2);
+    }
+
+    .hub-content {
+      display: grid;
+      flex: 1;
+      align-content: center;
+      padding: clamp(64px, 12vh, 140px) 0 clamp(52px, 10vh, 110px);
+    }
+
+    .hub-intro { max-width: 720px; }
+    .hub-intro h1 { font-size: clamp(40px, 7vw, 76px); }
+    .hub-intro p:last-child {
+      max-width: 610px;
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.65;
+    }
+
+    .hub-count {
+      margin: 54px 0 14px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .tool-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 760px);
+    }
+
+    .tool-card {
+      position: relative;
+      display: grid;
+      grid-template-columns: 76px minmax(0, 1fr) auto;
+      gap: 22px;
+      align-items: center;
+      min-height: 190px;
+      padding: 28px;
+      overflow: hidden;
+      border: 1px solid var(--line-bright);
+      border-radius: 20px;
+      background:
+        linear-gradient(115deg, rgba(93, 228, 231, .085), transparent 43%),
+        rgba(16, 23, 28, .92);
+      color: inherit;
+      text-decoration: none;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .25);
+      transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+    }
+
+    .tool-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .025), transparent);
+      transform: translateX(-100%);
+      transition: transform .45s ease;
+    }
+
+    .tool-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(93, 228, 231, .62);
+      box-shadow: 0 35px 90px rgba(0, 0, 0, .32), 0 0 0 1px rgba(93, 228, 231, .06);
+    }
+    .tool-card:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
+    .tool-card:hover::after { transform: translateX(100%); }
+
+    .tool-icon {
+      display: grid;
+      width: 76px;
+      height: 76px;
+      place-items: center;
+      border: 1px solid rgba(93, 228, 231, .3);
+      border-radius: 18px;
+      background: rgba(8, 16, 20, .7);
+      color: var(--cyan);
+    }
+
+    .tool-icon svg { width: 42px; height: 42px; }
+    .tool-copy { min-width: 0; }
+    .tool-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 10px;
+      color: var(--green);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .tool-status::before {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: currentColor;
+      box-shadow: 0 0 14px currentColor;
+      content: "";
+    }
+    .tool-copy h2 { font-size: clamp(21px, 3vw, 28px); }
+    .tool-copy p {
+      max-width: 590px;
+      margin: 9px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+    .tool-arrow {
+      display: grid;
+      width: 46px;
+      height: 46px;
+      place-items: center;
+      border: 1px solid var(--line-bright);
+      border-radius: 999px;
+      color: var(--cyan);
+      font-size: 24px;
+      transition: background .2s ease, transform .2s ease;
+    }
+    .tool-card:hover .tool-arrow { background: var(--cyan-dim); transform: translateX(3px); }
+
+    .hub-footnote {
+      margin: 16px 0 0;
+      color: #708087;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .header-actions { display: flex; align-items: center; gap: 9px; }
+    .menu-button {
+      min-height: 40px;
+      padding: 0 13px;
+      border: 1px solid var(--line-bright);
+      border-radius: 9px;
+      background: #0c1216;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .menu-button:hover { border-color: var(--cyan); color: var(--cyan); }
 
     .app {
       width: min(1500px, calc(100% - 32px));
@@ -669,6 +859,13 @@
     }
 
     @media (max-width: 760px) {
+      .tool-hub { width: min(100% - 24px, 1180px); padding-top: 18px; }
+      .hub-content { align-content: start; padding-top: 72px; }
+      .hub-count { margin-top: 42px; }
+      .tool-card { grid-template-columns: 60px minmax(0, 1fr); min-height: 0; padding: 22px; }
+      .tool-icon { width: 60px; height: 60px; border-radius: 15px; }
+      .tool-icon svg { width: 34px; height: 34px; }
+      .tool-arrow { display: none; }
       .app { width: min(100% - 20px, 1500px); padding-top: 18px; }
       header { display: block; }
       .header-side { justify-items: start; margin-top: 16px; }
@@ -685,6 +882,11 @@
     }
 
     @media (max-width: 450px) {
+      .hub-brand span:last-child { display: none; }
+      .hub-intro p:last-child { font-size: 15px; }
+      .tool-card { display: block; }
+      .tool-icon { margin-bottom: 20px; }
+      .header-actions { align-items: flex-start; flex-direction: column; }
       .readout-grid { grid-template-columns: 1fr; }
       .stage-toolbar { flex-wrap: wrap; }
       .stage-toolbar input[type="range"] { order: 3; flex-basis: 100%; }
@@ -698,7 +900,49 @@
   </style>
 </head>
 <body>
-  <main class="app">
+  <main class="tool-hub" id="toolHub">
+    <div class="hub-shell">
+      <nav class="hub-nav" aria-label="Tool menu header">
+        <div class="hub-brand">
+          <span class="hub-brand-mark" aria-hidden="true">AT</span>
+          <span>Airsoft Tools</span>
+        </div>
+        <div class="language-switch" role="group" aria-label="Language">
+          <button type="button" data-language="en" aria-pressed="true">English</button>
+          <button type="button" data-language="hr" aria-pressed="false">Hrvatski</button>
+        </div>
+      </nav>
+
+      <div class="hub-content">
+        <div class="hub-intro">
+          <p class="eyebrow">Interactive workshop</p>
+          <h1>Airsoft Tools</h1>
+          <p>Select a focused tool to explore your setup. More tools can be added here as the collection grows.</p>
+        </div>
+
+        <p class="hub-count">1 tool available</p>
+        <div class="tool-grid">
+          <a class="tool-card" id="openPneumaticLab" href="#pneumatic-timing" aria-labelledby="pneumaticToolTitle">
+            <span class="tool-icon" aria-hidden="true">
+              <svg viewBox="0 0 48 48" fill="none">
+                <path d="M6 30h7l4-13 6 21 5-27 5 19h9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M6 8h36M6 40h36" stroke="currentColor" stroke-opacity=".22" stroke-width="1"/>
+              </svg>
+            </span>
+            <span class="tool-copy">
+              <span class="tool-status">Available</span>
+              <h2 id="pneumaticToolTitle">Spring Sniper Pneumatic Timing Lab</h2>
+              <p>Compare piston, cylinder, barrel, BB and airbrake timing with live animation, graphs and chrono calibration.</p>
+            </span>
+            <span class="tool-arrow" aria-hidden="true">→</span>
+          </a>
+        </div>
+        <p class="hub-footnote">Additional calculators and setup tools will appear in this menu later.</p>
+      </div>
+    </div>
+  </main>
+
+  <main class="app" id="labApp" hidden>
     <header>
       <div>
         <p class="eyebrow">Interactive internal-ballistics explainer</p>
@@ -706,9 +950,12 @@
         <p class="lede">Compare SSG10, TAC-41, SRS, VSR and L96-style systems to see when a weighted piston builds useful pressure, when an airbrake begins cushioning, and whether the BB has already received most of its acceleration.</p>
       </div>
       <div class="header-side">
-        <div class="language-switch" role="group" aria-label="Language">
-          <button type="button" data-language="en" aria-pressed="true">English</button>
-          <button type="button" data-language="hr" aria-pressed="false">Hrvatski</button>
+        <div class="header-actions">
+          <button class="menu-button" id="backToTools" type="button">← All tools</button>
+          <div class="language-switch" role="group" aria-label="Language">
+            <button type="button" data-language="en" aria-pressed="true">English</button>
+            <button type="button" data-language="hr" aria-pressed="false">Hrvatski</button>
+          </div>
         </div>
         <div class="header-note"><strong>Interpretation boundary:</strong> this is a simplified comparative model—not a chronograph, pressure transducer, acoustic meter, or claim of exact real-world joules or dB. Calibration improves agreement only inside the measured setup range.</div>
       </div>
@@ -1027,6 +1274,14 @@
 
       const STATIC_HR = {
         "INTERACTIVE INTERNAL-BALLISTICS EXPLAINER": "INTERAKTIVNI PRIKAZ UNUTARNJE BALISTIKE",
+        "Airsoft Tools": "Airsoft alati",
+        "Interactive workshop": "Interaktivna radionica",
+        "Select a focused tool to explore your setup. More tools can be added here as the collection grows.": "Odaberite alat za istraživanje svoje konfiguracije. Ovdje se mogu dodavati novi alati kako zbirka bude rasla.",
+        "1 tool available": "Dostupan je 1 alat",
+        "Available": "Dostupno",
+        "Compare piston, cylinder, barrel, BB and airbrake timing with live animation, graphs and chrono calibration.": "Usporedite vremenski odnos pistona, cilindra, cijevi, BB-a i zračne kočnice uz animaciju, grafove i kalibraciju kronografom.",
+        "Additional calculators and setup tools will appear in this menu later.": "Dodatni kalkulatori i alati za konfiguraciju kasnije će se pojaviti u ovom izborniku.",
+        "← All tools": "← Svi alati",
         "SSG10 Pneumatic Timing Lab": "SSG10 laboratorij pneumatskog tempiranja",
         "Spring Sniper Pneumatic Timing Lab": "Laboratorij pneumatike opružnih snajpera",
         "See when a Stalker Scorpion-style weighted piston builds useful pressure, when its airbrake begins cushioning, and whether the BB has already received most of its acceleration.": "Pogledajte kada otežani piston tipa Stalker Scorpion stvara koristan tlak, kada njegova zračna kočnica počinje ublažavati udar i je li BB već dobio većinu ubrzanja.",
@@ -1347,6 +1602,8 @@
         airbrakeEffect: $("airbrakeEffect")
       };
       const platformPreset = $("platformPreset");
+      const toolHub = $("toolHub");
+      const labApp = $("labApp");
 
       let pistonMass = 72;
       let modelUnknowns = { driveScale: 0.325, flowEfficiency: 0.88 };
@@ -1358,6 +1615,35 @@
       let currentFraction = 0;
       let measurements = [];
       let applyingPreset = false;
+      let launchedFromMenu = false;
+
+      function updateDocumentTitle() {
+        if (labApp.hidden) {
+          document.title = language === "hr" ? "Airsoft alati" : "Airsoft Tools";
+        } else {
+          document.title = language === "hr" ? STATIC_HR["Spring Sniper Pneumatic Timing Lab"] : "Spring Sniper Pneumatic Timing Lab";
+        }
+      }
+
+      function showToolMenu() {
+        stopAnimation();
+        labApp.hidden = true;
+        toolHub.hidden = false;
+        updateDocumentTitle();
+        window.scrollTo(0, 0);
+      }
+
+      function showPneumaticLab(pushHistory = true) {
+        toolHub.hidden = true;
+        labApp.hidden = false;
+        updateDocumentTitle();
+        window.scrollTo(0, 0);
+        if (pushHistory) {
+          launchedFromMenu = true;
+          history.pushState({ view: "pneumatic-timing" }, "", "#pneumatic-timing");
+        }
+        requestAnimationFrame(() => drawAllCharts());
+      }
 
       function updatePresetNote() {
         const preset = PLATFORM_PRESETS[platformPreset.value] || PLATFORM_PRESETS.custom;
@@ -1413,7 +1699,7 @@
       function applyLanguage(nextLanguage) {
         language = MESSAGES[nextLanguage] ? nextLanguage : "en";
         document.documentElement.lang = language;
-        document.title = language === "hr" ? STATIC_HR["Spring Sniper Pneumatic Timing Lab"] : "Spring Sniper Pneumatic Timing Lab";
+        updateDocumentTitle();
         try { localStorage.setItem(LANGUAGE_KEY, language); } catch (_) { /* no-op */ }
         document.querySelectorAll("[data-language]").forEach((button) => {
           button.setAttribute("aria-pressed", button.dataset.language === language ? "true" : "false");
@@ -1425,15 +1711,19 @@
           timing: "Cilj vremenskog usklađivanja", stage: "Animirani ciklus opaljenja",
           scrubber: "Pomicanje kroz ciklus opaljenja", live: "Vrijednosti tijekom opaljenja",
           graphs: "Grafovi opaljenja uživo", insight: "Tumačenje trenutačne konfiguracije pistona",
-          energy: "Energija u joulima"
+          energy: "Energija u joulima", hubNav: "Zaglavlje izbornika alata",
+          openTool: "Otvori laboratorij pneumatike opružnih snajpera"
         } : {
           switcher: "Language", controls: "Simulation controls", presets: "Piston mass presets",
           timing: "Timing objective", stage: "Animated firing cycle",
           scrubber: "Scrub through firing cycle", live: "Live firing values",
           graphs: "Live firing graphs", insight: "Current piston-configuration interpretation",
-          energy: "Energy in joules"
+          energy: "Energy in joules", hubNav: "Tool menu header",
+          openTool: "Open the Spring Sniper Pneumatic Timing Lab"
         };
-        document.querySelector(".language-switch").setAttribute("aria-label", labels.switcher);
+        document.querySelectorAll(".language-switch").forEach((switcher) => switcher.setAttribute("aria-label", labels.switcher));
+        document.querySelector(".hub-nav").setAttribute("aria-label", labels.hubNav);
+        $("openPneumaticLab").setAttribute("aria-label", labels.openTool);
         document.querySelector(".controls-panel").setAttribute("aria-label", labels.controls);
         $("massPresets").setAttribute("aria-label", labels.presets);
         $("timingTrack").closest("section").setAttribute("aria-label", labels.timing);
@@ -2143,6 +2433,26 @@
         updateSimulation();
       }));
       platformPreset.addEventListener("change", () => applyPlatformPreset(platformPreset.value));
+      $("openPneumaticLab").addEventListener("click", (event) => {
+        event.preventDefault();
+        showPneumaticLab(true);
+      });
+      $("backToTools").addEventListener("click", () => {
+        if (launchedFromMenu) {
+          launchedFromMenu = false;
+          history.back();
+        } else {
+          history.replaceState({ view: "tools" }, "", `${location.pathname}${location.search}`);
+          showToolMenu();
+        }
+      });
+      window.addEventListener("popstate", () => {
+        if (location.hash === "#pneumatic-timing") showPneumaticLab(false);
+        else {
+          launchedFromMenu = false;
+          showToolMenu();
+        }
+      });
       $("playButton").addEventListener("click", togglePlay);
       $("resetButton").addEventListener("click", () => { stopAnimation(); setFrame(0); });
       $("scrubber").addEventListener("input", (event) => { stopAnimation(); setFrame(+event.target.value / 1000); });
@@ -2196,6 +2506,7 @@
       renderMeasurements();
       updateSimulation();
       applyLanguage(language);
+      if (location.hash === "#pneumatic-timing") showPneumaticLab(false);
     })();
   </script>
 </body>
