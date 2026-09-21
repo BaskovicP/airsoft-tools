@@ -37,6 +37,10 @@ A pre-cut measured curve cannot be reused for a hypothetical cut. For an already
 
 The animation and three graphs appear before the numerical readout cards. They use solver states, independent cylinder/BB pressure colors and signed arrows. Cylinder stroke, pin and both head passages share one axial drawing scale, so visible pin entry matches the calculated event; the barrel has its own scale. Exact pre/post-contact samples prevent interpolation from showing a reverse velocity before impact.
 
+Parameter edits update the existing panels, canvases and readouts in place. Playback pauses at the same model time (clamped to a shorter run if necessary), with a small updating indicator; it does not reset to the beginning. Presets, the no-pin option and optimizer application preserve open sections and unfinished chrono notes. Invalid inputs hide stale results without collapsing their layout. Stale optimizer tables stay visibly marked and cannot be applied or exported until another search.
+
+The cutaway adds layered metal and spring shading, pressure glow, signed airflow marks, a directional BB trail and a flow-dependent muzzle plume. These visual cues are schematic—not simulated molecules, resolved pressure waves or sound. Their state follows model time, so scrubbing and pausing freeze every cue. Graph traces are cached; only the time cursor is redrawn during playback. The presentation changes do not alter the physics equations or parameters.
+
 **Firing focus + faster settling** reserves most playback time for the shot and initial discharge, then shows the entire later interval faster. Uniform full-run slow motion and playback-speed controls are also available. Nothing is cut from the trajectory: the clock, scrubber, graphs, event buttons and exported data keep physical model time.
 
 Pressure-driven reversal **before** head contact is distinguished from reverse motion **after** contact. Maximum modeled backward travel is reported in millimeters. A pre-contact retreat above 1 mm gets an explicit input/model-validation warning; that display threshold is a convention, not a physical limit. The previous tight 20 mm pin example produces about 12.2 mm of pre-contact retreat under its assumptions and is retained as a test fixture, not a normal SSG10 default. No velocity clipping or hidden damping suppresses such predictions.
@@ -78,7 +82,9 @@ Searches are deterministic and capped at 60/120/240 combinations, can be cancell
 - `src/calibration.js`: record validation, migration and one-parameter fitting;
 - `src/optimizer.js`: hardware-only search, locks, eligibility and tradeoff ranking;
 - `src/playback.js`: physical-time sampling, phase-paced playback and consistent drawing geometry;
-- `src/app.js`: bilingual controls, canvas animation, graphs and data UI.
+- `src/view.js`: keyed incremental DOM updates that preserve live canvases and readouts;
+- `src/animation.js`: solver-driven cutaway rendering and schematic visual cues;
+- `src/app.js`: bilingual controls, playback, graphs and data UI.
 
 Run:
 

@@ -1,0 +1,96 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const vm = require("node:vm");
+const fs = require("node:fs");
+const path = require("node:path");
+const source = fs.readFileSync(path.join(__dirname, "../src/app.js"), "utf8");
+function functionSource(name) {
+  const start = source.indexOf(`  function ${name}(`);
+  assert.ok(start >= 0, name);
+  const rest = source.slice(start + 2), next = rest.slice(1).search(/^  (?:async )?function /m);
+  return next < 0 ? rest : rest.slice(0, next + 1);
+}
+function harness() {
+  const timers = new Map(), nodes = {}, context = {
+    p: {}, optimizer: null, shot: { valid: true, duration: .06 }, baseline: {}, fraction: .3, playheadTime: .018,
+    diagnostic: null, calculationPending: false, debounce: null, busy: false, playing: true,
+    chartCache: new Map(), location: { hash: "#pneumatic-timing" },
+    P: { simulate: () => context.nextShot }, nextShot: { valid: true, duration: .06 },
+    stop: () => { context.playing = false; }, invalidateOptimizer: () => {},
+    updateResults: () => { if (context.shot.valid) context.playheadTime = context.fraction * context.shot.duration; },
+    setTimeout: callback => { const id = Symbol(); timers.set(id, callback); return id; },
+    clearTimeout: id => timers.delete(id),
+    t: en => en, setStatus: () => {}, render: () => {}, clone: value => JSON.parse(JSON.stringify(value)), measurements: [],
+    $: id => nodes[id] || null,
+    document: { querySelectorAll: () => Object.values(nodes).filter(node => "disabled" in node) }
+  };
+  for (const id of ["results", "resultContent", "resultError", "resultStatus"]) nodes[id] = { dataset: {}, attrs: {}, setAttribute(name, value) { this.attrs[name] = value; } };
+  vm.createContext(context);
+  for (const name of ["setResultState", "recalculate", "scheduleCalculation", "setBusy"]) vm.runInContext(functionSource(name), context);
+  return { context, nodes, timers };
+}
+
+test("rapid edits retain previous shot and panel, cancel prior debounce and mark stale actions inert", () => {
+  const { context: c, nodes, timers } = harness(), previous = c.shot, canvas = {};
+  nodes.resultContent.canvas = canvas;
+  Object.defineProperty(nodes.results, "innerHTML", { set() { throw new Error("Mounted panel must not be cleared"); } });
+  for (let i = 0; i < 20; i++) c.scheduleCalculation();
+  assert.equal(timers.size, 1); assert.equal(c.shot, previous); assert.equal(nodes.resultContent.canvas, canvas);
+  assert.equal(c.playing, false); assert.equal(c.calculationPending, true); assert.equal(nodes.results.attrs["aria-busy"], "true");
+  assert.equal(nodes.resultContent.inert, true); assert.match(nodes.resultStatus.textContent, /previous shot/);
+});
+
+test("valid → invalid → different-duration valid retains physical playhead time", () => {
+  const { context: c } = harness();
+  c.nextShot = { valid: false, errors: ["dimension"] }; c.recalculate();
+  assert.equal(c.playheadTime, .018);
+  c.nextShot = { valid: true, duration: .25 }; c.recalculate();
+  assert.ok(Math.abs(c.fraction - .072) < 1e-12); assert.equal(c.playheadTime, .018);
+  c.nextShot = { valid: true, duration: .01 }; c.recalculate();
+  assert.equal(c.fraction, 1); assert.equal(c.playheadTime, .01);
+});
+
+test("invalid and pending states cannot expose active stale results and recover without removing content", () => {
+  const { context: c, nodes } = harness(), content = nodes.resultContent;
+  c.setResultState("invalid");
+  assert.equal(content.inert, true); assert.equal(content.attrs["aria-hidden"], "true"); assert.equal(nodes.resultError.hidden, false);
+  c.setResultState("pending"); assert.equal(content.inert, true); assert.equal(nodes.results.attrs["aria-busy"], "true");
+  c.setResultState("ready"); assert.equal(content.inert, false); assert.equal(content.attrs["aria-hidden"], "false");
+  assert.equal(nodes.resultError.hidden, true); assert.equal(nodes.resultContent, content);
+});
+
+test("pending, invalid and busy states guard delegated playback and export handlers", () => {
+  const { context: c, nodes } = harness(); let plays = 0, exports = 0;
+  c.startPlayback = () => plays++; c.download = () => exports++; c.playing = false;
+  nodes.results.contains = () => true;
+  vm.runInContext(functionSource("bindResults"), c); c.bindResults();
+  const click = id => nodes.results.onclick({ target: { closest: () => ({ id, dataset: {} }) } });
+  for (const state of ["pending", "invalid", "busy"]) {
+    c.calculationPending = state === "pending"; c.shot.valid = state !== "invalid"; c.busy = state === "busy";
+    click("playButton"); click("exportRun");
+  }
+  assert.equal(plays, 0); assert.equal(exports, 0);
+  c.busy = false; c.shot.valid = true; click("playButton"); assert.equal(plays, 1);
+});
+
+test("immediate Fit flushes debounce before busy state, preserving unavailable-event disabled state", async () => {
+  const { context: c, nodes, timers } = harness();
+  nodes.missingEvent = { disabled: true, dataset: {} };
+  nodes.fitButton = { disabled: false, dataset: {}, addEventListener(type, callback) { this.callback = callback; } };
+  c.C = { fitLoss: async () => { throw new Error("No training shots"); } };
+  c.updateResults = () => { assert.equal(c.busy, false, "Pending render must finish before controls are disabled"); };
+  const start = source.indexOf('    $("fitButton").addEventListener("click", async () => {');
+  const end = source.indexOf("\n  }\n  function renderMeasurements", start);
+  vm.runInContext(source.slice(start, end), c);
+  c.scheduleCalculation(); assert.equal(timers.size, 1);
+  await nodes.fitButton.callback();
+  assert.equal(timers.size, 0); assert.equal(c.calculationPending, false); assert.equal(c.busy, false);
+  assert.equal(nodes.missingEvent.disabled, true); assert.equal(nodes.fitButton.disabled, false);
+});
+
+test("parameter preset paths and live frames cannot rebuild the results shell", () => {
+  assert.doesNotMatch(functionSource("updateResults"), /\$\("results"\)\.innerHTML|bindResults\(\)/);
+  assert.doesNotMatch(functionSource("bindControls"), /\brender\(\)/);
+  assert.doesNotMatch(functionSource("renderOptimizerResults"), /\brender\(\)/);
+  assert.match(functionSource("setFrame"), /if \(!\$\("liveStrip"\)\.firstChild\)/);
+});

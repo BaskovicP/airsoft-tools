@@ -1005,7 +1005,16 @@
       .playback-options { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:8px; }
       .playback-options label { display:grid; gap:5px; font-size:.875rem; }
       .playback-options select { max-width:100%; }
-      #results > .stage, #results > .graphs { margin-bottom:18px; }
+      #resultContent > .stage, #resultContent > .graphs { margin-bottom:18px; }
+      .result-status { min-height:42px; padding:8px 2px; color:var(--muted); font-size:.8rem; line-height:1.5; }
+      .result-status::before { content:""; display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--cyan); margin-right:8px; }
+      #results[data-state="pending"] .result-status { color:var(--amber); }
+      #results[data-state="pending"] .result-status::before { background:var(--amber); }
+      #results[data-state="invalid"] #resultContent { visibility:hidden; }
+      #results[data-state="invalid"] .result-status::before { background:#ff7585; }
+      #optimizerResults.is-stale { opacity:.55; }
+      #resultContent .stage { overflow:hidden; border-color:#3a515d; background:radial-gradient(ellipse at 25% 35%,rgba(255,191,105,.045),transparent 65%),radial-gradient(ellipse at 85% 40%,rgba(93,228,231,.055),transparent 60%),var(--panel); }
+      #resultContent .live-item strong { font-variant-numeric:tabular-nums; }
       .controls-panel { max-height:none !important; position:static !important; }
       .control label { font-size:.875rem; }
       .control select { max-width:100%; }
@@ -1018,7 +1027,7 @@
       .event-list .brake { border-color:var(--amber); }
       .lab-warning { padding:14px 18px; border:1px solid var(--amber); border-radius:12px; font-size:.95rem; line-height:1.55; margin:16px 0; }
       .lab-warning.error { border-color:#ff7585; color:#ffbec5; }
-      #mechanism { display:block; width:100%; height:310px; }
+      #mechanism { display:block; width:100%; height:330px; background:linear-gradient(180deg,rgba(7,16,23,.15),rgba(7,16,23,.65)); border-top:1px solid #263d49; border-bottom:1px solid #263d49; }
       .stage-status { position:static; min-height:56px; margin:12px; max-width:none; font-size:.875rem; }
       .intensity p { font-size:.95rem; }
       .calibration .measurement-form { grid-template-columns:repeat(3,minmax(0,1fr)); }
