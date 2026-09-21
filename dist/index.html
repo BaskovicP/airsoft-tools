@@ -158,6 +158,7 @@
           <div class="control">
             <label for="airbrakeEffect"><span>Pneumatic cushion effect</span><output id="airbrakeEffectOut"></output></label>
             <input id="airbrakeEffect" type="range" min="0" max="100" step="1" value="72">
+            <p class="control-explainer"><strong>How it works:</strong> Higher values represent a stronger air cushion as the airbrake traps air near the cylinder head. The piston slows sooner and reaches the head with less kinetic energy, which usually softens its mechanical sound. This is a modeled damping strength—not a measured percentage of noise reduction.</p>
           </div>
         </section>
 
@@ -381,16 +382,22 @@
           </div>
         </section>
 
+        <div class="sound-heading">
+          <div><strong>Two separate contributors to shot sound</strong><p>Piston impact is the mechanical strike inside the cylinder. Muzzle blast is compressed air leaving the barrel. These relative indices explain different sources and cannot be added together or read as dB.</p></div>
+          <span class="tag heuristic">heuristic, not dB</span>
+        </div>
+
         <div class="intensity-grid">
-          <article class="intensity">
-            <div class="intensity-head"><strong>Estimated piston-impact intensity</strong><span class="tag heuristic">0–100 index</span><output id="impactValue">—</output></div>
+          <article class="intensity impact-primary" id="impactCard" data-severity="moderate">
+            <div class="intensity-head"><strong>Piston impact — mechanical sound contribution</strong><span class="tag heuristic">0–100 index</span><output id="impactValue">—</output></div>
             <div class="meter"><div id="impactMeter"></div></div>
-            <p>Heuristic index derived from modeled piston kinetic energy at the cylinder head. It is not sound pressure, dB, or a durability prediction.</p>
+            <output class="impact-meaning" id="impactMeaning">—</output>
+            <p><strong>What it means:</strong> This estimates how hard the piston reaches the cylinder head from its remaining kinetic energy (½mv²). A higher value generally means a sharper, louder mechanical strike. Actual loudness also depends on materials, damping, stock resonance, suppressor and surroundings. This index is not dB or a durability prediction.</p>
           </article>
           <article class="intensity">
-            <div class="intensity-head"><strong>Estimated muzzle-blast intensity</strong><span class="tag heuristic">0–100 index</span><output id="blastValue">—</output></div>
+            <div class="intensity-head"><strong>Muzzle blast — escaping-air sound contribution</strong><span class="tag heuristic">0–100 index</span><output id="blastValue">—</output></div>
             <div class="meter"><div id="blastMeter"></div></div>
-            <p>Heuristic index derived from modeled residual gauge pressure and gas volume at BB exit. It is not dB or a suppressor prediction.</p>
+            <p><strong>What it means:</strong> This estimates the remaining pressure and gas volume released when the BB exits. A higher value suggests a stronger air blast at the muzzle. It is separate from piston impact and is not dB or a suppressor prediction.</p>
           </article>
         </div>
 

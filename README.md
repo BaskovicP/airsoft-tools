@@ -33,6 +33,8 @@ Piston mass is continuously adjustable from 5 g to 300 g in 0.1 g increments; th
 
 Every advanced input updates the shot calculation, animation, graphs, impact/blast indices, and timing metrics. A live influence panel compares the current result with the same geometry, masses, spring, and airbrake under baseline advanced assumptions. Calibration snapshots preserve all advanced inputs.
 
+The airbrake control now explains the pneumatic cushion directly in the interface: a stronger modeled cushion traps more air near the cylinder head, decelerates the piston sooner, and usually leaves less kinetic energy for the final mechanical strike. The sound section keeps that piston-impact contribution separate from the compressed-air muzzle blast. Both are relative 0–100 heuristic indices—not acoustic dB measurements—and the impact card adds a plain-language landing severity for easier comparison.
+
 Published references: [SSG10 barrel](https://us.novritsch.com/product/ssg10-precision-inner-barrel-standard/), [SSG10 spring chart](https://us.novritsch.com/product/ssg-spring/), [TAC-41P](https://www.silverback-airsoft.com/t41p), [TAC-41 Lite Sport](https://www.silverback-airsoft.com/t41ls), [SRS A2 16-inch](https://www.silverback-airsoft.com/blt-13), [SRS 22-inch barrel](https://www.silverback-airsoft.com/ibl-a578), and [VSR-10 G-Spec](https://www.tokyo-marui.co.jp/products/aircocking/boltaction/73).
 
 ## Run the standalone app locally

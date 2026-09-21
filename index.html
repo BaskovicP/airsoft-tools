@@ -386,6 +386,19 @@
       background: rgba(255, 191, 105, .045);
     }
 
+    .control-explainer {
+      margin: 8px 0 0;
+      padding: 10px 11px;
+      border-left: 2px solid var(--amber);
+      border-radius: 0 7px 7px 0;
+      background: rgba(255, 191, 105, .06);
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .control-explainer strong { color: var(--amber); }
+
     .control label {
       display: flex;
       align-items: baseline;
@@ -772,6 +785,21 @@
       margin-top: 10px;
     }
 
+    .sound-heading {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-top: 18px;
+      padding: 14px 16px;
+      border: 1px solid rgba(255, 191, 105, .24);
+      border-radius: 10px;
+      background: rgba(255, 191, 105, .045);
+    }
+
+    .sound-heading strong { display: block; color: var(--amber); font-size: 13px; }
+    .sound-heading p { max-width: 820px; margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+
     .intensity {
       padding: 14px;
       border: 1px solid var(--line);
@@ -779,12 +807,45 @@
       background: var(--panel);
     }
 
+    .intensity.impact-primary {
+      --impact-color: var(--amber);
+      border-color: color-mix(in srgb, var(--impact-color) 58%, var(--line));
+      border-left: 4px solid var(--impact-color);
+      background: linear-gradient(135deg, color-mix(in srgb, var(--impact-color) 9%, var(--panel)), var(--panel) 70%);
+      box-shadow: inset 0 0 28px color-mix(in srgb, var(--impact-color) 5%, transparent);
+      transition: border-color .2s, background .2s, box-shadow .2s;
+    }
+
+    .intensity.impact-primary[data-severity="very-soft"] { --impact-color: var(--green); }
+    .intensity.impact-primary[data-severity="soft"] { --impact-color: var(--cyan); }
+    .intensity.impact-primary[data-severity="moderate"] { --impact-color: var(--amber); }
+    .intensity.impact-primary[data-severity="hard"],
+    .intensity.impact-primary[data-severity="very-hard"] { --impact-color: var(--red); }
+
     .intensity-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
       gap: 10px;
       font-size: 12px;
+    }
+
+    .intensity-head output { margin-left: auto; font-size: 15px; font-weight: 800; }
+    .impact-primary .intensity-head strong { color: var(--impact-color); }
+
+    .impact-meaning {
+      display: inline-flex;
+      margin-top: 10px;
+      padding: 5px 8px;
+      border: 1px solid var(--impact-color);
+      border-radius: 999px;
+      color: var(--impact-color);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      text-transform: uppercase;
     }
 
     .meter {
@@ -796,7 +857,8 @@
     }
 
     .meter > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--green), var(--amber), var(--red)); transition: width .2s; }
-    .intensity p { margin: 8px 0 0; color: var(--muted); font-size: 10px; line-height: 1.4; }
+    .intensity p { margin: 8px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+    .intensity p strong { color: var(--text); }
 
     .insight {
       margin-top: 10px;
@@ -909,6 +971,8 @@
       .live-strip { grid-template-columns: repeat(2, 1fr); }
       .live-item { border-bottom: 1px solid var(--line); }
       .intensity-grid { grid-template-columns: 1fr; }
+      .sound-heading { display: block; }
+      .sound-heading .tag { margin-top: 10px; }
       .measurement-form { grid-template-columns: 1fr 1fr; }
       .measurement-form button { grid-column: 1 / -1; }
       .timing-head { align-items: flex-start; flex-direction: column; gap: 5px; }
@@ -1084,6 +1148,7 @@
           <div class="control">
             <label for="airbrakeEffect"><span>Pneumatic cushion effect</span><output id="airbrakeEffectOut"></output></label>
             <input id="airbrakeEffect" type="range" min="0" max="100" step="1" value="72">
+            <p class="control-explainer"><strong>How it works:</strong> Higher values represent a stronger air cushion as the airbrake traps air near the cylinder head. The piston slows sooner and reaches the head with less kinetic energy, which usually softens its mechanical sound. This is a modeled damping strength—not a measured percentage of noise reduction.</p>
           </div>
         </section>
 
@@ -1307,16 +1372,22 @@
           </div>
         </section>
 
+        <div class="sound-heading">
+          <div><strong>Two separate contributors to shot sound</strong><p>Piston impact is the mechanical strike inside the cylinder. Muzzle blast is compressed air leaving the barrel. These relative indices explain different sources and cannot be added together or read as dB.</p></div>
+          <span class="tag heuristic">heuristic, not dB</span>
+        </div>
+
         <div class="intensity-grid">
-          <article class="intensity">
-            <div class="intensity-head"><strong>Estimated piston-impact intensity</strong><span class="tag heuristic">0–100 index</span><output id="impactValue">—</output></div>
+          <article class="intensity impact-primary" id="impactCard" data-severity="moderate">
+            <div class="intensity-head"><strong>Piston impact — mechanical sound contribution</strong><span class="tag heuristic">0–100 index</span><output id="impactValue">—</output></div>
             <div class="meter"><div id="impactMeter"></div></div>
-            <p>Heuristic index derived from modeled piston kinetic energy at the cylinder head. It is not sound pressure, dB, or a durability prediction.</p>
+            <output class="impact-meaning" id="impactMeaning">—</output>
+            <p><strong>What it means:</strong> This estimates how hard the piston reaches the cylinder head from its remaining kinetic energy (½mv²). A higher value generally means a sharper, louder mechanical strike. Actual loudness also depends on materials, damping, stock resonance, suppressor and surroundings. This index is not dB or a durability prediction.</p>
           </article>
           <article class="intensity">
-            <div class="intensity-head"><strong>Estimated muzzle-blast intensity</strong><span class="tag heuristic">0–100 index</span><output id="blastValue">—</output></div>
+            <div class="intensity-head"><strong>Muzzle blast — escaping-air sound contribution</strong><span class="tag heuristic">0–100 index</span><output id="blastValue">—</output></div>
             <div class="meter"><div id="blastMeter"></div></div>
-            <p>Heuristic index derived from modeled residual gauge pressure and gas volume at BB exit. It is not dB or a suppressor prediction.</p>
+            <p><strong>What it means:</strong> This estimates the remaining pressure and gas volume released when the BB exits. A higher value suggests a stronger air blast at the muzzle. It is separate from piston impact and is not dB or a suppressor prediction.</p>
           </article>
         </div>
 
@@ -1428,6 +1499,8 @@
         "Airbrake": "Zračna kočnica",
         "Rod / engagement length": "Duljina šipke / ulaska",
         "Pneumatic cushion effect": "Učinak pneumatskog jastuka",
+        "How it works:": "Kako djeluje:",
+        "Higher values represent a stronger air cushion as the airbrake traps air near the cylinder head. The piston slows sooner and reaches the head with less kinetic energy, which usually softens its mechanical sound. This is a modeled damping strength—not a measured percentage of noise reduction.": "Veća vrijednost predstavlja snažniji zračni jastuk kada zračna kočnica zarobi zrak blizu glave cilindra. Piston se ranije usporava i dolazi do glave s manje kinetičke energije, što obično ublažava njegov mehanički zvuk. To je modelirana jačina prigušenja — nije izmjereni postotak smanjenja buke.",
         "Advanced physics inputs": "Napredni fizikalni ulazi",
         "These controls parameterize major effects that geometry alone cannot determine. Defaults are assumptions, not measured SSG10 specifications.": "Ove kontrole opisuju glavne učinke koji se ne mogu odrediti samo iz geometrije. Zadane vrijednosti pretpostavke su, a ne izmjerene specifikacije SSG10.",
         "Reset advanced assumptions": "Vrati napredne pretpostavke",
@@ -1519,11 +1592,15 @@
         "Pressure vs time": "Tlak kroz vrijeme",
         "Piston velocity vs time": "Brzina pistona kroz vrijeme",
         "BB velocity vs time": "Brzina BB-a kroz vrijeme",
-        "Estimated piston-impact intensity": "Procijenjeni intenzitet udara pistona",
+        "Two separate contributors to shot sound": "Dva odvojena izvora zvuka opaljenja",
+        "Piston impact is the mechanical strike inside the cylinder. Muzzle blast is compressed air leaving the barrel. These relative indices explain different sources and cannot be added together or read as dB.": "Udar pistona mehanički je udar unutar cilindra. Prasak na ustima cijevi nastaje izlaskom komprimiranog zraka. Ovi relativni indeksi opisuju različite izvore i ne mogu se zbrajati niti očitati kao dB.",
+        "heuristic, not dB": "heuristika, nije dB",
+        "Piston impact — mechanical sound contribution": "Udar pistona — doprinos mehaničkom zvuku",
         "0–100 INDEX": "INDEKS 0–100",
-        "Heuristic index derived from modeled piston kinetic energy at the cylinder head. It is not sound pressure, dB, or a durability prediction.": "Heuristički indeks izveden iz modelirane kinetičke energije pistona na glavi cilindra. Nije zvučni tlak, dB ni predviđanje trajnosti.",
-        "Estimated muzzle-blast intensity": "Procijenjeni intenzitet praska na ustima cijevi",
-        "Heuristic index derived from modeled residual gauge pressure and gas volume at BB exit. It is not dB or a suppressor prediction.": "Heuristički indeks izveden iz modeliranog preostalog relativnog tlaka i volumena plina pri izlasku BB-a. Nije dB niti predviđanje učinka prigušivača.",
+        "What it means:": "Što znači:",
+        "This estimates how hard the piston reaches the cylinder head from its remaining kinetic energy (½mv²). A higher value generally means a sharper, louder mechanical strike. Actual loudness also depends on materials, damping, stock resonance, suppressor and surroundings. This index is not dB or a durability prediction.": "Ovo procjenjuje koliko snažno piston udara u glavu cilindra prema preostaloj kinetičkoj energiji (½mv²). Veća vrijednost općenito znači oštriji i glasniji mehanički udar. Stvarna glasnoća ovisi i o materijalima, prigušenju, rezonanciji kundaka, prigušivaču i okolini. Ovaj indeks nije dB ni predviđanje trajnosti.",
+        "Muzzle blast — escaping-air sound contribution": "Prasak na ustima cijevi — doprinos zvuka izlazećeg zraka",
+        "This estimates the remaining pressure and gas volume released when the BB exits. A higher value suggests a stronger air blast at the muzzle. It is separate from piston impact and is not dB or a suppressor prediction.": "Ovo procjenjuje preostali tlak i volumen plina koji se oslobađa pri izlasku BB-a. Veća vrijednost upućuje na snažniji prasak zraka na ustima cijevi. Odvojen je od udara pistona i nije dB niti predviđanje učinka prigušivača.",
         "What this Scorpion configuration is doing": "Kako se ponaša ova Scorpion konfiguracija",
         "What this piston configuration is doing": "Kako se ponaša ova konfiguracija pistona",
         "TIMING INTERPRETATION": "TUMAČENJE VREMENSKOG ODNOSA",
@@ -1564,6 +1641,11 @@
           "goal.none": "No strong airbrake event in this preset",
           "goal.near": "{percent}% of modeled exit energy gained first — near target",
           "goal.close": "{percent}% gained first — close, with overlap",
+          "impact.verySoft": "Very soft piston landing",
+          "impact.soft": "Soft mechanical impact",
+          "impact.moderate": "Moderate mechanical impact",
+          "impact.hard": "Hard mechanical impact",
+          "impact.veryHard": "Very hard mechanical impact",
           "phase.1": "1 · Trigger release — spring unloads and accelerates the piston",
           "phase.2": "2 · Piston compresses the sealed air column — pressure rises behind the stationary BB",
           "phase.3": "3 · Pressure overcomes BB resistance — BB accelerates down the barrel",
@@ -1616,6 +1698,11 @@
           "goal.none": "U ovom predlošku nema događaja snažnog kočenja",
           "goal.near": "{percent}% modelirane izlazne energije ostvareno je ranije — blizu cilja",
           "goal.close": "{percent}% ostvareno je ranije — blizu, uz preklapanje",
+          "impact.verySoft": "Vrlo mekan dosjed pistona",
+          "impact.soft": "Blag mehanički udar",
+          "impact.moderate": "Umjeren mehanički udar",
+          "impact.hard": "Jak mehanički udar",
+          "impact.veryHard": "Vrlo jak mehanički udar",
           "phase.1": "1 · Otpuštanje okidača — opruga se rasterećuje i ubrzava piston",
           "phase.2": "2 · Piston komprimira zatvoreni stupac zraka — tlak raste iza nepomičnog BB-a",
           "phase.3": "3 · Tlak nadvladava otpor BB-a — BB ubrzava kroz cijev",
@@ -2369,6 +2456,17 @@
 
         $("impactValue").textContent = `${Math.round(s.impactIndex)} / 100`;
         $("impactMeter").style.width = `${s.impactIndex}%`;
+        const impactSeverity = s.impactIndex <= 20
+          ? { state: "very-soft", key: "impact.verySoft" }
+          : s.impactIndex <= 40
+            ? { state: "soft", key: "impact.soft" }
+            : s.impactIndex <= 60
+              ? { state: "moderate", key: "impact.moderate" }
+              : s.impactIndex <= 80
+                ? { state: "hard", key: "impact.hard" }
+                : { state: "very-hard", key: "impact.veryHard" };
+        $("impactCard").dataset.severity = impactSeverity.state;
+        $("impactMeaning").textContent = tr(impactSeverity.key);
         $("blastValue").textContent = `${Math.round(s.blastIndex)} / 100`;
         $("blastMeter").style.width = `${s.blastIndex}%`;
 

@@ -63,6 +63,8 @@
         "Airbrake": "Zračna kočnica",
         "Rod / engagement length": "Duljina šipke / ulaska",
         "Pneumatic cushion effect": "Učinak pneumatskog jastuka",
+        "How it works:": "Kako djeluje:",
+        "Higher values represent a stronger air cushion as the airbrake traps air near the cylinder head. The piston slows sooner and reaches the head with less kinetic energy, which usually softens its mechanical sound. This is a modeled damping strength—not a measured percentage of noise reduction.": "Veća vrijednost predstavlja snažniji zračni jastuk kada zračna kočnica zarobi zrak blizu glave cilindra. Piston se ranije usporava i dolazi do glave s manje kinetičke energije, što obično ublažava njegov mehanički zvuk. To je modelirana jačina prigušenja — nije izmjereni postotak smanjenja buke.",
         "Advanced physics inputs": "Napredni fizikalni ulazi",
         "These controls parameterize major effects that geometry alone cannot determine. Defaults are assumptions, not measured SSG10 specifications.": "Ove kontrole opisuju glavne učinke koji se ne mogu odrediti samo iz geometrije. Zadane vrijednosti pretpostavke su, a ne izmjerene specifikacije SSG10.",
         "Reset advanced assumptions": "Vrati napredne pretpostavke",
@@ -154,11 +156,15 @@
         "Pressure vs time": "Tlak kroz vrijeme",
         "Piston velocity vs time": "Brzina pistona kroz vrijeme",
         "BB velocity vs time": "Brzina BB-a kroz vrijeme",
-        "Estimated piston-impact intensity": "Procijenjeni intenzitet udara pistona",
+        "Two separate contributors to shot sound": "Dva odvojena izvora zvuka opaljenja",
+        "Piston impact is the mechanical strike inside the cylinder. Muzzle blast is compressed air leaving the barrel. These relative indices explain different sources and cannot be added together or read as dB.": "Udar pistona mehanički je udar unutar cilindra. Prasak na ustima cijevi nastaje izlaskom komprimiranog zraka. Ovi relativni indeksi opisuju različite izvore i ne mogu se zbrajati niti očitati kao dB.",
+        "heuristic, not dB": "heuristika, nije dB",
+        "Piston impact — mechanical sound contribution": "Udar pistona — doprinos mehaničkom zvuku",
         "0–100 INDEX": "INDEKS 0–100",
-        "Heuristic index derived from modeled piston kinetic energy at the cylinder head. It is not sound pressure, dB, or a durability prediction.": "Heuristički indeks izveden iz modelirane kinetičke energije pistona na glavi cilindra. Nije zvučni tlak, dB ni predviđanje trajnosti.",
-        "Estimated muzzle-blast intensity": "Procijenjeni intenzitet praska na ustima cijevi",
-        "Heuristic index derived from modeled residual gauge pressure and gas volume at BB exit. It is not dB or a suppressor prediction.": "Heuristički indeks izveden iz modeliranog preostalog relativnog tlaka i volumena plina pri izlasku BB-a. Nije dB niti predviđanje učinka prigušivača.",
+        "What it means:": "Što znači:",
+        "This estimates how hard the piston reaches the cylinder head from its remaining kinetic energy (½mv²). A higher value generally means a sharper, louder mechanical strike. Actual loudness also depends on materials, damping, stock resonance, suppressor and surroundings. This index is not dB or a durability prediction.": "Ovo procjenjuje koliko snažno piston udara u glavu cilindra prema preostaloj kinetičkoj energiji (½mv²). Veća vrijednost općenito znači oštriji i glasniji mehanički udar. Stvarna glasnoća ovisi i o materijalima, prigušenju, rezonanciji kundaka, prigušivaču i okolini. Ovaj indeks nije dB ni predviđanje trajnosti.",
+        "Muzzle blast — escaping-air sound contribution": "Prasak na ustima cijevi — doprinos zvuka izlazećeg zraka",
+        "This estimates the remaining pressure and gas volume released when the BB exits. A higher value suggests a stronger air blast at the muzzle. It is separate from piston impact and is not dB or a suppressor prediction.": "Ovo procjenjuje preostali tlak i volumen plina koji se oslobađa pri izlasku BB-a. Veća vrijednost upućuje na snažniji prasak zraka na ustima cijevi. Odvojen je od udara pistona i nije dB niti predviđanje učinka prigušivača.",
         "What this Scorpion configuration is doing": "Kako se ponaša ova Scorpion konfiguracija",
         "What this piston configuration is doing": "Kako se ponaša ova konfiguracija pistona",
         "TIMING INTERPRETATION": "TUMAČENJE VREMENSKOG ODNOSA",
@@ -199,6 +205,11 @@
           "goal.none": "No strong airbrake event in this preset",
           "goal.near": "{percent}% of modeled exit energy gained first — near target",
           "goal.close": "{percent}% gained first — close, with overlap",
+          "impact.verySoft": "Very soft piston landing",
+          "impact.soft": "Soft mechanical impact",
+          "impact.moderate": "Moderate mechanical impact",
+          "impact.hard": "Hard mechanical impact",
+          "impact.veryHard": "Very hard mechanical impact",
           "phase.1": "1 · Trigger release — spring unloads and accelerates the piston",
           "phase.2": "2 · Piston compresses the sealed air column — pressure rises behind the stationary BB",
           "phase.3": "3 · Pressure overcomes BB resistance — BB accelerates down the barrel",
@@ -251,6 +262,11 @@
           "goal.none": "U ovom predlošku nema događaja snažnog kočenja",
           "goal.near": "{percent}% modelirane izlazne energije ostvareno je ranije — blizu cilja",
           "goal.close": "{percent}% ostvareno je ranije — blizu, uz preklapanje",
+          "impact.verySoft": "Vrlo mekan dosjed pistona",
+          "impact.soft": "Blag mehanički udar",
+          "impact.moderate": "Umjeren mehanički udar",
+          "impact.hard": "Jak mehanički udar",
+          "impact.veryHard": "Vrlo jak mehanički udar",
           "phase.1": "1 · Otpuštanje okidača — opruga se rasterećuje i ubrzava piston",
           "phase.2": "2 · Piston komprimira zatvoreni stupac zraka — tlak raste iza nepomičnog BB-a",
           "phase.3": "3 · Tlak nadvladava otpor BB-a — BB ubrzava kroz cijev",
@@ -1004,6 +1020,17 @@
 
         $("impactValue").textContent = `${Math.round(s.impactIndex)} / 100`;
         $("impactMeter").style.width = `${s.impactIndex}%`;
+        const impactSeverity = s.impactIndex <= 20
+          ? { state: "very-soft", key: "impact.verySoft" }
+          : s.impactIndex <= 40
+            ? { state: "soft", key: "impact.soft" }
+            : s.impactIndex <= 60
+              ? { state: "moderate", key: "impact.moderate" }
+              : s.impactIndex <= 80
+                ? { state: "hard", key: "impact.hard" }
+                : { state: "very-hard", key: "impact.veryHard" };
+        $("impactCard").dataset.severity = impactSeverity.state;
+        $("impactMeaning").textContent = tr(impactSeverity.key);
         $("blastValue").textContent = `${Math.round(s.blastIndex)} / 100`;
         $("blastMeter").style.width = `${s.blastIndex}%`;
 
