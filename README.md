@@ -43,6 +43,16 @@ Contact speed/kinetic energy and muzzle pressure/gas inventory/discharge replace
 - JSON import/export; full setup and shot-trace export; local storage only.
 - Limits: 2,000 records and 32 distinct configurations per fit. Export a backup before deleting measurements.
 
+### Freeze parts and optimize
+
+Use **Freeze parts & optimize** above the results. Checked groups stay fixed: cylinder, barrel, head/nozzle, piston, airbrake, spring and BB. Enter discrete values for unlocked hardware, using comma-separated numbers and decimal dots. The current value is always included. Example masses and pin lengths are hypothetical alternatives, not a catalog of compatible AMP parts.
+
+The optimizer preserves **95–105% of the starting setup's predicted BB exit energy**. Weather, fitted flow/leakage, friction, damping and timing criteria never vary. All candidates are observed with the same 250 ms time limit; missing contact or incomplete discharge never counts as zero noise.
+
+The shortlist balances first-contact piston energy, peak muzzle flow, exit pressure and spring-to-BB energy efficiency. It retains non-dominated tradeoffs, then uses disclosed ranking weights for balanced, sound-biased or efficiency-biased preferences. It is a **best-found model comparison**, not a claim of lowest real-world dB. Search coverage, exclusions and any worsening relative to the reference are shown.
+
+Searches are deterministic and capped at 60/120/240 combinations, can be cancelled, and do not change the live setup. **Apply & replay** rechecks a candidate, preserves frozen hardware and environmental/loss inputs, marks changed hardware as unmeasured and extends the display's observation limit to 250 ms. Actual chrono records are untouched. Setup or search changes invalidate old results. Search snapshots, locks, metrics and ranking weights can be exported.
+
 ## Source and tests
 
 `index.html` is generated but checked in so it opens standalone. Edit these sources, not its generated inline bundle:
@@ -50,6 +60,7 @@ Contact speed/kinetic energy and muzzle pressure/gas inventory/discharge replace
 - `src/page.html`: shared page shell/styles;
 - `src/physics.js`: pure solver, also loadable by Node;
 - `src/calibration.js`: record validation, migration and one-parameter fitting;
+- `src/optimizer.js`: hardware-only search, locks, eligibility and tradeoff ranking;
 - `src/app.js`: bilingual controls, canvas animation, graphs and data UI.
 
 Run:

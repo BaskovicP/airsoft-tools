@@ -1042,10 +1042,31 @@
       #fitStatus { font-size:.9rem; }
       .controls-panel.is-collapsed > :not(.panel-heading) { display:none; }
       .subtitle { color:var(--muted); line-height:1.6; }
+      .optimizer { padding:18px; margin-bottom:18px; border-color:var(--line-bright); }
+      .optimizer-heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; }
+      .optimizer-heading p { margin:7px 0 0; }
+      .optimizer-target { margin:18px 0 10px; color:var(--cyan); font-size:1rem; line-height:1.5; }
+      .optimizer-locks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:16px 0; }
+      .optimizer-part { min-width:0; margin:0; padding:12px; border:1px solid var(--line-bright); border-radius:10px; }
+      .optimizer-part legend { padding:0 6px; font-weight:650; }
+      .optimizer-part legend label { display:flex; align-items:center; gap:8px; cursor:pointer; }
+      .optimizer-part details { border:0; padding:4px 0 0; }
+      .optimizer-field { display:block; margin:12px 0; font-size:.875rem; line-height:1.5; }
+      .optimizer-field input { display:block; width:100%; margin-top:5px; padding:8px; border:1px solid var(--line-bright); border-radius:7px; background:var(--bg); color:var(--text); }
+      .optimizer-field input:disabled { opacity:.55; }
+      .optimizer-field small { display:block; margin-top:4px; color:var(--amber); }
+      .optimizer-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; font-size:.875rem; }
+      .optimizer-options select { margin-top:6px; }
+      .optimizer-table { min-width:780px; }
+      .optimizer-table td:first-child { min-width:230px; max-width:350px; font-family:inherit; }
+      .optimizer-table p { margin:8px 0; }
+      .optimizer-table small { color:var(--muted); line-height:1.5; }
+      .optimizer-baseline { background:var(--cyan-dim); }
       .source-links { display:flex; flex-wrap:wrap; gap:12px; font-size:.875rem; }
       a { color:var(--cyan); }
       button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, textarea:focus-visible { outline:2px solid var(--cyan); outline-offset:3px; }
       @media(max-width:720px) {
+        .optimizer-locks,.optimizer-options { grid-template-columns:1fr; }
         .calibration .measurement-form { grid-template-columns:1fr; }
         #mechanism { height:265px; }
         .live-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }

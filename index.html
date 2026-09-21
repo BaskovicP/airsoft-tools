@@ -1042,10 +1042,31 @@
       #fitStatus { font-size:.9rem; }
       .controls-panel.is-collapsed > :not(.panel-heading) { display:none; }
       .subtitle { color:var(--muted); line-height:1.6; }
+      .optimizer { padding:18px; margin-bottom:18px; border-color:var(--line-bright); }
+      .optimizer-heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; }
+      .optimizer-heading p { margin:7px 0 0; }
+      .optimizer-target { margin:18px 0 10px; color:var(--cyan); font-size:1rem; line-height:1.5; }
+      .optimizer-locks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:16px 0; }
+      .optimizer-part { min-width:0; margin:0; padding:12px; border:1px solid var(--line-bright); border-radius:10px; }
+      .optimizer-part legend { padding:0 6px; font-weight:650; }
+      .optimizer-part legend label { display:flex; align-items:center; gap:8px; cursor:pointer; }
+      .optimizer-part details { border:0; padding:4px 0 0; }
+      .optimizer-field { display:block; margin:12px 0; font-size:.875rem; line-height:1.5; }
+      .optimizer-field input { display:block; width:100%; margin-top:5px; padding:8px; border:1px solid var(--line-bright); border-radius:7px; background:var(--bg); color:var(--text); }
+      .optimizer-field input:disabled { opacity:.55; }
+      .optimizer-field small { display:block; margin-top:4px; color:var(--amber); }
+      .optimizer-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; font-size:.875rem; }
+      .optimizer-options select { margin-top:6px; }
+      .optimizer-table { min-width:780px; }
+      .optimizer-table td:first-child { min-width:230px; max-width:350px; font-family:inherit; }
+      .optimizer-table p { margin:8px 0; }
+      .optimizer-table small { color:var(--muted); line-height:1.5; }
+      .optimizer-baseline { background:var(--cyan-dim); }
       .source-links { display:flex; flex-wrap:wrap; gap:12px; font-size:.875rem; }
       a { color:var(--cyan); }
       button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, textarea:focus-visible { outline:2px solid var(--cyan); outline-offset:3px; }
       @media(max-width:720px) {
+        .optimizer-locks,.optimizer-options { grid-template-columns:1fr; }
         .calibration .measurement-form { grid-template-columns:1fr; }
         #mechanism { height:265px; }
         .live-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -1422,10 +1443,154 @@
 })(typeof globalThis !== "undefined" ? globalThis : this);
 
 
+/* Bounded hardware-only search. Rankings are engineering preferences, not acoustics. */
+(function (root) {
+  "use strict";
+  const VERSION = "1.0.0";
+  const P = typeof module !== "undefined" && module.exports ? require("./physics.js") : root.PneumaticPhysics;
+  const GROUPS = Object.freeze({
+    cylinder: ["cylinderBore", "strokeLength", "deadVolume"],
+    barrel: ["barrelLength", "barrelDiameter"],
+    head: ["headBore", "headLength", "nozzleBore", "nozzleLength", "breechVolume"],
+    piston: ["pistonMass"],
+    airbrake: ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper"],
+    spring: ["springStiffness", "springPreload", "springMass"],
+    bb: ["bbMass", "bbDiameter"]
+  });
+  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
+  const WEIGHTS = Object.freeze({ balanced: [.35,.2,.15,.30], quiet: [.45,.25,.2,.10], efficient: [.15,.10,.05,.70] });
+  const HORIZON_MS = 250;
+  const clone = v => JSON.parse(JSON.stringify(v));
+  function parseValues(text) {
+    if (typeof text !== "string" || !text.trim()) throw new Error("optimizer:values");
+    const tokens = text.trim().split(/[,;\s]+/);
+    if (tokens.length > 12 || tokens.some(v => !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(v))) throw new Error("optimizer:values");
+    const values = [...new Set(tokens.map(Number))];
+    if (values.some(v => !Number.isFinite(v))) throw new Error("optimizer:values");
+    return values;
+  }
+  function searchSpace(raw, config = {}) {
+    const base = P.normalize(raw);
+    if (P.validate(base).length) throw new Error("optimizer:baseline-invalid");
+    for (const key of Object.keys(config.values || {})) if (!Object.hasOwn(LIMITS, key)) throw new Error("optimizer:forbidden-parameter");
+    for (const key of Object.keys(config.locks || {})) if (!Object.hasOwn(GROUPS, key)) throw new Error("optimizer:unknown-group");
+    const dimensions = [], locks = {};
+    let total = 1;
+    for (const [group, keys] of Object.entries(GROUPS)) {
+      locks[group] = config.locks?.[group] !== false;
+      if (locks[group]) continue;
+      for (const key of keys) {
+        const entries = config.values?.[key] || [base[key]];
+        if (!Array.isArray(entries) || entries.length > 12 || entries.length === 0 || entries.some(v => !Number.isFinite(v) || v < LIMITS[key][0] || v > LIMITS[key][1])) throw new Error(`optimizer:values:${key}`);
+        if (base.springCurve.length && ["springStiffness", "springMass"].includes(key) && entries.some(v => v !== base[key])) throw new Error("optimizer:measured-spring");
+        const values = [...new Set([base[key], ...entries])];
+        if (values.length > 1) { dimensions.push({ key, values }); total *= values.length; }
+        if (!Number.isSafeInteger(total)) throw new Error("optimizer:space-too-large");
+      }
+    }
+    return { base: clone(base), dimensions, total, locks };
+  }
+  function candidateAt(space, index) {
+    const p = clone(space.base);
+    for (const dimension of space.dimensions) { const at = index % dimension.values.length; index = Math.floor(index / dimension.values.length); p[dimension.key] = dimension.values[at]; }
+    return p;
+  }
+  function sampleIndices(space, budget) {
+    const count = Math.min(space.total, budget);
+    if (space.total <= budget) return Array.from({ length: count }, (_, i) => i);
+    const chosen = new Set([0]);
+    // Always try individual changes first, then deterministic multi-part samples.
+    let stride = 1;
+    for (const d of space.dimensions) {
+      for (let i = 1; i < d.values.length && chosen.size < count; i++) chosen.add(i * stride);
+      stride *= d.values.length;
+    }
+    let seed = 0x6d2b79f5;
+    while (chosen.size < count) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      chosen.add(Math.floor(seed / 4294967296 * space.total));
+    }
+    return [...chosen];
+  }
+  function assess(params, shot, bounds) {
+    if (!shot?.valid) return { reason: "invalid" };
+    if (!Number.isFinite(shot.exitEnergy) || !Number.isFinite(shot.exitTime) || !Number.isFinite(shot.exitVelocity)) return { reason: "noExit" };
+    if (bounds && (shot.exitEnergy < bounds.min - 1e-10 || shot.exitEnergy > bounds.max + 1e-10)) return { reason: "energy" };
+    if (!Number.isFinite(shot.pistonHitTime) || !Number.isFinite(shot.impactEnergy) || shot.dischargeComplete !== true) return { reason: "unfinished" };
+    const springWork = P.springEnergy(params, 0);
+    if (!(springWork > 0) || !Number.isFinite(shot.peakOutflow) || !Number.isFinite(shot.exitPressure) || !Number.isFinite(shot.energyResidual) || Math.abs(shot.energyResidual) > .001 * springWork) return { reason: "numerical" };
+    const efficiency = shot.exitEnergy / springWork;
+    if (!(efficiency > 0 && efficiency <= 1.001) || shot.impactEnergy < 0 || shot.peakOutflow < 0) return { reason: "numerical" };
+    const metrics = { energy: shot.exitEnergy, velocity: shot.exitVelocity, efficiency, springWork,
+      impact: shot.impactEnergy, outflow: shot.peakOutflow, exitGauge: Math.max(0, shot.exitPressure - shot.ambientPressure),
+      timingMargin: shot.strongBrakeTime !== null && shot.usefulTime !== null ? shot.strongBrakeTime - shot.usefulTime : null,
+      contactTime: shot.pistonHitTime, duration: shot.duration, energyResidual: shot.energyResidual };
+    return { reason: null, metrics, vector: [metrics.impact, metrics.outflow, metrics.exitGauge, -metrics.efficiency] };
+  }
+  function dominates(a, b) {
+    return a.vector.every((v, i) => v <= b.vector[i]) && a.vector.some((v, i) => v < b.vector[i]);
+  }
+  function rank(candidates, priority = "balanced") {
+    const weights = WEIGHTS[priority];
+    if (!weights) throw new Error("optimizer:priority");
+    if (!candidates.length) return [];
+    const frontier = candidates.filter(a => !candidates.some(b => b !== a && dominates(b, a)));
+    const lows = weights.map((_, i) => Math.min(...frontier.map(c => c.vector[i])));
+    const highs = weights.map((_, i) => Math.max(...frontier.map(c => c.vector[i])));
+    return frontier.map(c => ({ ...c, score: weights.reduce((sum, w, i) => sum + w * (highs[i] === lows[i] ? 0 : (c.vector[i] - lows[i]) / (highs[i] - lows[i])), 0) }))
+      .sort((a, b) => a.score - b.score || Object.keys(a.changes).length - Object.keys(b.changes).length || a.index - b.index);
+  }
+  function changesFrom(base, next) {
+    return Object.fromEntries(Object.keys(LIMITS).filter(key => base[key] !== next[key]).map(key => [key, { from: base[key], to: next[key] }]));
+  }
+  function applyCandidate(current, result, candidate) {
+    if (JSON.stringify(P.normalize(current)) !== JSON.stringify(result.base)) throw new Error("optimizer:stale");
+    const allowed = new Set(Object.entries(GROUPS).filter(([group]) => result.locks[group] === false).flatMap(([, keys]) => keys));
+    const next = clone(P.normalize(current));
+    for (const key of Object.keys(P.DEFAULTS)) {
+      if (JSON.stringify(candidate.params[key]) !== JSON.stringify(next[key])) {
+        if (!allowed.has(key)) throw new Error("optimizer:locked-change");
+        next[key] = clone(candidate.params[key]);
+      }
+    }
+    if (P.validate(next).length) throw new Error("optimizer:candidate-invalid");
+    return next;
+  }
+  async function search(raw, config = {}, callbacks = {}, simulate = P.simulate) {
+    const space = searchSpace(raw, config), budget = config.budget ?? 120, priority = config.priority || "balanced";
+    if (!Number.isInteger(budget) || budget < 1 || budget > 240 || !WEIGHTS[priority]) throw new Error("optimizer:settings");
+    const cancelled = () => Boolean(callbacks.isCancelled?.());
+    if (cancelled()) throw new Error("optimizer:cancelled");
+    const reference = simulate(space.base, { maxTime: HORIZON_MS, sampleInterval: 1 });
+    if (!reference.valid || !Number.isFinite(reference.exitEnergy) || !(reference.exitEnergy > 0) || !Number.isFinite(reference.exitTime)) throw new Error("optimizer:baseline-no-exit");
+    const bounds = { min: reference.exitEnergy * .95, max: reference.exitEnergy * 1.05 };
+    const indices = sampleIndices(space, budget), candidates = [], rejected = { invalid: 0, noExit: 0, energy: 0, unfinished: 0, numerical: 0 };
+    const baseline = assess(space.base, reference, bounds);
+    for (let n = 0; n < indices.length; n++) {
+      if (cancelled()) throw new Error("optimizer:cancelled");
+      const index = indices[n], params = candidateAt(space, index);
+      const s = index === 0 ? reference : simulate(params, { maxTime: HORIZON_MS, sampleInterval: 1 });
+      const assessed = assess(params, s, bounds);
+      if (assessed.reason) rejected[assessed.reason]++;
+      else candidates.push({ index, params, metrics: assessed.metrics, vector: assessed.vector, changes: changesFrom(space.base, params) });
+      callbacks.onProgress?.({ completed: n + 1, planned: indices.length, eligible: candidates.length });
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    if (cancelled()) throw new Error("optimizer:cancelled");
+    return { optimizerVersion: VERSION, solverVersion: P.VERSION, base: space.base, locks: space.locks, dimensions: space.dimensions, bounds, baseline: baseline.metrics || null,
+      baselineReason: baseline.reason, priority, weights: WEIGHTS[priority], horizonMs: HORIZON_MS,
+      total: space.total, evaluated: indices.length, exhaustive: indices.length === space.total, rejected, eligible: candidates.length,
+      frontier: rank(candidates, priority), noVariables: space.dimensions.length === 0 };
+  }
+  const api = { VERSION, GROUPS, LIMITS, WEIGHTS, HORIZON_MS, parseValues, searchSpace, candidateAt, sampleIndices, assess, dominates, rank, changesFrom, applyCandidate, search };
+  if (typeof module !== "undefined" && module.exports) module.exports = api; else root.PneumaticOptimizer = api;
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
+
 /* UI shared by the generated standalone file and Cloudflare build. */
 (() => {
   "use strict";
-  const P = globalThis.PneumaticPhysics, C = globalThis.PneumaticCalibration;
+  const P = globalThis.PneumaticPhysics, C = globalThis.PneumaticCalibration, O = globalThis.PneumaticOptimizer;
   const $ = id => document.getElementById(id), finite = Number.isFinite;
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   let language = "en";
@@ -1438,6 +1603,7 @@
   let p = P.normalize(), selectedPlatform = "ssg10", component = "amp", springLabel = "unspecified", pinLabel = "custom";
   let provenance = { geometry: "assumed", spring: "assumed" }, shot = null, baseline = null, fraction = 0, playing = false, animation = 0;
   let measurements = [], fit = null, status = null, diagnostic = null, busy = false, debounce = null;
+  let optimizer = null;
   const fields = {
     cylinderBore: ["Cylinder internal diameter", "Unutarnji promjer cilindra", "mm", 15, 35, .01],
     strokeLength: ["Actual piston stroke", "Stvarni hod pistona", "mm", 20, 150, .1],
@@ -1542,8 +1708,8 @@
         <label for="springCurve">${t("Optional measured force curve: compression mm, force N (one pair per line)", "Neobavezna izmjerena krivulja: stlačenje mm, sila N (jedan par po retku)")}</label><textarea id="springCurve" rows="4" placeholder="50, 27.5&#10;100, 55&#10;140, 77">${p.springCurve.map(v => v.join(", ")).join("\n")}</textarea><p class="field-help">${t("A supplied curve replaces linear stiffness and must cover preload through full cocked compression. Clear it to use stiffness × compression. Restitution is a simplified bumper model; peak contact force and sound are not calculated.", "Unesena krivulja zamjenjuje linearnu krutost i mora pokriti raspon od prednaprezanja do punog zapinjanja. Izbrišite je za model krutost × stlačenje. Koeficijent odskoka pojednostavljen je model odbojnika; vršna sila kontakta i zvuk se ne računaju.")}</p>${provenanceControl("spring", "I have measured the spring force and installed compression", "Izmjerio/la sam silu opruge i ugrađeno stlačenje")}</details>
         <details><summary>${t("Airflow, friction and environment", "Protok, trenje i okoliš")}</summary>${["dischargeCoefficient", "pistonLeak", "nozzleLeak", "bbLeakCoefficient", "bbBreakaway", "barrelDrag", "heatTransfer", "ambientPressure", "airTemperature"].map(field).join("")}<p class="field-help">${t("Leak areas include their discharge coefficient. Zero heat conductance is an adiabatic starting approximation. All loss coefficients need evidence; they are not efficiency percentages.", "Površine curenja uključuju koeficijent protoka. Nulta toplinska vodljivost početna je adijabatska aproksimacija. Svi koeficijenti gubitaka zahtijevaju potvrdu; nisu postoci učinkovitosti.")}</p></details>
         <details><summary>${t("Timing criteria and solver", "Vremenski kriteriji i rješavač")}</summary>${["usefulFraction", "decelThreshold", "maxTime"].map(field).join("")}<p class="field-help">${t("Adaptive midpoint integration, maximum step 0.01 ms. Thresholds are user conventions, not physical switches. The model can end before contact or complete discharge.", "Adaptivna integracija metodom srednje točke, najveći korak 0,01 ms. Pragovi su dogovoreni kriteriji, a ne fizikalne sklopke. Model može završiti prije kontakta ili potpunog pražnjenja.")}</p></details>
-      </aside><section class="main"><div id="results"></div>${calibrationMarkup()}</section></div></main>`;
-    bindLanguage(); bindControls(); updateResults(); renderMeasurements();
+      </aside><section class="main">${optimizerMarkup()}<div id="results"></div>${calibrationMarkup()}</section></div></main>`;
+    bindLanguage(); bindControls(); bindOptimizer(); updateResults(); renderMeasurements(); renderOptimizerResults();
   }
   function calibrationMarkup() {
     return `<details class="panel calibration" id="calibrationPanel"><summary>${t("Calibration · actual chrono measurements", "Kalibracija · stvarna mjerenja kronografom")}</summary><div class="calibration-body"><p class="calibration-intro">${t("Your 0.46 g / 330 fps observation is a reference until its full setup is recorded. Energy is derived from mass and velocity, not an independent measurement. Record each shot. All data stays in this browser unless you export it.", "Mjerenje 0,46 g / 330 fps ostaje referenca dok se ne zabilježi potpuna konfiguracija. Energija se izvodi iz mase i brzine, nije neovisno mjerenje. Zabilježite svaki hitac. Podaci ostaju u ovom pregledniku osim ako ih izvezete.")}</p>
@@ -1553,6 +1719,111 @@
       <div class="table-wrap"><table><thead><tr><th>BB</th><th>fps / J</th><th>${t("Use / setup", "Namjena / konfiguracija")}</th><th>${t("Notes", "Bilješke")}</th><th></th></tr></thead><tbody id="measurementRows"></tbody></table></div>
       <div class="fit-row"><button id="fitButton" class="primary-button" type="button">${t("Fit Cd to training shots", "Prilagodi Cd podacima")}</button><button id="exportMeasurements" class="secondary-button" type="button">${t("Export data", "Izvezi podatke")}</button><label class="secondary-button">${t("Import data", "Uvezi podatke")}<input id="importMeasurements" type="file" accept="application/json,.json" hidden></label></div><p id="fitStatus" class="status-line" role="status">${status ? esc(t(...status)) : t("No fit applied. References do not calibrate the solver.", "Prilagodba nije primijenjena. Reference ne kalibriraju rješavač.")}</p><div id="fitReport"></div>
       </div></details>`;
+  }
+  function ensureOptimizer() {
+    if (optimizer) return;
+    optimizer = { locks: Object.fromEntries(Object.keys(O.GROUPS).map(key => [key, !["piston", "airbrake"].includes(key)])),
+      values: Object.fromEntries(Object.keys(O.LIMITS).map(key => [key, String(p[key])])), priority: "balanced", budget: 120,
+      result: null, open: false, cancelled: false, running: false, status: null };
+    optimizer.values.pistonMass = [...new Set([p.pistonMass, 58, 65, 68, 72, 76, 82])].join(", ");
+    optimizer.values.airbrakeLength = [...new Set([p.airbrakeLength, 0, p.airbrakeLength - 2, p.airbrakeLength - 1, p.airbrakeLength + 1, p.airbrakeLength + 2].filter(v => v >= 0 && v <= 40).map(v => Number(v.toFixed(3))))].join(", ");
+  }
+  function optimizerMarkup() {
+    ensureOptimizer();
+    const labels = { cylinder: ["Cylinder", "Cilindar"], barrel: ["Barrel", "Cijev"], head: ["Head / nozzle", "Glava / mlaznica"], piston: ["Piston", "Piston"], airbrake: ["Airbrake", "Zračna kočnica"], spring: ["Spring", "Opruga"], bb: ["BB", "BB"] };
+    return `<section class="panel optimizer"><div class="optimizer-heading"><div><h2>${t("Find a quieter, efficient setup", "Pronađi tišu i učinkovitiju konfiguraciju")}</h2><p class="small-note">${t("Freeze the parts you want to keep. Search only the hardware choices you can change.", "Zamrznite dijelove koje želite zadržati. Pretražujte samo zamjenjive dijelove.")}</p></div><button class="primary-button" type="button" id="toggleOptimizer" aria-expanded="${optimizer.open}" aria-controls="optimizerBody">${t("Freeze parts & optimize", "Zamrzni dijelove i optimiziraj")}</button></div>
+      <div id="optimizerBody" ${optimizer.open ? "" : "hidden"}><p class="optimizer-target">${t("Performance constraint: keep 95–105% of this setup’s predicted BB exit energy.", "Uvjet performansi: zadrži 95–105% predviđene izlazne energije BB-a trenutačne konfiguracije.")}</p>
+      <p class="small-note">${t("Checked = frozen. Enter actual available choices separated by commas; use a dot for decimals. The current value is always included. Example piston masses and pin lengths are hypothetical—not verified compatible AMP parts. Changing geometry can require new sealing/friction measurements.", "Označeno = zamrznuto. Unesite stvarno dostupne vrijednosti odvojene zarezima; decimalni znak je točka. Trenutačna vrijednost uvijek je uključena. Primjeri masa pistona i duljina pina hipotetski su — nisu potvrđeni kompatibilni AMP dijelovi. Promjena geometrije može zahtijevati novo mjerenje brtvljenja i trenja.")}</p>
+      <div class="optimizer-locks">${Object.entries(O.GROUPS).map(([group, keys]) => `<fieldset class="optimizer-part"><legend><label><input type="checkbox" data-opt-lock="${group}" ${optimizer.locks[group] ? "checked" : ""}>${t("Freeze", "Zamrzni")} ${t(...labels[group])}</label></legend><details ${!optimizer.locks[group] ? "open" : ""}><summary>${t("Candidate values", "Vrijednosti kandidata")}</summary>${keys.map(key => {
+        const fixedCurve = p.springCurve.length && ["springStiffness", "springMass"].includes(key);
+        return `<label class="optimizer-field" for="opt-${key}"><span>${t(fields[key][0], fields[key][1])} (${fields[key][2]})</span><input type="text" id="opt-${key}" data-opt-values="${key}" value="${esc(fixedCurve ? String(p[key]) : optimizer.values[key])}" ${optimizer.locks[group] || fixedCurve ? "disabled" : ""} maxlength="180">${fixedCurve ? `<small>${t("Fixed with the measured spring curve; preload may vary within its measured range.", "Fiksno uz izmjerenu krivulju opruge; prednaprezanje može varirati unutar izmjerenog raspona.")}</small>` : ""}</label>`;
+      }).join("")}</details></fieldset>`).join("")}</div>
+      <div class="optimizer-options"><label>${t("Ranking preference", "Prioritet rangiranja")}<select id="optimizerPriority">${[["balanced", "Balanced trade-off", "Uravnotežen kompromis"], ["quiet", "Lower sound contributors", "Niži doprinosi zvuku"], ["efficient", "Higher energy efficiency", "Viša energetska učinkovitost"]].map(([value, en, hr]) => `<option value="${value}" ${optimizer.priority === value ? "selected" : ""}>${t(en, hr)}</option>`).join("")}</select></label><label>${t("Maximum combinations", "Najviše kombinacija")}<select id="optimizerBudget">${[60, 120, 240].map(v => `<option ${optimizer.budget === v ? "selected" : ""}>${v}</option>`).join("")}</select></label></div>
+      <p class="small-note">${t("Weather, fitted airflow/leakage, friction, damping and timing criteria stay fixed. Every candidate uses the same 250 ms observation limit, allowing delayed contact/discharge. Efficiency = BB exit energy ÷ initial available spring work. Rankings compare impact energy, peak muzzle airflow, exit pressure and efficiency—not dB or guaranteed loudness.", "Vrijeme, prilagođeni protok/curenje, trenje, prigušenje i vremenski kriteriji ostaju fiksni. Svaki kandidat koristi isti prozor promatranja od 250 ms za kasni kontakt/pražnjenje. Učinkovitost = izlazna energija BB-a ÷ početni raspoloživi rad opruge. Rangiranje uspoređuje energiju udara, vršni protok, izlazni tlak i učinkovitost — ne dB ni zajamčenu glasnoću.")}</p>
+      <details><summary>${t("How ranking works", "Kako radi rangiranje")}</summary><p class="small-note">${t("Only completed, numerically acceptable shots inside the energy band qualify. Keep the non-dominated trade-offs: no other tested candidate is at least as good on all four objectives and better on one. Rank those with range-normalized weighted costs. Impact / airflow / exit pressure / inefficiency weights: balanced 35/20/15/30%; sound-biased 45/25/20/10%; efficiency-biased 15/10/5/70%. These weights are preferences, not an acoustic formula. A limited search finds the best tested choices, not a global optimum.", "Prikladni su samo završeni, numerički prihvatljivi hici unutar energetskog raspona. Zadržavaju se nedominirani kompromisi: nijedan drugi ispitani kandidat nije jednako dobar u sva četiri cilja i bolji u jednom. Rangiraju se normaliziranim ponderiranim troškovima. Udar / protok / tlak / neučinkovitost: uravnoteženo 35/20/15/30%; zvuk 45/25/20/10%; učinkovitost 15/10/5/70%. Ponderi su prioriteti, ne akustička formula. Ograničena pretraga pronalazi najbolje ispitane opcije, ne globalni optimum.")}</p></details>
+      <div class="fit-row"><button class="primary-button" type="button" id="runOptimizer">${t("Find best combinations", "Pronađi najbolje kombinacije")}</button><button class="secondary-button" type="button" id="cancelOptimizer" disabled>${t("Cancel search", "Prekini pretragu")}</button></div><p class="status-line" role="status" id="optimizerStatus">${optimizer.status ? esc(t(...optimizer.status)) : ""}</p><div id="optimizerResults"></div></div></section>`;
+  }
+  function invalidateOptimizer() {
+    if (!optimizer) return;
+    optimizer.cancelled = true;
+    if (optimizer.result) optimizer.status = ["Setup or search choices changed. Run the search again before applying a result.", "Konfiguracija ili odabiri pretrage promijenjeni su. Ponovite pretragu prije primjene rezultata."];
+    optimizer.result = null;
+    if ($("optimizerResults")) $("optimizerResults").innerHTML = "";
+    if ($("optimizerStatus")) $("optimizerStatus").textContent = optimizer.status ? t(...optimizer.status) : "";
+  }
+  function bindOptimizer() {
+    $("toggleOptimizer").addEventListener("click", e => { optimizer.open = !optimizer.open; $("optimizerBody").hidden = !optimizer.open; e.currentTarget.setAttribute("aria-expanded", String(optimizer.open)); });
+    document.querySelectorAll("[data-opt-lock]").forEach(box => box.addEventListener("change", () => {
+      const group = box.dataset.optLock; optimizer.locks[group] = box.checked; invalidateOptimizer();
+      for (const key of O.GROUPS[group]) $("opt-" + key).disabled = box.checked || Boolean(p.springCurve.length && ["springStiffness", "springMass"].includes(key));
+      box.closest("fieldset").querySelector("details").open = !box.checked;
+    }));
+    document.querySelectorAll("[data-opt-values]").forEach(input => input.addEventListener("input", () => { optimizer.values[input.dataset.optValues] = input.value; invalidateOptimizer(); }));
+    $("optimizerPriority").addEventListener("change", e => { optimizer.priority = e.target.value; invalidateOptimizer(); });
+    $("optimizerBudget").addEventListener("change", e => { optimizer.budget = Number(e.target.value); invalidateOptimizer(); });
+    $("cancelOptimizer").addEventListener("click", () => { optimizer.cancelled = true; $("cancelOptimizer").disabled = true; $("optimizerStatus").textContent = t("Cancelling after the current shot…", "Prekid nakon trenutačnog hica…"); });
+    $("runOptimizer").addEventListener("click", async () => {
+      if (busy) return;
+      clearTimeout(debounce); stop();
+      if (!shot) recalculate();
+      const base = clone(p), config = { locks: clone(optimizer.locks), values: {}, budget: optimizer.budget, priority: optimizer.priority };
+      try {
+        for (const [group, keys] of Object.entries(O.GROUPS)) if (!config.locks[group]) for (const key of keys) config.values[key] = p.springCurve.length && ["springStiffness", "springMass"].includes(key) ? [p[key]] : O.parseValues(optimizer.values[key]);
+        O.searchSpace(base, config);
+      } catch (_) { optimizer.status = ["Check candidate lists: up to 12 numbers per field, within the normal control ranges. Use decimal dots. Confirm the starting setup is valid.", "Provjerite popise: do 12 brojeva po polju, unutar uobičajenih raspona kontrola. Koristite decimalnu točku. Početna konfiguracija mora biti valjana."]; $("optimizerStatus").textContent = t(...optimizer.status); return; }
+      optimizer.cancelled = false; optimizer.running = true; optimizer.result = null;
+      $("optimizerResults").innerHTML = ""; setBusy(true); $("cancelOptimizer").disabled = false;
+      $("optimizerStatus").textContent = t("Capturing current energy and evaluating hardware combinations…", "Bilježenje trenutačne energije i provjera kombinacija dijelova…");
+      await new Promise(resolve => setTimeout(resolve, 20));
+      try {
+        const result = await O.search(base, config, {
+          isCancelled: () => optimizer.cancelled || JSON.stringify(p) !== JSON.stringify(base) || location.hash !== "#pneumatic-timing",
+          onProgress: progress => { if ($("optimizerStatus")) $("optimizerStatus").textContent = t(`${progress.completed} / ${progress.planned} combinations checked · ${progress.eligible} eligible.`, `Provjereno ${progress.completed} / ${progress.planned} kombinacija · ${progress.eligible} prikladnih.`); }
+        });
+        optimizer.result = result; optimizer.status = ["Search complete. Review the trade-offs before applying a hypothetical setup.", "Pretraga je završena. Pregledajte kompromise prije primjene hipotetske konfiguracije."];
+      } catch (error) {
+        optimizer.result = null;
+        optimizer.status = error.message === "optimizer:cancelled" ? ["Search cancelled. No setup was changed and partial results were discarded.", "Pretraga je prekinuta. Konfiguracija nije promijenjena, a djelomični rezultati odbačeni su."] : ["Search cannot start: the current setup needs a valid BB exit to define its energy target. Check inputs or spring data.", "Pretraga nije moguća: trenutačna konfiguracija mora dati valjan izlazak BB-a za ciljni energetski raspon. Provjerite ulaze ili oprugu."];
+      } finally {
+        optimizer.running = false; setBusy(false);
+        if ($("optimizerStatus")) { $("optimizerStatus").textContent = t(...optimizer.status); $("cancelOptimizer").disabled = true; renderOptimizerResults(); }
+      }
+    });
+  }
+  function renderOptimizerResults() {
+    if (!$("optimizerResults")) return;
+    const r = optimizer?.result;
+    if (!r) { $("optimizerResults").innerHTML = ""; return; }
+    const rejected = r.rejected, best = r.frontier.slice(0, 5);
+    const changeText = candidate => Object.entries(candidate.changes).map(([key, v]) => `${t(fields[key][0], fields[key][1])}: ${fmt(v.from, 3)} → ${fmt(v.to, 3)} ${fields[key][2]}`).join("; ") || t("Current setup — unchanged", "Trenutačna konfiguracija — nepromijenjena");
+    const metricCells = m => `<td>${fmt(m.energy, 3, "J")}</td><td>${fmt(m.impact * 1000, 3, "mJ")}</td><td>${fmt(m.outflow * 1000, 3, "g/s")}</td><td>${fmt(m.exitGauge / 1e5, 3, "bar(g)")}</td><td>${fmt(m.efficiency * 100, 1, "%")}</td>`;
+    $("optimizerResults").innerHTML = `<p class="optimizer-target">${t("Required model exit energy", "Tražena izlazna energija modela")}: ${fmt(r.bounds.min, 3)}–${fmt(r.bounds.max, 3, "J")}.</p>
+      <p class="small-note">${t(`Checked ${r.evaluated} of ${r.total.toLocaleString("en")} combinations. ${r.exhaustive ? "All listed combinations checked." : "Sampled search; untested combinations may be better."} ${r.eligible} eligible; ${r.frontier.length} non-dominated trade-offs.`, `Provjereno ${r.evaluated} od ${r.total.toLocaleString("hr")} kombinacija. ${r.exhaustive ? "Provjerene su sve navedene kombinacije." : "Uzorkovana pretraga; neispitane kombinacije mogu biti bolje."} ${r.eligible} prikladnih; ${r.frontier.length} nedominiranih kompromisa.`)}</p>
+      <p class="small-note">${t(`Excluded: ${rejected.energy} outside energy band, ${rejected.unfinished} missing contact/unfinished discharge, ${rejected.noExit} no exit, ${rejected.invalid} invalid, ${rejected.numerical} failed numerical checks. Unfinished impacts are unknown, never zero.`, `Isključeno: ${rejected.energy} izvan energije, ${rejected.unfinished} bez kontakta/nepotpuno pražnjenje, ${rejected.noExit} bez izlaska, ${rejected.invalid} nevaljanih, ${rejected.numerical} numerički neprihvatljivih. Nezavršeni udari nepoznati su, nikad nula.`)}</p>
+      ${r.noVariables ? `<p class="lab-warning">${t("All values are frozen or have only the current choice. Nothing can be optimized; unfreeze a part and enter alternatives.", "Sve vrijednosti su zamrznute ili imaju samo trenutačni izbor. Nema promjenjivih veličina; odmrznite dio i unesite alternative.")}</p>` : ""}
+      ${best.length ? `<div class="table-wrap"><table class="optimizer-table"><thead><tr><th>${t("Choice / changes", "Odabir / promjene")}</th><th>${t("BB energy", "Energija BB-a")}</th><th>${t("Impact energy", "Energija udara")}</th><th>${t("Peak muzzle flow", "Vršni protok")}</th><th>${t("Exit pressure", "Izlazni tlak")}</th><th>${t("Efficiency", "Učinkovitost")}</th><th></th></tr></thead><tbody>${r.baseline ? `<tr class="optimizer-baseline"><td>${t("Current setup · reference", "Trenutačno · referenca")}</td>${metricCells(r.baseline)}<td></td></tr>` : ""}${best.map((candidate, i) => {
+        const m = candidate.metrics, b = r.baseline;
+        const compromise = b && (m.impact > b.impact + 1e-9 || m.outflow > b.outflow + 1e-9 || m.exitGauge > b.exitGauge + 1e-4 || m.efficiency < b.efficiency - 1e-8);
+        return `<tr><td><strong>${i + 1}. ${t("Best found trade-off", "Najbolji pronađeni kompromis")}</strong><p>${esc(changeText(candidate))}</p><small>${compromise ? t("At least one objective is worse than the reference.", "Najmanje jedan cilj lošiji je od reference.") : t("No listed objective is worse than the reference, if available.", "Nijedan navedeni cilj nije lošiji od reference, ako je dostupna.")} ${t("Energy threshold → slowing", "Prag energije → usporavanje")}: ${stamp(m.timingMargin)}.</small></td>${metricCells(m)}<td><button class="secondary-button" type="button" data-apply-optimizer="${i}" ${Object.keys(candidate.changes).length ? "" : "disabled"}>${t("Apply & replay", "Primijeni i prikaži")}</button></td></tr>`;
+      }).join("")}</tbody></table></div><p class="small-note">${t("Apply changes only the listed unlocked hardware and extends the playback limit to 250 ms (observation time, not a physical change). It marks changed inputs as unmeasured. Calibration records stay intact. Compare actual chrono and sound measurements before buying or changing parts.", "Primjena mijenja samo navedene odmrznute dijelove i produljuje prikaz na 250 ms (vrijeme promatranja, ne fizička promjena). Promijenjeni ulazi označuju se kao neizmjereni. Kalibracijski zapisi ostaju sačuvani. Usporedite stvarna mjerenja kronografom i zvuka prije kupnje ili zamjene dijelova.")}</p>` : `<p class="lab-warning">${t("No complete candidate meets the energy constraint. No best setup is claimed. Review your candidate values; unresolved low-impact cases are not assumed quiet.", "Nijedan završeni kandidat ne zadovoljava energetski uvjet. Ne tvrdi se da postoji najbolja konfiguracija. Provjerite kandidate; nezavršeni slučajevi ne smatraju se tihima.")}</p>`}
+      <button class="secondary-button" type="button" id="exportOptimizer">${t("Export search and locks", "Izvezi pretragu i zaključavanja")}</button>`;
+    $("exportOptimizer").addEventListener("click", () => download("airsoft-optimizer-search.json", r));
+    document.querySelectorAll("[data-apply-optimizer]").forEach(button => button.addEventListener("click", () => {
+      if (busy || !optimizer.result) return;
+      const candidate = optimizer.result.frontier[Number(button.dataset.applyOptimizer)];
+      try {
+        const next = O.applyCandidate(p, optimizer.result, candidate), keys = Object.keys(candidate.changes);
+        // Recheck using the normal full-trace solver before changing the live setup.
+        const checked = P.simulate(next, { maxTime: r.horizonMs });
+        if (O.assess(next, checked, r.bounds).reason) throw new Error("candidate changed");
+        p = next; p.maxTime = r.horizonMs; selectedPlatform = "custom";
+        if (keys.some(key => O.GROUPS.spring.includes(key))) { provenance.spring = "assumed"; springLabel = "custom"; }
+        if (keys.some(key => !O.GROUPS.spring.includes(key))) provenance.geometry = "assumed";
+        if (keys.some(key => [...O.GROUPS.piston, ...O.GROUPS.head, ...O.GROUPS.airbrake].includes(key))) component = "custom";
+        if (keys.some(key => O.GROUPS.airbrake.includes(key))) pinLabel = p.airbrakeLength ? "custom" : "plug";
+        invalidateFit(); setStatus("A hypothetical optimizer setup is active. Existing measurements are preserved; this new hardware combination is not automatically calibrated.", "Aktivna je hipotetska konfiguracija optimizatora. Postojeća mjerenja sačuvana su; nova kombinacija dijelova nije automatski kalibrirana."); invalidateOptimizer(); recalculate(); optimizer.status = ["Candidate applied. Frozen hardware and environmental/loss assumptions were preserved. Playback now observes up to 250 ms.", "Kandidat je primijenjen. Zamrznuti dijelovi i pretpostavke okoliša/gubitaka sačuvani su. Prikaz sada prati do 250 ms."]; render();
+      } catch (_) { invalidateOptimizer(); optimizer.status = ["Result is stale or failed rechecking. No candidate was applied; run the search again.", "Rezultat je zastario ili nije prošao ponovnu provjeru. Kandidat nije primijenjen; ponovite pretragu."]; $("optimizerStatus").textContent = t(...optimizer.status); }
+    }));
   }
   function metric(label, value, note, kind = "model") { return `<article class="readout"><div class="topline"><span>${label}</span><span class="tag ${kind}">${kind === "geometry" ? t("geometry", "geometrija") : t("model", "model")}</span></div><strong>${value}</strong><small>${note}</small></article>`; }
   function updateResults() {
@@ -1599,12 +1870,14 @@
     }));
   }
   function recalculate() {
+    if (optimizer?.result && JSON.stringify(p) !== JSON.stringify(optimizer.result.base)) invalidateOptimizer();
     stop(); fraction = 0; diagnostic = null;
     shot = P.simulate(p);
     baseline = shot.valid ? P.simulate({ ...p, airbrakeLength: 0, airbrakeTaper: 0 }) : null;
     updateResults();
   }
   function scheduleCalculation() {
+    invalidateOptimizer();
     stop(); clearTimeout(debounce);
     shot = null; baseline = null;
     $("results").innerHTML = `<p class="empty-state" role="status">${t("Calculating the coupled shot…", "Računanje povezanog ciklusa…")}</p>`;

@@ -149,6 +149,7 @@ test('browser bundle is classic standalone JS and exports identical solver', () 
   const pure = script.slice(0, script.indexOf('/* UI shared'));
   const ctx = vm.createContext({ setTimeout }); vm.runInContext(pure, ctx);
   assert.equal(ctx.PneumaticPhysics.VERSION, P.VERSION);
+  assert.equal(ctx.PneumaticOptimizer.VERSION, '1.0.0');
   close(ctx.PneumaticPhysics.simulate({ maxTime: 10 }).frames.at(-1).pistonX, P.simulate({ maxTime: 10 }).frames.at(-1).pistonX);
   assert.equal(fs.readFileSync('dist/app.js','utf8').trim(), script.trim());
 });
