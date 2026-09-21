@@ -21,6 +21,18 @@ Published barrel and volume geometry is identified in the preset notes. Internal
 
 Selecting an SSG10 configuration also enables an SSG10 spring selector from M110 through M220. Manufacturer reference energies are shown for context, while the simulation uses their relative 0.20 g energy ratio against M150 as a heuristic drive multiplier. These values are not treated as exact output predictions, and chrono calibration records the selected spring with each measurement.
 
+## Extended physics controls
+
+Piston mass is continuously adjustable from 5 g to 300 g in 0.1 g increments; the quick mass buttons remain available as shortcuts. The advanced panel also models:
+
+- spring preload and spring condition;
+- piston friction, seal efficiency, cylinder-head/nozzle dead volume, and nozzle flow efficiency/pressure response;
+- compression exponent and a separate chamber-to-barrel pressure response;
+- actual BB diameter, hop/bucking breakaway force, moving barrel drag, and BB air-transfer efficiency;
+- ambient pressure and air temperature effects on pressure and flow timing.
+
+Every advanced input updates the shot calculation, animation, graphs, impact/blast indices, and timing metrics. A live influence panel compares the current result with the same geometry, masses, spring, and airbrake under baseline advanced assumptions. Calibration snapshots preserve all advanced inputs.
+
 Published references: [SSG10 barrel](https://us.novritsch.com/product/ssg10-precision-inner-barrel-standard/), [SSG10 spring chart](https://us.novritsch.com/product/ssg-spring/), [TAC-41P](https://www.silverback-airsoft.com/t41p), [TAC-41 Lite Sport](https://www.silverback-airsoft.com/t41ls), [SRS A2 16-inch](https://www.silverback-airsoft.com/blt-13), [SRS 22-inch barrel](https://www.silverback-airsoft.com/ibl-a578), and [VSR-10 G-Spec](https://www.tokyo-marui.co.jp/products/aircocking/boltaction/73).
 
 ## Run the standalone app locally

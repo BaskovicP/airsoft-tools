@@ -434,6 +434,16 @@
       color: var(--cyan);
     }
 
+    .mass-entry {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 82px;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 9px;
+    }
+
+    .mass-entry input[type="number"] { min-height: 36px; padding: 6px 8px; }
+
     .tag {
       display: inline-flex;
       align-items: center;
@@ -477,6 +487,14 @@
     }
 
     .assumption-grid span:nth-child(odd) { color: var(--muted); }
+
+    .advanced-controls { margin-top: 13px; }
+    .advanced-controls[open] > summary { color: var(--cyan); }
+    .advanced-section { padding: 13px 0 2px; border-top: 1px solid rgba(66, 81, 90, .65); }
+    .advanced-section:first-of-type { border-top: 0; }
+    .advanced-section .group-label { margin-bottom: 8px; color: var(--text); }
+    .advanced-help { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .advanced-reset { width: 100%; margin: 11px 0 2px; }
 
     .main { min-width: 0; }
 
@@ -584,6 +602,15 @@
     .timing-marker.brake::after { color: var(--amber); }
     .timing-marker.exit { background: var(--cyan); }
     .timing-marker.exit::after { color: var(--cyan); transform: translateX(-100%); left: -5px; }
+
+    .factor-impact { margin-bottom: 10px; padding: 14px 15px; }
+    .factor-impact .panel-heading { margin-bottom: 10px; }
+    .factor-summary { margin: 0 0 11px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .factor-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; }
+    .factor-delta { padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: #0b1115; }
+    .factor-delta span { display: block; color: var(--muted); font-size: 10px; line-height: 1.3; }
+    .factor-delta strong { display: block; margin-top: 4px; font-family: var(--mono); font-size: 13px; }
+    .factor-delta strong.changed { color: var(--cyan); }
 
     .stage {
       position: relative;
@@ -853,6 +880,7 @@
       .readout-grid { grid-template-columns: repeat(2, 1fr); }
       .chart-grid { grid-template-columns: 1fr; }
       canvas { height: 175px; }
+      .factor-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
 
     @media (max-width: 760px) {
@@ -889,6 +917,7 @@
       .stage-toolbar input[type="range"] { order: 3; flex-basis: 100%; }
       .measurement-form { grid-template-columns: 1fr; }
       .preset-row { grid-template-columns: repeat(3, 1fr); }
+      .factor-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
     @media (prefers-reduced-motion: reduce) {

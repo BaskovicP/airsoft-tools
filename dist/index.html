@@ -136,7 +136,11 @@
         <section class="control-group">
           <p class="group-label">Moving mass</p>
           <div class="control">
-            <label><span>Piston mass</span><output id="pistonMassOut"></output></label>
+            <label for="pistonMassRange"><span>Piston mass</span><output id="pistonMassOut"></output></label>
+            <div class="mass-entry">
+              <input id="pistonMassRange" type="range" min="5" max="300" step="0.1" value="72">
+              <input id="pistonMassNumber" type="number" min="5" max="300" step="0.1" value="72" aria-label="Exact piston mass in grams">
+            </div>
             <div class="preset-row" id="massPresets" aria-label="Piston mass presets"></div>
           </div>
           <div class="control">
@@ -157,14 +161,49 @@
           </div>
         </section>
 
+        <details class="advanced-controls">
+          <summary>Advanced physics inputs</summary>
+          <p class="advanced-help">These controls parameterize major effects that geometry alone cannot determine. Defaults are assumptions, not measured SSG10 specifications.</p>
+          <button class="secondary-button advanced-reset" id="resetAdvancedButton" type="button">Reset advanced assumptions</button>
+
+          <div class="advanced-section">
+            <p class="group-label">Spring and piston mechanics</p>
+            <div class="control"><label for="springPreload"><span>Spring preload / spacer</span><output id="springPreloadOut"></output></label><input id="springPreload" type="range" min="0" max="14" step="0.5" value="0"></div>
+            <div class="control"><label for="springCondition"><span>Spring condition / strength</span><output id="springConditionOut"></output></label><input id="springCondition" type="range" min="70" max="110" step="1" value="100"></div>
+            <div class="control"><label for="pistonFriction"><span>Piston dynamic friction</span><output id="pistonFrictionOut"></output></label><input id="pistonFriction" type="range" min="0" max="12" step="0.1" value="3.2"></div>
+          </div>
+
+          <div class="advanced-section">
+            <p class="group-label">Compression and airflow</p>
+            <div class="control"><label for="deadVolume"><span>Head / nozzle dead volume</span><output id="deadVolumeOut"></output></label><input id="deadVolume" type="range" min="0.2" max="2.5" step="0.05" value="0.55"></div>
+            <div class="control"><label for="sealEfficiency"><span>Piston seal efficiency</span><output id="sealEfficiencyOut"></output></label><input id="sealEfficiency" type="range" min="60" max="100" step="1" value="100"></div>
+            <div class="control"><label for="nozzleFlow"><span>Nozzle flow efficiency</span><output id="nozzleFlowOut"></output></label><input id="nozzleFlow" type="range" min="30" max="100" step="1" value="100"></div>
+            <div class="control"><label for="compressionExponent"><span>Compression exponent</span><output id="compressionExponentOut"></output></label><input id="compressionExponent" type="range" min="1" max="1.4" step="0.01" value="1.32"></div>
+          </div>
+
+          <div class="advanced-section">
+            <p class="group-label">BB, hop and barrel losses</p>
+            <div class="control"><label for="bbDiameter"><span>Actual BB diameter</span><output id="bbDiameterOut"></output></label><input id="bbDiameter" type="range" min="5.90" max="5.98" step="0.01" value="5.95"></div>
+            <div class="control"><label for="bbBreakaway"><span>Hop / bucking breakaway force</span><output id="bbBreakawayOut"></output></label><input id="bbBreakaway" type="range" min="0.2" max="4" step="0.05" value="1.35"></div>
+            <div class="control"><label for="barrelDrag"><span>Moving barrel drag</span><output id="barrelDragOut"></output></label><input id="barrelDrag" type="range" min="0" max="0.5" step="0.01" value="0.11"></div>
+            <div class="control"><label for="barrelSeal"><span>BB air-transfer efficiency</span><output id="barrelSealOut"></output></label><input id="barrelSeal" type="range" min="60" max="100" step="1" value="100"></div>
+          </div>
+
+          <div class="advanced-section">
+            <p class="group-label">Environment</p>
+            <div class="control"><label for="ambientPressure"><span>Ambient air pressure</span><output id="ambientPressureOut"></output></label><input id="ambientPressure" type="range" min="80" max="105" step="0.1" value="101.3"></div>
+            <div class="control"><label for="airTemperature"><span>Air temperature</span><output id="airTemperatureOut"></output></label><input id="airTemperature" type="range" min="-10" max="45" step="1" value="20"></div>
+          </div>
+        </details>
+
         <details>
           <summary>Unknown model assumptions</summary>
           <div class="assumption-grid">
             <span>Effective spring drive</span><strong id="driveScaleLabel" class="mono">1.000×</strong>
-            <span>Seal / flow efficiency</span><strong id="flowEfficiencyLabel" class="mono">88.0%</strong>
-            <span>BB breakaway resistance</span><strong class="mono">1.35 N</strong>
-            <span>Piston friction</span><strong class="mono">3.2 N</strong>
-            <span>Compression exponent</span><strong class="mono">1.32</strong>
+            <span>Fitted base flow efficiency</span><strong id="flowEfficiencyLabel" class="mono">88.0%</strong>
+            <span>Spring force curve</span><strong>simplified linear</strong>
+            <span>Nozzle model</span><strong>lumped response</strong>
+            <span>Simulation time step</span><strong class="mono">0.01 ms</strong>
           </div>
         </details>
       </aside>
@@ -214,6 +253,19 @@
             <div class="timing-fill" id="timingFill"></div>
             <div class="timing-marker brake" id="brakeTimingMarker" data-label="strong brake"></div>
             <div class="timing-marker exit" id="exitTimingMarker" data-label="BB exit"></div>
+          </div>
+        </section>
+
+        <section class="panel factor-impact" aria-label="Advanced-factor influence">
+          <div class="panel-heading"><h2>Advanced-factor influence</h2><span class="tag heuristic">versus baseline assumptions</span></div>
+          <p class="factor-summary" id="factorSummary">All advanced inputs are at their baseline assumptions.</p>
+          <div class="factor-grid">
+            <div class="factor-delta"><span>Exit velocity</span><strong id="factorVelocity">0.0%</strong></div>
+            <div class="factor-delta"><span>Peak BB pressure</span><strong id="factorPressure">0.0%</strong></div>
+            <div class="factor-delta"><span>Peak piston velocity</span><strong id="factorPistonVelocity">0.0%</strong></div>
+            <div class="factor-delta"><span>BB exit time</span><strong id="factorExitTime">0.0%</strong></div>
+            <div class="factor-delta"><span>Impact index</span><strong id="factorImpact">0.0</strong></div>
+            <div class="factor-delta"><span>Blast index</span><strong id="factorBlast">0.0</strong></div>
           </div>
         </section>
 
@@ -350,7 +402,7 @@
         <details class="panel calibration" id="calibrationPanel">
           <summary>Calibration mode — add real chrono measurements</summary>
           <div class="calibration-body">
-            <p class="calibration-intro">Each measurement stores a snapshot of the current barrel, cylinder, spring selection, piston stroke, piston mass and airbrake setup. “Fit unknowns” adjusts only the base spring-drive scale and seal/flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.</p>
+            <p class="calibration-intro">Each measurement stores the current geometry, spring, piston, BB, airbrake and advanced physics inputs. “Fit unknowns” adjusts only the base spring-drive scale and flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.</p>
             <form class="measurement-form" id="measurementForm">
               <label><span>BB mass (g)</span><input id="measurementMass" type="number" min="0.10" max="1" step="0.01" value="0.46" required></label>
               <label><span>Measured velocity (fps)</span><input id="measurementFps" type="number" min="1" max="1000" step="1" value="330" required></label>
@@ -373,9 +425,9 @@
               <h3>What is calculated, estimated, and still unknown</h3>
               <ul>
                 <li><strong style="color:var(--green)">Geometry:</strong> barrel volume and cylinder/barrel volume ratio are direct calculations from the entered dimensions.</li>
-                <li><strong style="color:var(--blue)">Physics-based model:</strong> pressure, velocities, acceleration, momentum and event timing come from a simplified time-step model using spring force, gas compression and force balance. They depend on assumptions.</li>
+                <li><strong style="color:var(--blue)">Physics-based model:</strong> pressure, velocities, acceleration, momentum and event timing come from a simplified time-step model using spring force, two-stage pressure response, gas compression and force balance. They depend on assumptions.</li>
                 <li><strong style="color:var(--amber)">Heuristics:</strong> impact and muzzle-blast are relative 0–100 comparison indices, never dB. Relative energy retention is only relative to this model’s no-airbrake baseline.</li>
-                <li><strong style="color:var(--purple)">Unknown or fitted:</strong> actual spring curve, dynamic seal leakage, hop/bucking resistance, airbrake clearances, friction, temperature and barrel losses are not known from geometry alone. Chrono fitting cannot uniquely identify all of them.</li>
+                <li><strong style="color:var(--purple)">Unknown or fitted:</strong> advanced controls parameterize spring condition, preload, friction, dead volume, seals, nozzle response, hop resistance, barrel losses and environment. Their real values still require measurement; chrono fitting cannot uniquely identify all of them.</li>
               </ul>
             </div>
           </div>

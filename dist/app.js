@@ -56,15 +56,45 @@
         "MOVING MASS": "POKRETNA MASA",
         "Stalker Scorpion piston mass": "Masa Stalker Scorpion pistona",
         "Piston mass": "Masa pistona",
+        "Exact piston mass in grams": "Točna masa pistona u gramima",
         "Piston mass presets": "Zadane mase pistona",
         "BB mass": "Masa BB-a",
         "AIRBRAKE": "ZRAČNA KOČNICA",
         "Airbrake": "Zračna kočnica",
         "Rod / engagement length": "Duljina šipke / ulaska",
         "Pneumatic cushion effect": "Učinak pneumatskog jastuka",
+        "Advanced physics inputs": "Napredni fizikalni ulazi",
+        "These controls parameterize major effects that geometry alone cannot determine. Defaults are assumptions, not measured SSG10 specifications.": "Ove kontrole opisuju glavne učinke koji se ne mogu odrediti samo iz geometrije. Zadane vrijednosti pretpostavke su, a ne izmjerene specifikacije SSG10.",
+        "Reset advanced assumptions": "Vrati napredne pretpostavke",
+        "SPRING AND PISTON MECHANICS": "MEHANIKA OPRUGE I PISTONA",
+        "Spring and piston mechanics": "Mehanika opruge i pistona",
+        "Spring preload / spacer": "Prednaprezanje opruge / odstojnik",
+        "Spring condition / strength": "Stanje / snaga opruge",
+        "Piston dynamic friction": "Dinamičko trenje pistona",
+        "COMPRESSION AND AIRFLOW": "KOMPRESIJA I PROTOK ZRAKA",
+        "Compression and airflow": "Kompresija i protok zraka",
+        "Head / nozzle dead volume": "Mrtvi volumen glave / mlaznice",
+        "Piston seal efficiency": "Učinkovitost brtve pistona",
+        "Nozzle flow efficiency": "Učinkovitost protoka kroz mlaznicu",
+        "Compression exponent": "Eksponent kompresije",
+        "BB, HOP AND BARREL LOSSES": "GUBICI BB-a, HOP-UPA I CIJEVI",
+        "BB, hop and barrel losses": "Gubici BB-a, hop-upa i cijevi",
+        "Actual BB diameter": "Stvarni promjer BB-a",
+        "Hop / bucking breakaway force": "Sila pokretanja kroz hop-up gumicu",
+        "Moving barrel drag": "Otpor kretanju u cijevi",
+        "BB air-transfer efficiency": "Učinkovitost prijenosa zraka na BB",
+        "ENVIRONMENT": "OKOLINA",
+        "Environment": "Okolina",
+        "Ambient air pressure": "Tlak okolnog zraka",
+        "Air temperature": "Temperatura zraka",
         "Unknown model assumptions": "Nepoznate pretpostavke modela",
         "Effective spring drive": "Efektivni pogon opruge",
-        "Seal / flow efficiency": "Učinkovitost brtvljenja / protoka",
+        "Fitted base flow efficiency": "Prilagođena osnovna učinkovitost protoka",
+        "Spring force curve": "Krivulja sile opruge",
+        "simplified linear": "pojednostavljeno linearna",
+        "Nozzle model": "Model mlaznice",
+        "lumped response": "skupni odziv",
+        "Simulation time step": "Vremenski korak simulacije",
         "BB breakaway resistance": "Otpor pokretanju BB-a",
         "Piston friction": "Trenje pistona",
         "Compression exponent": "Eksponent kompresije",
@@ -87,6 +117,15 @@
         "Airbrake entry vs BB exit": "Ulazak zračne kočnice prema izlasku BB-a",
         "Negative means airbrake enters first": "Negativno znači da zračna kočnica ulazi prva",
         "The tuning target: useful BB acceleration nearly complete before strong pneumatic braking": "Cilj podešavanja: korisno ubrzanje BB-a gotovo je završeno prije snažnog pneumatskog kočenja",
+        "Advanced-factor influence": "Utjecaj naprednih faktora",
+        "versus baseline assumptions": "prema osnovnim pretpostavkama",
+        "All advanced inputs are at their baseline assumptions.": "Svi napredni ulazi postavljeni su na osnovne pretpostavke.",
+        "Exit velocity": "Izlazna brzina",
+        "Peak BB pressure": "Vršni tlak iza BB-a",
+        "Peak piston velocity": "Vršna brzina pistona",
+        "BB exit time": "Vrijeme izlaska BB-a",
+        "Impact index": "Indeks udara",
+        "Blast index": "Indeks praska",
         "strong brake": "snažno kočenje",
         "BB exit": "izlazak BB-a",
         "Fire / play": "Opali / pokreni",
@@ -128,6 +167,7 @@
         "Each measurement stores a snapshot of the current barrel, cylinder, piston and airbrake setup. “Fit unknowns” adjusts only the effective spring-drive scale and seal/flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.": "Svako mjerenje sprema trenutačnu konfiguraciju cijevi, cilindra, pistona i zračne kočnice. „Prilagodi nepoznanice” podešava samo efektivnu skalu pogona opruge i učinkovitost brtvljenja/protoka. Jedna točka može usidriti ukupnu skalu; za određivanje obiju nepoznanica potrebne su različite mase BB-a i konfiguracije. Podaci ostaju u lokalnoj pohrani ovog preglednika.",
         "Each measurement stores a snapshot of the current barrel, cylinder, piston stroke, piston mass and airbrake setup. “Fit unknowns” adjusts only the effective spring-drive scale and seal/flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.": "Svako mjerenje sprema trenutačnu konfiguraciju cijevi, cilindra, hoda i mase pistona te zračne kočnice. „Prilagodi nepoznanice” podešava samo efektivnu skalu pogona opruge i učinkovitost brtvljenja/protoka. Jedna točka može usidriti ukupnu skalu; za određivanje obiju nepoznanica potrebne su različite mase BB-a i konfiguracije. Podaci ostaju u lokalnoj pohrani ovog preglednika.",
         "Each measurement stores a snapshot of the current barrel, cylinder, spring selection, piston stroke, piston mass and airbrake setup. “Fit unknowns” adjusts only the base spring-drive scale and seal/flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.": "Svako mjerenje sprema trenutačnu konfiguraciju cijevi, cilindra, odabir opruge, hod i masu pistona te zračnu kočnicu. „Prilagodi nepoznanice” podešava samo osnovnu skalu pogona opruge i učinkovitost brtvljenja/protoka. Jedna točka može usidriti ukupnu skalu; za određivanje obiju nepoznanica potrebne su različite mase BB-a i konfiguracije. Podaci ostaju u lokalnoj pohrani ovog preglednika.",
+        "Each measurement stores the current geometry, spring, piston, BB, airbrake and advanced physics inputs. “Fit unknowns” adjusts only the base spring-drive scale and flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.": "Svako mjerenje sprema trenutačnu geometriju, oprugu, piston, BB, zračnu kočnicu i napredne fizikalne ulaze. „Prilagodi nepoznanice” podešava samo osnovnu skalu pogona opruge i učinkovitost protoka. Jedna točka može usidriti ukupnu skalu; za određivanje obiju nepoznanica potrebne su različite mase BB-a i konfiguracije. Podaci ostaju u lokalnoj pohrani ovog preglednika.",
         "BB mass (g)": "Masa BB-a (g)",
         "Measured velocity (fps)": "Izmjerena brzina (fps)",
         "Energy (J, derived)": "Energija (J, izvedena)",
@@ -142,11 +182,11 @@
         "Geometry:": "Geometrija:",
         "barrel volume and cylinder/barrel volume ratio are direct calculations from the entered dimensions.": "volumen cijevi i omjer volumena cilindra i cijevi izravno se računaju iz unesenih dimenzija.",
         "Physics-based model:": "Fizikalni model:",
-        "pressure, velocities, acceleration, momentum and event timing come from a simplified time-step model using spring force, gas compression and force balance. They depend on assumptions.": "tlak, brzine, ubrzanje, količina gibanja i vremena događaja dolaze iz pojednostavljenog vremenskog modela koji koristi silu opruge, kompresiju plina i ravnotežu sila. Ovise o pretpostavkama.",
+        "pressure, velocities, acceleration, momentum and event timing come from a simplified time-step model using spring force, two-stage pressure response, gas compression and force balance. They depend on assumptions.": "tlak, brzine, ubrzanje, količina gibanja i vremena događaja dolaze iz pojednostavljenog vremenskog modela koji koristi silu opruge, dvostupanjski odziv tlaka, kompresiju plina i ravnotežu sila. Ovise o pretpostavkama.",
         "Heuristics:": "Heuristike:",
         "impact and muzzle-blast are relative 0–100 comparison indices, never dB. Relative energy retention is only relative to this model’s no-airbrake baseline.": "udar i prasak na ustima cijevi relativni su usporedni indeksi 0–100, nikada dB. Relativno zadržavanje energije uspoređuje se samo s osnovnim modelom bez zračne kočnice.",
         "Unknown or fitted:": "Nepoznato ili prilagođeno:",
-        "actual spring curve, dynamic seal leakage, hop/bucking resistance, airbrake clearances, friction, temperature and barrel losses are not known from geometry alone. Chrono fitting cannot uniquely identify all of them.": "stvarna krivulja opruge, dinamičko propuštanje brtvi, otpor hop-up gumice, zazori zračne kočnice, trenje, temperatura i gubici u cijevi ne mogu se odrediti samo iz geometrije. Prilagodba kronografskim podacima ne može ih sve jednoznačno identificirati."
+        "advanced controls parameterize spring condition, preload, friction, dead volume, seals, nozzle response, hop resistance, barrel losses and environment. Their real values still require measurement; chrono fitting cannot uniquely identify all of them.": "napredne kontrole parametriziraju stanje i prednaprezanje opruge, trenje, mrtvi volumen, brtve, odziv mlaznice, otpor hop-upa, gubitke u cijevi i okolinu. Njihove stvarne vrijednosti i dalje zahtijevaju mjerenje; prilagodba kronografskim podacima ne može ih sve jednoznačno odrediti."
       };
 
       const MESSAGES = {
@@ -189,6 +229,8 @@
           "measurement.remove": "Remove", "measurement.delete": "Delete measurement",
           "model.energy": "{fps} fps · ≈{energy} J model estimate",
           "spring.note": "Manufacturer reference for the default SSG10 barrel: {light} J with 0.20 g and {heavy} J with a heavy BB, with stated output variation of ±20%. The simulation applies a {scale}× relative drive factor versus M150; it does not treat those values as an exact prediction.",
+          "factor.default": "All advanced inputs are at their baseline assumptions.",
+          "factor.active": "{count} advanced inputs differ from baseline. The deltas below isolate their combined modeled effect while geometry, masses, spring selection and airbrake stay unchanged.",
           "preset.ssg10": "Published 430 × 6.01 mm barrel; cylinder, stroke, piston and airbrake values are the current SSG10 model defaults.",
           "preset.ssg10-short": "Derived comparison: the same modeled cylinder bore with 20 mm less stroke reduces swept volume from 35.8 to 27.4 cm³. This is not a universal short-stroke recipe.",
           "preset.tac41p": "Published baseline: 41 cm³ usable bolt volume and a 510 × 6.05 mm barrel. Stroke, piston mass and no-airbrake state are editable starting assumptions.",
@@ -239,6 +281,8 @@
           "measurement.remove": "Ukloni", "measurement.delete": "Izbriši mjerenje",
           "model.energy": "{fps} fps · ≈{energy} J, procjena modela",
           "spring.note": "Referentni podaci proizvođača za standardnu cijev SSG10: {light} J s BB-om od 0,20 g i {heavy} J s teškim BB-om, uz navedeno odstupanje izlazne snage od ±20%. Simulacija primjenjuje relativni faktor pogona {scale}× prema opruzi M150; te vrijednosti ne smatra točnim predviđanjem.",
+          "factor.default": "Svi napredni ulazi postavljeni su na osnovne pretpostavke.",
+          "factor.active": "Broj naprednih ulaza koji odstupaju od osnove: {count}. Donje razlike izdvajaju njihov zajednički modelirani učinak uz nepromijenjenu geometriju, mase, odabir opruge i zračnu kočnicu.",
           "preset.ssg10": "Objavljeni podaci za cijev: 430 × 6,01 mm; vrijednosti cilindra, hoda, pistona i zračne kočnice trenutačne su zadane vrijednosti SSG10 modela.",
           "preset.ssg10-short": "Izvedena usporedba: isti modelirani promjer cilindra s 20 mm kraćim hodom smanjuje radni volumen s 35,8 na 27,4 cm³. Ovo nije univerzalna uputa za skraćivanje hoda.",
           "preset.tac41p": "Objavljena osnova: 41 cm³ iskoristivog volumena cilindra i cijev 510 × 6,05 mm. Hod, masa pistona i stanje bez zračne kočnice početne su pretpostavke koje možete mijenjati.",
@@ -316,6 +360,21 @@
         M220: { lightJ: 4.53, heavyJ: 5.00 }
       };
       const SSG10_REFERENCE_J = SSG10_SPRINGS.M150.lightJ;
+      const ADVANCED_DEFAULTS = {
+        springPreload: 0,
+        springCondition: 100,
+        pistonFriction: 3.2,
+        deadVolume: 0.55,
+        sealEfficiency: 100,
+        nozzleFlow: 100,
+        compressionExponent: 1.32,
+        bbDiameter: 5.95,
+        bbBreakaway: 1.35,
+        barrelDrag: 0.11,
+        barrelSeal: 100,
+        ambientPressure: 101.3,
+        airTemperature: 20
+      };
 
       let language = "en";
       try { language = localStorage.getItem(LANGUAGE_KEY) || "en"; } catch (_) { /* no-op */ }
@@ -361,10 +420,25 @@
         strokeLength: $("strokeLength"),
         bbMass: $("bbMass"),
         airbrakeLength: $("airbrakeLength"),
-        airbrakeEffect: $("airbrakeEffect")
+        airbrakeEffect: $("airbrakeEffect"),
+        springPreload: $("springPreload"),
+        springCondition: $("springCondition"),
+        pistonFriction: $("pistonFriction"),
+        deadVolume: $("deadVolume"),
+        sealEfficiency: $("sealEfficiency"),
+        nozzleFlow: $("nozzleFlow"),
+        compressionExponent: $("compressionExponent"),
+        bbDiameter: $("bbDiameter"),
+        bbBreakaway: $("bbBreakaway"),
+        barrelDrag: $("barrelDrag"),
+        barrelSeal: $("barrelSeal"),
+        ambientPressure: $("ambientPressure"),
+        airTemperature: $("airTemperature")
       };
       const platformPreset = $("platformPreset");
       const ssgSpring = $("ssgSpring");
+      const pistonMassRange = $("pistonMassRange");
+      const pistonMassNumber = $("pistonMassNumber");
       const toolHub = $("toolHub");
       const labApp = $("labApp");
 
@@ -372,6 +446,7 @@
       let modelUnknowns = { driveScale: 0.325, flowEfficiency: 0.88 };
       let shot = null;
       let noBrakeShot = null;
+      let advancedReferenceShot = null;
       let animationId = null;
       let playing = false;
       let playStart = 0;
@@ -431,6 +506,44 @@
         });
       }
 
+      function setPistonMass(value) {
+        pistonMass = Math.round(clamp(Number(value) || 72, 5, 300) * 10) / 10;
+        pistonMassRange.value = pistonMass;
+        pistonMassNumber.value = pistonMass;
+        syncMassPresetButtons();
+      }
+
+      function resetAdvancedInputs() {
+        Object.entries(ADVANCED_DEFAULTS).forEach(([id, value]) => {
+          inputs[id].value = value;
+        });
+      }
+
+      function withAdvancedDefaults(p) {
+        return {
+          ...p,
+          springPreload: ADVANCED_DEFAULTS.springPreload,
+          springCondition: ADVANCED_DEFAULTS.springCondition / 100,
+          pistonFriction: ADVANCED_DEFAULTS.pistonFriction,
+          deadVolume: ADVANCED_DEFAULTS.deadVolume,
+          sealEfficiency: ADVANCED_DEFAULTS.sealEfficiency / 100,
+          nozzleFlow: ADVANCED_DEFAULTS.nozzleFlow / 100,
+          compressionExponent: ADVANCED_DEFAULTS.compressionExponent,
+          bbDiameter: ADVANCED_DEFAULTS.bbDiameter,
+          bbBreakaway: ADVANCED_DEFAULTS.bbBreakaway,
+          barrelDrag: ADVANCED_DEFAULTS.barrelDrag,
+          barrelSeal: ADVANCED_DEFAULTS.barrelSeal / 100,
+          ambientPressure: ADVANCED_DEFAULTS.ambientPressure,
+          airTemperature: ADVANCED_DEFAULTS.airTemperature
+        };
+      }
+
+      function advancedChangeCount(p) {
+        const baseline = withAdvancedDefaults(p);
+        return ["springPreload", "springCondition", "pistonFriction", "deadVolume", "sealEfficiency", "nozzleFlow", "compressionExponent", "bbDiameter", "bbBreakaway", "barrelDrag", "barrelSeal", "ambientPressure", "airTemperature"]
+          .filter((key) => Math.abs(p[key] - baseline[key]) > 1e-9).length;
+      }
+
       function markSetupAsCustom() {
         if (applyingPreset) return;
         platformPreset.value = "custom";
@@ -455,11 +568,11 @@
         inputs.bbMass.value = preset.bbMass;
         inputs.airbrakeLength.value = preset.airbrakeLength;
         inputs.airbrakeEffect.value = preset.airbrakeEffect;
-        pistonMass = preset.pistonMass;
+        setPistonMass(preset.pistonMass);
+        resetAdvancedInputs();
         ssgSpringEnabled = Boolean(preset.springRating);
         if (preset.springRating) ssgSpring.value = preset.springRating;
         platformPreset.value = id;
-        syncMassPresetButtons();
         applyingPreset = false;
         updatePresetNote();
         updateSpringControl();
@@ -493,14 +606,16 @@
           scrubber: "Pomicanje kroz ciklus opaljenja", live: "Vrijednosti tijekom opaljenja",
           graphs: "Grafovi opaljenja uživo", insight: "Tumačenje trenutačne konfiguracije pistona",
           energy: "Energija u joulima", hubNav: "Zaglavlje izbornika alata",
-          openTool: "Otvori laboratorij pneumatike opružnih snajpera"
+          openTool: "Otvori laboratorij pneumatike opružnih snajpera",
+          pistonMass: "Točna masa pistona u gramima", factor: "Utjecaj naprednih faktora"
         } : {
           switcher: "Language", controls: "Simulation controls", presets: "Piston mass presets",
           timing: "Timing objective", stage: "Animated firing cycle",
           scrubber: "Scrub through firing cycle", live: "Live firing values",
           graphs: "Live firing graphs", insight: "Current piston-configuration interpretation",
           energy: "Energy in joules", hubNav: "Tool menu header",
-          openTool: "Open the Spring Sniper Pneumatic Timing Lab"
+          openTool: "Open the Spring Sniper Pneumatic Timing Lab",
+          pistonMass: "Exact piston mass in grams", factor: "Advanced-factor influence"
         };
         document.querySelectorAll(".language-switch").forEach((switcher) => switcher.setAttribute("aria-label", labels.switcher));
         document.querySelector(".hub-nav").setAttribute("aria-label", labels.hubNav);
@@ -513,7 +628,9 @@
         document.querySelector(".live-strip").setAttribute("aria-label", labels.live);
         document.querySelector(".graphs").setAttribute("aria-label", labels.graphs);
         document.querySelector(".insight").setAttribute("aria-label", labels.insight);
+        document.querySelector(".factor-impact").setAttribute("aria-label", labels.factor);
         $("measurementEnergy").setAttribute("aria-label", labels.energy);
+        pistonMassNumber.setAttribute("aria-label", labels.pistonMass);
         $("brakeTimingMarker").dataset.label = language === "hr" ? "snažno kočenje" : "strong brake";
         $("exitTimingMarker").dataset.label = language === "hr" ? "izlazak BB-a" : "BB exit";
 
@@ -542,6 +659,19 @@
           airbrakeEffect: +inputs.airbrakeEffect.value / 100,
           springRating: ssgSpringEnabled ? ssgSpring.value : null,
           springDrive: ssgSpringEnabled ? spring.lightJ / SSG10_REFERENCE_J : 1,
+          springPreload: +inputs.springPreload.value,
+          springCondition: +inputs.springCondition.value / 100,
+          pistonFriction: +inputs.pistonFriction.value,
+          deadVolume: +inputs.deadVolume.value,
+          sealEfficiency: +inputs.sealEfficiency.value / 100,
+          nozzleFlow: +inputs.nozzleFlow.value / 100,
+          compressionExponent: +inputs.compressionExponent.value,
+          bbDiameter: +inputs.bbDiameter.value,
+          bbBreakaway: +inputs.bbBreakaway.value,
+          barrelDrag: +inputs.barrelDrag.value,
+          barrelSeal: +inputs.barrelSeal.value / 100,
+          ambientPressure: +inputs.ambientPressure.value,
+          airTemperature: +inputs.airTemperature.value,
           driveScale: modelUnknowns.driveScale,
           flowEfficiency: modelUnknowns.flowEfficiency
         };
@@ -559,7 +689,20 @@
           airbrakeLength: p.airbrakeLength,
           airbrakeEffect: p.airbrakeEffect,
           springRating: p.springRating,
-          springDrive: p.springDrive
+          springDrive: p.springDrive,
+          springPreload: p.springPreload,
+          springCondition: p.springCondition,
+          pistonFriction: p.pistonFriction,
+          deadVolume: p.deadVolume,
+          sealEfficiency: p.sealEfficiency,
+          nozzleFlow: p.nozzleFlow,
+          compressionExponent: p.compressionExponent,
+          bbDiameter: p.bbDiameter,
+          bbBreakaway: p.bbBreakaway,
+          barrelDrag: p.barrelDrag,
+          barrelSeal: p.barrelSeal,
+          ambientPressure: p.ambientPressure,
+          airTemperature: p.airTemperature
         };
       }
 
@@ -570,12 +713,16 @@
         const cylinderArea = cylinderVolume / stroke;
         const barrelLength = p.barrelLength / 1000;
         const barrelArea = Math.PI * Math.pow(p.barrelDiameter / 2000, 2);
+        const bbArea = Math.PI * Math.pow((p.bbDiameter ?? 5.95) / 2000, 2);
         const pistonMassKg = p.pistonMass / 1000;
         const bbMassKg = p.bbMass / 1000;
-        const deadVolume = 0.55e-6;
+        const ambientPressure = (p.ambientPressure ?? 101.3) * 1000;
+        const airTemperatureK = (p.airTemperature ?? 20) + 273.15;
+        const airDensityRatio = ambientPressure / ATM * (293.15 / airTemperatureK);
+        const deadVolume = (p.deadVolume ?? 0.55) * 1e-6;
         const initialVolume = cylinderVolume + deadVolume;
         const engagementX = Math.max(0, stroke - p.airbrakeLength / 1000);
-        const compressionExponent = 1.32;
+        const compressionExponent = p.compressionExponent ?? 1.32;
         const dt = 0.00001;
         const maxTime = 0.045;
         const storeEvery = lightweight ? 999999 : 5;
@@ -586,11 +733,13 @@
         let bbX = 0;
         let bbV = 0;
         let bbA = 0;
-        let pressure = ATM;
+        let pressure = ambientPressure;
+        let chamberPressure = ambientPressure;
         let bbMoving = false;
         let bbExited = false;
         let pistonHit = false;
-        let exitPressure = ATM;
+        let exitPressure = ambientPressure;
+        let exitChamberPressure = ambientPressure;
         let exitTime = null;
         let exitVelocity = 0;
         let engageTime = null;
@@ -599,7 +748,7 @@
         let pistonImpactVelocity = 0;
         let momentumAtEngage = 0;
         let bbEnergyAtStrongBrake = null;
-        let peakPressure = ATM;
+        let peakPressure = ambientPressure;
         let peakPistonV = 0;
         let strongBrakeSeen = false;
         const frames = [];
@@ -609,19 +758,28 @@
           const chamberVolume = Math.max(deadVolume * 0.45, cylinderVolume * (1 - pistonX / stroke) + deadVolume + barrelVolumeBehind);
 
           if (!bbExited) {
-            const idealPressure = ATM * Math.pow(initialVolume / chamberVolume, compressionExponent);
-            pressure = ATM + Math.max(0, idealPressure - ATM) * p.flowEfficiency;
+            const idealPressure = ambientPressure * Math.pow(initialVolume / chamberVolume, compressionExponent);
+            const sealEfficiency = clamp(p.sealEfficiency ?? 1, 0.6, 1);
+            const nozzleEfficiency = clamp(p.nozzleFlow ?? 1, 0.3, 1);
+            const chamberRetention = lerp(0.82, 1, sealEfficiency);
+            chamberPressure = ambientPressure + Math.max(0, idealPressure - ambientPressure) * (p.flowEfficiency ?? 0.88) * chamberRetention;
+            const targetBbPressure = ambientPressure + (chamberPressure - ambientPressure) * sealEfficiency * lerp(0.65, 1, nozzleEfficiency);
+            const flowTau = lerp(0.00050, 0.00002, nozzleEfficiency) * Math.sqrt(airDensityRatio);
+            pressure += (targetBbPressure - pressure) * (1 - Math.exp(-dt / flowTau));
           } else {
-            const ventTau = 0.00072 + 0.00055 * clamp((exitPressure - ATM) / (4 * ATM), 0, 1);
-            pressure = ATM + (exitPressure - ATM) * Math.exp(-(t - exitTime) / ventTau);
+            const ventTau = (0.00072 + 0.00055 * clamp((exitPressure - ambientPressure) / (4 * ambientPressure), 0, 1)) * Math.sqrt(airDensityRatio);
+            pressure = ambientPressure + (exitPressure - ambientPressure) * Math.exp(-(t - exitTime) / ventTau);
+            chamberPressure = ambientPressure + (exitChamberPressure - ambientPressure) * Math.exp(-(t - exitTime) / (ventTau * 1.18));
           }
 
-          pressure = clamp(pressure, ATM, ATM * 18);
+          pressure = clamp(pressure, ambientPressure, ambientPressure * 18);
+          chamberPressure = clamp(chamberPressure, ambientPressure, ambientPressure * 18);
           peakPressure = Math.max(peakPressure, pressure);
 
-          const springForce = p.driveScale * (p.springDrive || 1) * Math.max(0, 205 - 118 * (pistonX / stroke));
-          const pressureForce = (pressure - ATM) * cylinderArea;
-          const pistonFriction = pistonV > 0.02 ? 3.2 : 0;
+          const preloadForce = 118 / stroke * ((p.springPreload ?? 0) / 1000);
+          const springForce = p.driveScale * (p.springDrive || 1) * (p.springCondition ?? 1) * Math.max(0, 205 + preloadForce - 118 * (pistonX / stroke));
+          const pressureForce = (chamberPressure - ambientPressure) * cylinderArea;
+          const pistonFriction = pistonV > 0.02 ? (p.pistonFriction ?? 3.2) : 0;
           let brakeForce = 0;
           let brakeProgress = 0;
 
@@ -637,7 +795,7 @@
             const retainedCushion = Math.exp(-elapsed / leakTau);
             const effectiveCushionArea = cylinderArea * 0.29;
             brakeForce = p.airbrakeEffect * (
-              ATM * trappedCompression * retainedCushion * effectiveCushionArea +
+              ambientPressure * trappedCompression * retainedCushion * effectiveCushionArea +
               Math.max(0, pistonV) * 0.62 * (0.25 + brakeProgress)
             );
             brakeForce = Math.min(brakeForce, 520);
@@ -664,11 +822,12 @@
           }
 
           if (!bbExited) {
-            const pressureOnBb = (pressure - ATM) * barrelArea;
-            const breakaway = bbMoving ? 0.11 : 1.35;
+            const pressureOnBb = (pressure - ambientPressure) * bbArea * (p.barrelSeal ?? 1);
+            const breakaway = p.bbBreakaway ?? 1.35;
+            const movingDrag = p.barrelDrag ?? 0.11;
             if (bbMoving || pressureOnBb > breakaway) {
               bbMoving = true;
-              bbA = Math.max(0, (pressureOnBb - (bbMoving ? 0.11 : breakaway)) / bbMassKg);
+              bbA = Math.max(0, (pressureOnBb - movingDrag) / bbMassKg);
               bbV += bbA * dt;
               bbX += bbV * dt;
             } else {
@@ -681,6 +840,7 @@
               exitTime = t;
               exitVelocity = bbV;
               exitPressure = pressure;
+              exitChamberPressure = chamberPressure;
             }
           } else {
             bbA = 0;
@@ -722,8 +882,8 @@
         const preBrakeShare = exitEnergy > 0 ? clamp(bbEnergyAtStrongBrake / exitEnergy, 0, 1.15) : 0;
         const impactEnergy = 0.5 * pistonMassKg * pistonImpactVelocity * pistonImpactVelocity;
         const impactIndex = clamp(100 * (1 - Math.exp(-impactEnergy / 0.33)), 0, 100);
-        const residualGauge = Math.max(0, exitPressure - ATM);
-        const blastBasis = residualGauge / ATM * (0.62 + 0.38 * clamp(cylinderVolume / (barrelArea * barrelLength), 0.6, 4) / 4);
+        const residualGauge = Math.max(0, exitPressure - ambientPressure);
+        const blastBasis = residualGauge / ambientPressure * (0.62 + 0.38 * clamp(cylinderVolume / (barrelArea * barrelLength), 0.6, 4) / 4);
         const blastIndex = clamp(100 * (1 - Math.exp(-blastBasis / 1.7)), 0, 100);
 
         return {
@@ -735,6 +895,7 @@
           barrelArea,
           barrelVolume: barrelArea * barrelLength,
           ratio: cylinderVolume / (barrelArea * barrelLength),
+          ambientPressure,
           engagementX,
           engageTime,
           strongBrakeTime,
@@ -764,8 +925,7 @@
           button.dataset.mass = mass;
           button.setAttribute("aria-pressed", mass === pistonMass ? "true" : "false");
           button.addEventListener("click", () => {
-            pistonMass = mass;
-            syncMassPresetButtons();
+            setPistonMass(mass);
             markSetupAsCustom();
             updateSimulation();
           });
@@ -778,12 +938,45 @@
         $("barrelLengthOut").textContent = `${p.barrelLength} mm`;
         $("barrelDiameterOut").textContent = `${p.barrelDiameter.toFixed(2)} mm`;
         $("strokeLengthOut").textContent = `${p.strokeLength} mm`;
-        $("pistonMassOut").textContent = `${p.pistonMass} g`;
+        $("pistonMassOut").textContent = `${p.pistonMass.toFixed(1)} g`;
         $("bbMassOut").textContent = `${p.bbMass.toFixed(2)} g`;
         $("airbrakeLengthOut").textContent = `${p.airbrakeLength} mm`;
         $("airbrakeEffectOut").textContent = `${Math.round(p.airbrakeEffect * 100)}%`;
+        $("springPreloadOut").textContent = `${p.springPreload.toFixed(1)} mm`;
+        $("springConditionOut").textContent = `${Math.round(p.springCondition * 100)}%`;
+        $("pistonFrictionOut").textContent = `${p.pistonFriction.toFixed(1)} N`;
+        $("deadVolumeOut").textContent = `${p.deadVolume.toFixed(2)} cm³`;
+        $("sealEfficiencyOut").textContent = `${Math.round(p.sealEfficiency * 100)}%`;
+        $("nozzleFlowOut").textContent = `${Math.round(p.nozzleFlow * 100)}%`;
+        $("compressionExponentOut").textContent = p.compressionExponent.toFixed(2);
+        $("bbDiameterOut").textContent = `${p.bbDiameter.toFixed(2)} mm`;
+        $("bbBreakawayOut").textContent = `${p.bbBreakaway.toFixed(2)} N`;
+        $("barrelDragOut").textContent = `${p.barrelDrag.toFixed(2)} N`;
+        $("barrelSealOut").textContent = `${Math.round(p.barrelSeal * 100)}%`;
+        $("ambientPressureOut").textContent = `${p.ambientPressure.toFixed(1)} kPa`;
+        $("airTemperatureOut").textContent = `${p.airTemperature.toFixed(0)} °C`;
         $("driveScaleLabel").textContent = `${(p.driveScale * (p.springDrive || 1)).toFixed(3)}×`;
         $("flowEfficiencyLabel").textContent = `${(p.flowEfficiency * 100).toFixed(1)}%`;
+      }
+
+      function updateFactorInfluence() {
+        const reference = advancedReferenceShot;
+        if (!reference) return;
+        const percentDelta = (value, baseline) => baseline ? (value - baseline) / Math.abs(baseline) * 100 : 0;
+        const signed = (value, digits, suffix) => `${value > 0 ? "+" : ""}${value.toFixed(digits)}${suffix}`;
+        const setDelta = (id, value, digits = 1, suffix = "%") => {
+          const element = $(id);
+          element.textContent = signed(value, digits, suffix);
+          element.classList.toggle("changed", Math.abs(value) >= Math.pow(10, -digits) / 2);
+        };
+        const activeCount = advancedChangeCount(shot.params);
+        $("factorSummary").textContent = tr(activeCount ? "factor.active" : "factor.default", { count: activeCount });
+        setDelta("factorVelocity", percentDelta(shot.exitVelocity, reference.exitVelocity));
+        setDelta("factorPressure", percentDelta(shot.peakPressure - shot.ambientPressure, reference.peakPressure - reference.ambientPressure));
+        setDelta("factorPistonVelocity", percentDelta(shot.peakPistonV, reference.peakPistonV));
+        setDelta("factorExitTime", percentDelta(shot.exitTime, reference.exitTime));
+        setDelta("factorImpact", shot.impactIndex - reference.impactIndex, 1, "");
+        setDelta("factorBlast", shot.blastIndex - reference.blastIndex, 1, "");
       }
 
       function updateMetrics() {
@@ -799,7 +992,7 @@
         $("velocityMetric").textContent = `${s.exitVelocity.toFixed(1)} m/s`;
         $("energyMetric").textContent = tr("model.energy", { fps: fps.toFixed(0), energy: s.exitEnergy.toFixed(2) });
         $("preBrakeMetric").textContent = hasAirbrake ? `${Math.round(clamp(s.preBrakeShare, 0, 1) * 100)}%` : "—";
-        $("peakPressureMetric").textContent = `${((s.peakPressure - ATM) / 1e5).toFixed(2)} bar(g)`;
+        $("peakPressureMetric").textContent = `${((s.peakPressure - s.ambientPressure) / 1e5).toFixed(2)} bar(g)`;
         $("retentionMetric").textContent = `${Math.round(retention * 100)}%`;
         $("momentumMetric").textContent = hasAirbrake ? `${s.momentumAtEngage.toFixed(3)} kg·m/s` : "—";
         $("timingMetric").textContent = hasAirbrake
@@ -843,6 +1036,7 @@
         $("brakeTimingMarker").style.display = hasAirbrake ? "block" : "none";
         $("exitTimingMarker").style.left = `${exitPct}%`;
         $("timingFill").style.width = `${hasAirbrake ? Math.min(brakePct, exitPct) : exitPct}%`;
+        updateFactorInfluence();
       }
 
       function updateSimulation() {
@@ -854,6 +1048,7 @@
         updateOutputs(p);
         shot = simulate(p);
         noBrakeShot = simulate({ ...p, airbrakeLength: 0, airbrakeEffect: 0 }, true);
+        advancedReferenceShot = simulate(withAdvancedDefaults(p), true);
         updateMetrics();
         setFrame(0);
         drawAllCharts();
@@ -921,8 +1116,8 @@
         const bbScreen = frame.bbExited ? 1148 + clamp(bbAfter / 0.06, 0, 1) * 80 : lerp(581, 1148, bbInside);
         const airStart = pistonScreen + 58;
         const airWidth = Math.max(0, 496 - airStart);
-        const gaugeBar = Math.max(0, (frame.pressure - ATM) / 1e5);
-        const pressureNorm = clamp(gaugeBar / Math.max(0.5, (shot.peakPressure - ATM) / 1e5), 0, 1);
+        const gaugeBar = Math.max(0, (frame.pressure - shot.ambientPressure) / 1e5);
+        const pressureNorm = clamp(gaugeBar / Math.max(0.5, (shot.peakPressure - shot.ambientPressure) / 1e5), 0, 1);
         const springEnd = pistonScreen + 1;
 
         $("pistonGroup").setAttribute("transform", `translate(${pistonScreen} 0)`);
@@ -1090,7 +1285,7 @@
       function drawAllCharts(playTime = currentFraction * (shot ? shot.duration : 0)) {
         if (!shot) return;
         const colors = chartColors();
-        drawChart($("pressureChart"), (f) => Math.max(0, (f.pressure - ATM) / 1e5), colors.cyan, playTime);
+        drawChart($("pressureChart"), (f) => Math.max(0, (f.pressure - shot.ambientPressure) / 1e5), colors.cyan, playTime);
         drawChart($("pistonChart"), (f) => f.pistonV, colors.amber, playTime);
         drawChart($("bbChart"), (f) => f.bbV, colors.blue, playTime);
       }
@@ -1125,7 +1320,20 @@
               airbrakeLength: 20,
               airbrakeEffect: 0.72,
               springRating: "M150",
-              springDrive: 1
+              springDrive: 1,
+              springPreload: 0,
+              springCondition: 1,
+              pistonFriction: 3.2,
+              deadVolume: 0.55,
+              sealEfficiency: 1,
+              nozzleFlow: 1,
+              compressionExponent: 1.32,
+              bbDiameter: 5.95,
+              bbBreakaway: 1.35,
+              barrelDrag: 0.11,
+              barrelSeal: 1,
+              ambientPressure: 101.3,
+              airTemperature: 20
             }
           }];
         }
@@ -1221,6 +1429,21 @@
         markSetupAsCustom();
         updateSimulation();
       }));
+      pistonMassRange.addEventListener("input", () => {
+        setPistonMass(pistonMassRange.value);
+        markSetupAsCustom();
+        updateSimulation();
+      });
+      pistonMassNumber.addEventListener("change", () => {
+        setPistonMass(pistonMassNumber.value);
+        markSetupAsCustom();
+        updateSimulation();
+      });
+      $("resetAdvancedButton").addEventListener("click", () => {
+        resetAdvancedInputs();
+        markSetupAsCustom();
+        updateSimulation();
+      });
       platformPreset.addEventListener("change", () => applyPlatformPreset(platformPreset.value));
       ssgSpring.addEventListener("change", () => {
         updateSpringControl();
