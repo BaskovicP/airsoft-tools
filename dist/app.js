@@ -38,6 +38,9 @@
         "Setup": "Postavke",
         "Platform starting point": "Početna konfiguracija platforme",
         "Rifle / configuration preset": "Predložak replike / konfiguracije",
+        "SSG10 spring": "Opruga SSG10",
+        "relative model input": "relativni ulaz modela",
+        "M150 · calibration reference": "M150 · referenca kalibracije",
         "SSG10 reference": "SSG10 referentna konfiguracija",
         "SSG10 short-stroke (−20 mm)": "SSG10 skraćeni hod (−20 mm)",
         "VSR-10 Pro / clone baseline": "VSR-10 Pro / klon, osnovna konfiguracija",
@@ -124,6 +127,7 @@
         "Calibration mode — add real chrono measurements": "Kalibracija — dodajte stvarna kronografska mjerenja",
         "Each measurement stores a snapshot of the current barrel, cylinder, piston and airbrake setup. “Fit unknowns” adjusts only the effective spring-drive scale and seal/flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.": "Svako mjerenje sprema trenutačnu konfiguraciju cijevi, cilindra, pistona i zračne kočnice. „Prilagodi nepoznanice” podešava samo efektivnu skalu pogona opruge i učinkovitost brtvljenja/protoka. Jedna točka može usidriti ukupnu skalu; za određivanje obiju nepoznanica potrebne su različite mase BB-a i konfiguracije. Podaci ostaju u lokalnoj pohrani ovog preglednika.",
         "Each measurement stores a snapshot of the current barrel, cylinder, piston stroke, piston mass and airbrake setup. “Fit unknowns” adjusts only the effective spring-drive scale and seal/flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.": "Svako mjerenje sprema trenutačnu konfiguraciju cijevi, cilindra, hoda i mase pistona te zračne kočnice. „Prilagodi nepoznanice” podešava samo efektivnu skalu pogona opruge i učinkovitost brtvljenja/protoka. Jedna točka može usidriti ukupnu skalu; za određivanje obiju nepoznanica potrebne su različite mase BB-a i konfiguracije. Podaci ostaju u lokalnoj pohrani ovog preglednika.",
+        "Each measurement stores a snapshot of the current barrel, cylinder, spring selection, piston stroke, piston mass and airbrake setup. “Fit unknowns” adjusts only the base spring-drive scale and seal/flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.": "Svako mjerenje sprema trenutačnu konfiguraciju cijevi, cilindra, odabir opruge, hod i masu pistona te zračnu kočnicu. „Prilagodi nepoznanice” podešava samo osnovnu skalu pogona opruge i učinkovitost brtvljenja/protoka. Jedna točka može usidriti ukupnu skalu; za određivanje obiju nepoznanica potrebne su različite mase BB-a i konfiguracije. Podaci ostaju u lokalnoj pohrani ovog preglednika.",
         "BB mass (g)": "Masa BB-a (g)",
         "Measured velocity (fps)": "Izmjerena brzina (fps)",
         "Energy (J, derived)": "Energija (J, izvedena)",
@@ -181,8 +185,10 @@
           "fit.ready": "{count} measurement{suffix} ready to fit.",
           "fit.reset": "Calibration reset to the supplied 0.46 g / 330 fps reference point.",
           "measurement.setup": "{length} mm × {diameter} · {stroke} mm stroke · {mass} g piston · {brakeLength} mm / {effect}% brake",
+          "measurement.spring": " · {spring} spring",
           "measurement.remove": "Remove", "measurement.delete": "Delete measurement",
           "model.energy": "{fps} fps · ≈{energy} J model estimate",
+          "spring.note": "Manufacturer reference for the default SSG10 barrel: {light} J with 0.20 g and {heavy} J with a heavy BB, with stated output variation of ±20%. The simulation applies a {scale}× relative drive factor versus M150; it does not treat those values as an exact prediction.",
           "preset.ssg10": "Published 430 × 6.01 mm barrel; cylinder, stroke, piston and airbrake values are the current SSG10 model defaults.",
           "preset.ssg10-short": "Derived comparison: the same modeled cylinder bore with 20 mm less stroke reduces swept volume from 35.8 to 27.4 cm³. This is not a universal short-stroke recipe.",
           "preset.tac41p": "Published baseline: 41 cm³ usable bolt volume and a 510 × 6.05 mm barrel. Stroke, piston mass and no-airbrake state are editable starting assumptions.",
@@ -229,8 +235,10 @@
           "fit.ready": "Broj mjerenja spremnih za prilagodbu: {count}.",
           "fit.reset": "Kalibracija je vraćena na zadanu referentnu točku 0,46 g / 330 fps.",
           "measurement.setup": "{length} mm × {diameter} · hod {stroke} mm · piston {mass} g · kočnica {brakeLength} mm / {effect}%",
+          "measurement.spring": " · opruga {spring}",
           "measurement.remove": "Ukloni", "measurement.delete": "Izbriši mjerenje",
           "model.energy": "{fps} fps · ≈{energy} J, procjena modela",
+          "spring.note": "Referentni podaci proizvođača za standardnu cijev SSG10: {light} J s BB-om od 0,20 g i {heavy} J s teškim BB-om, uz navedeno odstupanje izlazne snage od ±20%. Simulacija primjenjuje relativni faktor pogona {scale}× prema opruzi M150; te vrijednosti ne smatra točnim predviđanjem.",
           "preset.ssg10": "Objavljeni podaci za cijev: 430 × 6,01 mm; vrijednosti cilindra, hoda, pistona i zračne kočnice trenutačne su zadane vrijednosti SSG10 modela.",
           "preset.ssg10-short": "Izvedena usporedba: isti modelirani promjer cilindra s 20 mm kraćim hodom smanjuje radni volumen s 35,8 na 27,4 cm³. Ovo nije univerzalna uputa za skraćivanje hoda.",
           "preset.tac41p": "Objavljena osnova: 41 cm³ iskoristivog volumena cilindra i cijev 510 × 6,05 mm. Hod, masa pistona i stanje bez zračne kočnice početne su pretpostavke koje možete mijenjati.",
@@ -248,11 +256,13 @@
         ssg10: {
           cylinderVolume: 35.8, strokeLength: 85, barrelLength: 430, barrelDiameter: 6.01,
           pistonMass: 72, bbMass: 0.46, airbrakeLength: 20, airbrakeEffect: 72,
+          springRating: "M150",
           noteKey: "preset.ssg10"
         },
         "ssg10-short": {
           cylinderVolume: 27.4, strokeLength: 65, barrelLength: 430, barrelDiameter: 6.01,
           pistonMass: 72, bbMass: 0.46, airbrakeLength: 20, airbrakeEffect: 72,
+          springRating: "M150",
           noteKey: "preset.ssg10-short"
         },
         tac41p: {
@@ -292,6 +302,20 @@
         },
         custom: { noteKey: "preset.custom" }
       };
+
+      const SSG10_SPRINGS = {
+        M110: { lightJ: 0.90, heavyJ: 0.95 },
+        M120: { lightJ: 1.15, heavyJ: 1.35 },
+        M130: { lightJ: 1.40, heavyJ: 1.70 },
+        M140: { lightJ: 1.81, heavyJ: 2.00 },
+        M150: { lightJ: 2.12, heavyJ: 2.35 },
+        M160: { lightJ: 2.30, heavyJ: 2.81 },
+        M170: { lightJ: 2.92, heavyJ: 3.38 },
+        M180: { lightJ: 3.00, heavyJ: 3.50 },
+        M190: { lightJ: 3.15, heavyJ: 3.85 },
+        M220: { lightJ: 4.53, heavyJ: 5.00 }
+      };
+      const SSG10_REFERENCE_J = SSG10_SPRINGS.M150.lightJ;
 
       let language = "en";
       try { language = localStorage.getItem(LANGUAGE_KEY) || "en"; } catch (_) { /* no-op */ }
@@ -340,6 +364,7 @@
         airbrakeEffect: $("airbrakeEffect")
       };
       const platformPreset = $("platformPreset");
+      const ssgSpring = $("ssgSpring");
       const toolHub = $("toolHub");
       const labApp = $("labApp");
 
@@ -354,6 +379,7 @@
       let measurements = [];
       let applyingPreset = false;
       let launchedFromMenu = false;
+      let ssgSpringEnabled = true;
 
       function updateDocumentTitle() {
         if (labApp.hidden) {
@@ -388,6 +414,17 @@
         $("presetNote").textContent = tr(preset.noteKey);
       }
 
+      function updateSpringControl() {
+        $("ssgSpringControl").hidden = !ssgSpringEnabled;
+        if (!ssgSpringEnabled) return;
+        const spring = SSG10_SPRINGS[ssgSpring.value] || SSG10_SPRINGS.M150;
+        $("springNote").textContent = tr("spring.note", {
+          light: spring.lightJ.toFixed(2),
+          heavy: spring.heavyJ.toFixed(2),
+          scale: (spring.lightJ / SSG10_REFERENCE_J).toFixed(2)
+        });
+      }
+
       function syncMassPresetButtons() {
         document.querySelectorAll("#massPresets .preset").forEach((button) => {
           button.setAttribute("aria-pressed", +button.dataset.mass === pistonMass ? "true" : "false");
@@ -404,7 +441,10 @@
         const preset = PLATFORM_PRESETS[id];
         if (!preset || id === "custom") {
           platformPreset.value = "custom";
+          ssgSpringEnabled = false;
           updatePresetNote();
+          updateSpringControl();
+          updateSimulation();
           return;
         }
         applyingPreset = true;
@@ -416,10 +456,13 @@
         inputs.airbrakeLength.value = preset.airbrakeLength;
         inputs.airbrakeEffect.value = preset.airbrakeEffect;
         pistonMass = preset.pistonMass;
+        ssgSpringEnabled = Boolean(preset.springRating);
+        if (preset.springRating) ssgSpring.value = preset.springRating;
         platformPreset.value = id;
         syncMassPresetButtons();
         applyingPreset = false;
         updatePresetNote();
+        updateSpringControl();
         updateSimulation();
       }
 
@@ -477,6 +520,7 @@
         updatePlayButtonLabel();
         setFitStatus(fitStatusState.key, fitStatusState.vars);
         updatePresetNote();
+        updateSpringControl();
         if (shot) {
           updateOutputs(currentParams());
           updateMetrics();
@@ -486,6 +530,7 @@
       }
 
       function currentParams() {
+        const spring = SSG10_SPRINGS[ssgSpring.value] || SSG10_SPRINGS.M150;
         return {
           cylinderVolume: +inputs.cylinderVolume.value,
           barrelLength: +inputs.barrelLength.value,
@@ -495,6 +540,8 @@
           bbMass: +inputs.bbMass.value,
           airbrakeLength: +inputs.airbrakeLength.value,
           airbrakeEffect: +inputs.airbrakeEffect.value / 100,
+          springRating: ssgSpringEnabled ? ssgSpring.value : null,
+          springDrive: ssgSpringEnabled ? spring.lightJ / SSG10_REFERENCE_J : 1,
           driveScale: modelUnknowns.driveScale,
           flowEfficiency: modelUnknowns.flowEfficiency
         };
@@ -510,7 +557,9 @@
           pistonMass: p.pistonMass,
           bbMass: p.bbMass,
           airbrakeLength: p.airbrakeLength,
-          airbrakeEffect: p.airbrakeEffect
+          airbrakeEffect: p.airbrakeEffect,
+          springRating: p.springRating,
+          springDrive: p.springDrive
         };
       }
 
@@ -570,7 +619,7 @@
           pressure = clamp(pressure, ATM, ATM * 18);
           peakPressure = Math.max(peakPressure, pressure);
 
-          const springForce = p.driveScale * Math.max(0, 205 - 118 * (pistonX / stroke));
+          const springForce = p.driveScale * (p.springDrive || 1) * Math.max(0, 205 - 118 * (pistonX / stroke));
           const pressureForce = (pressure - ATM) * cylinderArea;
           const pistonFriction = pistonV > 0.02 ? 3.2 : 0;
           let brakeForce = 0;
@@ -733,7 +782,7 @@
         $("bbMassOut").textContent = `${p.bbMass.toFixed(2)} g`;
         $("airbrakeLengthOut").textContent = `${p.airbrakeLength} mm`;
         $("airbrakeEffectOut").textContent = `${Math.round(p.airbrakeEffect * 100)}%`;
-        $("driveScaleLabel").textContent = `${p.driveScale.toFixed(3)}×`;
+        $("driveScaleLabel").textContent = `${(p.driveScale * (p.springDrive || 1)).toFixed(3)}×`;
         $("flowEfficiencyLabel").textContent = `${(p.flowEfficiency * 100).toFixed(1)}%`;
       }
 
@@ -1074,7 +1123,9 @@
               pistonMass: 72,
               bbMass: 0.46,
               airbrakeLength: 20,
-              airbrakeEffect: 0.72
+              airbrakeEffect: 0.72,
+              springRating: "M150",
+              springDrive: 1
             }
           }];
         }
@@ -1096,7 +1147,7 @@
             mass: m.setup.pistonMass,
             brakeLength: m.setup.airbrakeLength,
             effect: Math.round(m.setup.airbrakeEffect * 100)
-          });
+          }) + (m.setup.springRating ? tr("measurement.spring", { spring: m.setup.springRating }) : "");
           row.innerHTML = `
             <td>${m.mass.toFixed(2)} g</td>
             <td>${m.fps.toFixed(0)} fps</td>
@@ -1171,6 +1222,10 @@
         updateSimulation();
       }));
       platformPreset.addEventListener("change", () => applyPlatformPreset(platformPreset.value));
+      ssgSpring.addEventListener("change", () => {
+        updateSpringControl();
+        updateSimulation();
+      });
       $("openPneumaticLab").addEventListener("click", (event) => {
         event.preventDefault();
         showPneumaticLab(true);

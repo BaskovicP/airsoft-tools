@@ -19,7 +19,9 @@ The selector includes these starting configurations:
 
 Published barrel and volume geometry is identified in the preset notes. Internal stroke, piston mass, airbrake state, and generic-platform values that are not established by published specifications are deliberately labeled as editable assumptions. Selecting a preset with no configured airbrake hides the airbrake event instead of presenting an invented braking time.
 
-Published geometry references: [SSG10 barrel](https://us.novritsch.com/product/ssg10-precision-inner-barrel-standard/), [TAC-41P](https://www.silverback-airsoft.com/t41p), [TAC-41 Lite Sport](https://www.silverback-airsoft.com/t41ls), [SRS A2 16-inch](https://www.silverback-airsoft.com/blt-13), [SRS 22-inch barrel](https://www.silverback-airsoft.com/ibl-a578), and [VSR-10 G-Spec](https://www.tokyo-marui.co.jp/products/aircocking/boltaction/73).
+Selecting an SSG10 configuration also enables an SSG10 spring selector from M110 through M220. Manufacturer reference energies are shown for context, while the simulation uses their relative 0.20 g energy ratio against M150 as a heuristic drive multiplier. These values are not treated as exact output predictions, and chrono calibration records the selected spring with each measurement.
+
+Published references: [SSG10 barrel](https://us.novritsch.com/product/ssg10-precision-inner-barrel-standard/), [SSG10 spring chart](https://us.novritsch.com/product/ssg-spring/), [TAC-41P](https://www.silverback-airsoft.com/t41p), [TAC-41 Lite Sport](https://www.silverback-airsoft.com/t41ls), [SRS A2 16-inch](https://www.silverback-airsoft.com/blt-13), [SRS 22-inch barrel](https://www.silverback-airsoft.com/ibl-a578), and [VSR-10 G-Spec](https://www.tokyo-marui.co.jp/products/aircocking/boltaction/73).
 
 ## Run the standalone app locally
 

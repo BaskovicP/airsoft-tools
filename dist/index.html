@@ -95,6 +95,22 @@
             </select>
             <p class="preset-note" id="presetNote"></p>
           </div>
+          <div class="control" id="ssgSpringControl">
+            <label for="ssgSpring"><span>SSG10 spring</span><span class="tag heuristic">relative model input</span></label>
+            <select id="ssgSpring">
+              <option value="M110">M110</option>
+              <option value="M120">M120</option>
+              <option value="M130">M130</option>
+              <option value="M140">M140</option>
+              <option value="M150" selected>M150 · calibration reference</option>
+              <option value="M160">M160</option>
+              <option value="M170">M170</option>
+              <option value="M180">M180</option>
+              <option value="M190">M190</option>
+              <option value="M220">M220</option>
+            </select>
+            <p class="preset-note spring-note" id="springNote"></p>
+          </div>
         </section>
 
         <section class="control-group">
@@ -334,7 +350,7 @@
         <details class="panel calibration" id="calibrationPanel">
           <summary>Calibration mode — add real chrono measurements</summary>
           <div class="calibration-body">
-            <p class="calibration-intro">Each measurement stores a snapshot of the current barrel, cylinder, piston stroke, piston mass and airbrake setup. “Fit unknowns” adjusts only the effective spring-drive scale and seal/flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.</p>
+            <p class="calibration-intro">Each measurement stores a snapshot of the current barrel, cylinder, spring selection, piston stroke, piston mass and airbrake setup. “Fit unknowns” adjusts only the base spring-drive scale and seal/flow efficiency. One data point can anchor overall scale; varied BB masses and configurations are needed to constrain both unknowns. Saved data stays in this browser’s local storage.</p>
             <form class="measurement-form" id="measurementForm">
               <label><span>BB mass (g)</span><input id="measurementMass" type="number" min="0.10" max="1" step="0.01" value="0.46" required></label>
               <label><span>Measured velocity (fps)</span><input id="measurementFps" type="number" min="1" max="1000" step="1" value="330" required></label>
