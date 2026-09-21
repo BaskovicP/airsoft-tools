@@ -1015,7 +1015,7 @@
       #optimizerResults.is-stale { opacity:.55; }
       #resultContent .stage { overflow:hidden; border-color:#3a515d; background:radial-gradient(ellipse at 25% 35%,rgba(255,191,105,.045),transparent 65%),radial-gradient(ellipse at 85% 40%,rgba(93,228,231,.055),transparent 60%),var(--panel); }
       #resultContent .live-item strong { font-variant-numeric:tabular-nums; }
-      .controls-panel { max-height:none !important; position:static !important; }
+      .controls-panel { max-height:none; }
       .control label { font-size:.875rem; }
       .control select { max-width:100%; }
       .provenance { display:flex; gap:8px; align-items:center; margin:10px 0; font-size:.875rem; }
@@ -1072,6 +1072,89 @@
       .source-links { display:flex; flex-wrap:wrap; gap:12px; font-size:.875rem; }
       a { color:var(--cyan); }
       button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, textarea:focus-visible { outline:2px solid var(--cyan); outline-offset:3px; }
+      /* Tuning workspace: controls and results scroll independently on laptops.
+         Short/narrow viewports return to normal document flow. */
+      .tuning-app { padding:16px 0; }
+      .lab-header { align-items:center; gap:16px; margin-bottom:10px; }
+      .lab-header h1 { font-size:clamp(1.2rem,2vw,1.6rem); line-height:1.25; margin-top:5px; }
+      .lab-header a { font-size:.875rem; }
+      .model-caveat { margin:0 0 12px; padding:8px 12px; border:1px solid #80603b; border-radius:8px; color:var(--amber); font-size:.875rem; }
+      .model-caveat summary { font:inherit; padding:0; }
+      .model-caveat p { margin:10px 0 2px; color:var(--muted); line-height:1.5; }
+      .tuning-app .layout { grid-template-columns:340px minmax(0,1fr); gap:14px; }
+      .tuning-app .controls-panel { position:static; display:flex; flex-direction:column; min-height:0; padding:14px; }
+      .tuning-app .controls-panel .panel-heading { margin-bottom:10px; }
+      .settings-picker { display:grid; gap:6px; font-size:.875rem; padding-bottom:12px; border-bottom:1px solid var(--line); }
+      .settings-picker select { width:100%; min-height:42px; }
+      .settings-pages { min-height:0; scrollbar-gutter:stable; }
+      .settings-page { padding:10px 2px 16px; }
+      .settings-page > .control-group { padding-top:0; border-top:0; }
+      .settings-section { border:0; padding:0; }
+      .settings-section > summary { display:none; }
+      .settings-page .control { margin-bottom:14px; }
+      .settings-page .group-label { white-space:normal; }
+      .inline-help { border:1px solid var(--line); border-radius:8px; padding:10px; margin-top:12px; }
+      .inline-help summary { font-size:.875rem; padding:0; color:var(--muted); }
+      .inline-help p:last-child { margin-bottom:0; }
+      .tuning-app .main { display:flex; flex-direction:column; min-height:0; }
+      .workspace-nav { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px; }
+      .workspace-nav button,.mobile-workspace-jumps button { flex:1; min-height:42px; padding:8px 10px; font:inherit; font-size:.875rem; border:1px solid var(--line-bright); border-radius:8px; background:var(--panel); color:var(--muted); cursor:pointer; }
+      .workspace-nav button[aria-pressed="true"] { background:var(--cyan-dim); color:var(--cyan); border-color:var(--cyan); }
+      .workspace-body { min-height:0; scrollbar-gutter:stable; }
+      .workspace-body .result-status { min-height:26px; padding:0 2px 8px; font-size:.8rem; }
+      #workspace-transport { position:sticky; top:0; z-index:3; background:#101b23; border:1px solid var(--line-bright); border-radius:10px; padding:10px; margin-bottom:10px; }
+      .shot-caption { padding:10px 14px; margin:0; color:var(--muted); font-size:.8rem; line-height:1.4; border-bottom:1px solid var(--line); }
+      .shot-incomplete { margin:10px 12px; padding:8px 10px; border-left:3px solid var(--amber); color:var(--amber); font-size:.875rem; line-height:1.4; }
+      #workspace-shot #mechanism { height:clamp(200px,29vh,275px); min-height:0; }
+      #workspace-shot .stage-status { min-height:0; margin:8px 10px; padding:7px 10px; font-family:inherit; line-height:1.4; }
+      .tuning-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; padding:8px 10px 12px; }
+      .tuning-summary > div { min-width:0; border:1px solid var(--line); border-radius:8px; padding:10px; background:#0b141b; }
+      .tuning-summary span,.tuning-summary small { display:block; font-size:.8rem; line-height:1.4; color:var(--muted); }
+      .tuning-summary span { font-size:.875rem; }
+      .tuning-summary strong { display:block; font:600 1.2rem var(--mono); margin:7px 0; color:var(--text); overflow-wrap:anywhere; }
+      .stage-disclosure { margin:0; padding:10px 14px; border-top:1px solid var(--line); }
+      .stage-disclosure > summary { padding:0; font-size:.875rem; color:var(--muted); }
+      .stage-disclosure[open] > summary { margin-bottom:12px; }
+      .stage-disclosure .live-strip { padding:0; }
+      #workspace-details > * { margin-bottom:16px; }
+      .workspace-body .optimizer { margin:0; }
+      .workspace-body .calibration { margin:0; }
+      #settingsPanel,#previewPanel { scroll-margin-top:12px; }
+      .mobile-workspace-jumps { display:none; }
+      .tuning-app button:focus-visible,.tuning-app summary:focus-visible,.tuning-app select:focus-visible { outline:2px solid var(--cyan); outline-offset:3px; }
+      @media(min-width:961px) and (min-height:700px) {
+        .tuning-app .layout { height:calc(100vh - 166px); height:calc(100dvh - 166px); min-height:490px; align-items:stretch; }
+        .settings-pages,.workspace-body { overflow:auto; overscroll-behavior-y:contain; }
+        .settings-pages { flex:1; }
+        .workspace-body { flex:1; }
+      }
+      @media(max-width:1200px) {
+        .tuning-app .layout { grid-template-columns:300px minmax(0,1fr); }
+        .tuning-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      }
+      @media(max-width:960px), (max-height:699px) {
+        .tuning-app .layout { height:auto; min-height:0; }
+        .settings-pages { max-height:65vh; max-height:65svh; overflow:auto; }
+        .workspace-body { overflow:visible; }
+      }
+      @media(max-width:960px) {
+        .tuning-app { padding-bottom:calc(90px + env(safe-area-inset-bottom)); }
+        .tuning-app .layout { display:flex; flex-direction:column; }
+        .tuning-app .main { order:0; width:100%; }
+        .tuning-app .controls-panel { order:1; width:100%; }
+        .lab-header { display:flex; align-items:flex-start; flex-wrap:wrap; }
+        .lab-header h1 { max-width:32ch; }
+        .mobile-workspace-jumps { position:fixed; z-index:8; bottom:calc(10px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); display:flex; gap:6px; width:min(360px,calc(100% - 24px)); padding:6px; border:1px solid var(--line-bright); border-radius:12px; background:#0b151eef; box-shadow:0 4px 30px #0009; }
+        .mobile-workspace-jumps button { color:var(--cyan); }
+        .workspace-nav button { flex:1 1 85px; }
+        #workspace-shot #mechanism { height:230px; }
+      }
+      @media(max-width:400px) {
+        .tuning-summary { gap:6px; }
+        .tuning-summary > div { padding:8px; }
+        .tuning-summary strong { font-size:1.05rem; }
+        #workspace-transport { flex-wrap:wrap; }
+      }
       @media(max-width:720px) {
         .optimizer-locks,.optimizer-options { grid-template-columns:1fr; }
         .calibration .measurement-form { grid-template-columns:1fr; }

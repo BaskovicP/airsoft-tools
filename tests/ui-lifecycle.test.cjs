@@ -14,7 +14,7 @@ function harness() {
   const timers = new Map(), nodes = {}, context = {
     p: {}, optimizer: null, shot: { valid: true, duration: .06 }, baseline: {}, fraction: .3, playheadTime: .018,
     diagnostic: null, calculationPending: false, debounce: null, busy: false, playing: true,
-    chartCache: new Map(), location: { hash: "#pneumatic-timing" },
+    chartCache: new Map(), workspace: null, location: { hash: "#pneumatic-timing" },
     P: { simulate: () => context.nextShot }, nextShot: { valid: true, duration: .06 },
     stop: () => { context.playing = false; }, invalidateOptimizer: () => {},
     updateResults: () => { if (context.shot.valid) context.playheadTime = context.fraction * context.shot.duration; },

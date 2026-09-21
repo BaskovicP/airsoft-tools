@@ -33,9 +33,17 @@ The estimate assumes uniform linear active coils with unchanged wire, diameter a
 
 A pre-cut measured curve cannot be reused for a hypothetical cut. For an already cut and measured spring, use its **current** free length, mass and curve with cut/removal set to zero. Hypothetical cut estimates are not eligible for chrono fitting. Spring length/cut choices join the optimizer when length mode is enabled and the spring is unlocked; solid height remains a fixed constraint, not an optimization variable. The optimizer still preserves 95–105% of starting predicted energy.
 
+### Tuning workspace
+
+On laptop/desktop-sized viewports, settings and results have independent scroll areas. Choose **Cylinder & barrel**, **Piston & BB**, **Airbrake & head**, **Spring**, **Losses & environment**, **Rifle presets**, or **Timing & solver** from the settings selector; changing categories keeps the preview in place and remembers each category's scroll position. Inputs are moved once, never duplicated or reset.
+
+Use **Shot**, **Graphs**, **Results**, **Optimize**, and **Chrono** to switch views directly. The compact Shot view shows the cutaway plus predicted exit energy, volume ratio, piston-contact energy, muzzle pressure/flow and useful-energy timing. Full telemetry and playback/model notes expand on demand. Playback and scrubbing remain available in Shot, Graphs and Results. Applying an optimizer choice opens Shot, selects the relevant settings category and replays it.
+
+Short/narrow screens use normal page flow rather than a fixed-height workspace. Mobile **Settings / Preview** shortcuts jump and focus the relevant controls. Model warnings remain visible; hiding long explanations does not hide invalid inputs or missing-event notices. Open shot disclosures and selected categories/views survive parameter edits; chrono drafts remain intact.
+
 ### Animation and outputs
 
-The animation and three graphs appear before the numerical readout cards. They use solver states, independent cylinder/BB pressure colors and signed arrows. Cylinder stroke, pin and both head passages share one axial drawing scale, so visible pin entry matches the calculated event; the barrel has its own scale. Exact pre/post-contact samples prevent interpolation from showing a reverse velocity before impact.
+The animation and three graphs have dedicated views next to the settings. They use solver states, independent cylinder/BB pressure colors and signed arrows. Cylinder stroke, pin and both head passages share one axial drawing scale, so visible pin entry matches the calculated event; the barrel has its own scale. Exact pre/post-contact samples prevent interpolation from showing a reverse velocity before impact.
 
 Parameter edits update the existing panels, canvases and readouts in place. Playback pauses at the same model time (clamped to a shorter run if necessary), with a small updating indicator; it does not reset to the beginning. Presets, the no-pin option and optimizer application preserve open sections and unfinished chrono notes. Invalid inputs hide stale results without collapsing their layout. Stale optimizer tables stay visibly marked and cannot be applied or exported until another search.
 
@@ -65,7 +73,7 @@ Contact speed/kinetic energy and muzzle pressure/gas inventory/discharge replace
 
 ### Freeze parts and optimize
 
-Use **Freeze parts & optimize** above the results. Checked groups stay fixed: cylinder, barrel, head/nozzle, piston, airbrake, spring and BB. Enter discrete values for unlocked hardware, using comma-separated numbers and decimal dots. The current value is always included. Example masses and pin lengths are hypothetical alternatives, not a catalog of compatible AMP parts.
+Choose **Optimize** to open **Freeze parts & optimize**. Checked groups stay fixed: cylinder, barrel, head/nozzle, piston, airbrake, spring and BB. Enter discrete values for unlocked hardware, using comma-separated numbers and decimal dots. The current value is always included. Example masses and pin lengths are hypothetical alternatives, not a catalog of compatible AMP parts.
 
 The optimizer preserves **95–105% of the starting setup's predicted BB exit energy**. Weather, fitted flow/leakage, friction, damping and timing criteria never vary. All candidates are observed with the same 250 ms time limit; missing contact or incomplete discharge never counts as zero noise.
 
@@ -83,6 +91,7 @@ Searches are deterministic and capped at 60/120/240 combinations, can be cancell
 - `src/optimizer.js`: hardware-only search, locks, eligibility and tradeoff ranking;
 - `src/playback.js`: physical-time sampling, phase-paced playback and consistent drawing geometry;
 - `src/view.js`: keyed incremental DOM updates that preserve live canvases and readouts;
+- `src/workspace.js`: grouped settings, view navigation, compact result organization and scroll preservation;
 - `src/animation.js`: solver-driven cutaway rendering and schematic visual cues;
 - `src/app.js`: bilingual controls, playback, graphs and data UI.
 
@@ -94,7 +103,7 @@ npm test
 npm run package:cloudflare
 ```
 
-There are no npm dependencies to install. Tests cover geometry/work invariants, flow/choking/laminar limits, invalid setups, missing events, rebound and BB deceleration, leakage/heat accounting, timestep refinement, synthetic calibration, migration and standalone/build parity. Tests are numerical/source checks, not browser visual QA or experimental validation.
+There are no npm dependencies to install. Tests cover geometry/work invariants, flow/choking/laminar limits, invalid setups, missing events, rebound and BB deceleration, leakage/heat accounting, timestep refinement, synthetic calibration, migration, persistent nodes/disclosures, workspace navigation/scroll/focus, and standalone/build parity. Tests are numerical/source/DOM-contract checks, not browser visual QA or experimental validation.
 
 For a local HTTP preview, optionally run `python3 -m http.server 8000`, then open `http://127.0.0.1:8000`.
 

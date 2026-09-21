@@ -628,10 +628,13 @@
     }
     // data-live leaves belong to the frame renderer, not the shot template.
     if (current.hasAttribute("data-live")) return;
+    const preserveOpen = current.nodeName === "DETAILS" && next.hasAttribute("data-preserve-open");
     for (const attribute of Array.from(current.attributes)) {
+      if (preserveOpen && attribute.name === "open") continue;
       if (!next.hasAttribute(attribute.name)) current.removeAttribute(attribute.name);
     }
     for (const attribute of Array.from(next.attributes)) {
+      if (preserveOpen && attribute.name === "open") continue;
       if (current.getAttribute(attribute.name) !== attribute.value) current.setAttribute(attribute.name, attribute.value);
     }
     patchChildren(current, next);
@@ -655,6 +658,122 @@
   const api = { patchChildren };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.PneumaticView = api;
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
+
+/* Layout/navigation only. Reparents existing controls and canvases once; never
+   clones them or changes physical inputs. No framework/runtime dependency. */
+(function (root) {
+  "use strict";
+  const CATEGORIES = [
+    ["geometry", "Cylinder & barrel", "Cilindar i cijev"], ["masses", "Piston & BB", "Piston i BB"],
+    ["airbrake", "Airbrake & head", "Zračna kočnica i glava"], ["spring", "Spring", "Opruga"],
+    ["losses", "Losses & environment", "Gubici i okoliš"], ["rifle", "Rifle presets", "Predlošci replika"],
+    ["solver", "Timing & solver", "Vrijeme i rješavač"]
+  ];
+  const VIEWS = [["shot", "Shot", "Hitac"], ["graphs", "Graphs", "Grafovi"], ["details", "Results", "Rezultati"], ["optimizer", "Optimize", "Optimizacija"], ["calibration", "Chrono", "Kronograf"]];
+  function mount(doc, state, t, onView) {
+    const $ = id => doc.getElementById(id);
+    const aside = doc.querySelector(".controls-panel"), main = doc.querySelector(".main");
+    aside.id = "settingsPanel"; main.id = "previewPanel";
+    const members = {
+      rifle: [$("platformPreset").closest("section")], geometry: [$("cylinderBore").closest("section"), $("shortStrokeDynamic")],
+      masses: [$("pistonMass").closest("section"), aside.querySelector(".preset-row")], airbrake: [$("pinLabel").closest("details")],
+      spring: [$("springDetails")], losses: [$("dischargeCoefficient").closest("details")], solver: [$("usefulFraction").closest("details")]
+    };
+    const picker = doc.createElement("label"); picker.className = "settings-picker";
+    picker.innerHTML = `${t("Adjust", "Podesi")}<select id="settingsCategory" aria-controls="settingsPages">${CATEGORIES.map(([id, en, hr]) => `<option value="${id}">${t(en, hr)}</option>`).join("")}</select>`;
+    const pages = doc.createElement("div"); pages.id = "settingsPages"; pages.className = "settings-pages";
+    for (const [id, en, hr] of CATEGORIES) {
+      const page = doc.createElement("section"); page.id = "settings-" + id; page.dataset.settingsPage = id; page.className = "settings-page"; page.setAttribute("aria-label", t(en, hr));
+      for (const element of members[id]) { if (element.tagName === "DETAILS") { element.open = true; element.classList.add("settings-section"); } page.append(element); }
+      pages.append(page);
+    }
+    aside.append(picker, pages);
+    // Keep explanations available without making people pass them to reach inputs.
+    const helpGroups = new Map();
+    pages.querySelectorAll("p.field-help, p.evidence").forEach(note => {
+      const notes = helpGroups.get(note.parentElement) || []; notes.push(note); helpGroups.set(note.parentElement, notes);
+    });
+    for (const [parent, notes] of helpGroups) {
+      const help = doc.createElement("details"); help.className = "inline-help";
+      const summary = doc.createElement("summary"); summary.textContent = t("Help & assumptions", "Objašnjenja i pretpostavke"); help.append(summary, ...notes); parent.append(help);
+    }
+    const body = doc.createElement("div"); body.id = "workspaceBody"; body.className = "workspace-body";
+    const optimizer = main.querySelector(".optimizer"), calibration = $("calibrationPanel");
+    optimizer.id = "workspace-optimizer"; optimizer.dataset.workspacePanel = "optimizer";
+    calibration.dataset.workspacePanel = "calibration"; calibration.open = true;
+    body.append($("results"), optimizer, calibration);
+    const nav = doc.createElement("nav"); nav.className = "workspace-nav"; nav.setAttribute("aria-label", t("Lab views", "Prikazi laboratorija"));
+    nav.innerHTML = VIEWS.map(([id, en, hr]) => `<button type="button" data-workspace-view="${id}" aria-controls="${id === "calibration" ? "calibrationPanel" : "workspace-" + id}" aria-pressed="false">${t(en, hr)}</button>`).join("");
+    main.append(nav, body);
+    const jump = doc.createElement("nav"); jump.className = "mobile-workspace-jumps"; jump.setAttribute("aria-label", t("Workspace shortcuts", "Prečaci radnog prostora"));
+    jump.innerHTML = `<button type="button" data-jump="settings">${t("Settings", "Postavke")}</button><button type="button" data-jump="preview">${t("Preview", "Prikaz")}</button>`;
+    main.closest(".app").append(jump);
+    function sync() {
+      for (const panel of pages.children) panel.hidden = panel.dataset.settingsPage !== state.category;
+      $("settingsCategory").value = state.category;
+      main.querySelectorAll("[data-workspace-panel]").forEach(panel => { panel.hidden = panel.dataset.workspacePanel !== state.view; });
+      // Pending/invalid status remains visible even in Optimize or Chrono.
+      if ($("resultContent")) $("resultContent").hidden = !["shot", "graphs", "details"].includes(state.view);
+      nav.querySelectorAll("button").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.workspaceView === state.view)));
+    }
+    function selectCategory(value) {
+      if (!CATEGORIES.some(([id]) => id === value)) return;
+      state.categoryScroll[state.category] = pages.scrollTop; state.category = value;
+      sync(); pages.scrollTop = state.categoryScroll[value] || 0;
+    }
+    function selectView(value) {
+      if (!VIEWS.some(([id]) => id === value)) return;
+      state.viewScroll[state.view] = body.scrollTop; state.view = value;
+      sync(); body.scrollTop = state.viewScroll[value] || 0; onView(value);
+    }
+    $("settingsCategory").addEventListener("change", event => selectCategory(event.target.value));
+    nav.addEventListener("click", event => { const button = event.target.closest("[data-workspace-view]"); if (button && !button.disabled) selectView(button.dataset.workspaceView); });
+    jump.addEventListener("click", event => {
+      const button = event.target.closest("[data-jump]"); if (!button || button.disabled) return;
+      if (button.dataset.jump === "settings") {
+        aside.classList.remove("is-collapsed"); $("toggleControls").setAttribute("aria-expanded", "true");
+        aside.scrollIntoView({ block: "start" }); $("settingsCategory").focus({ preventScroll: true });
+      } else {
+        selectView("shot"); body.scrollTop = 0;
+        main.scrollIntoView({ block: "start" }); nav.querySelector("button").focus({ preventScroll: true });
+      }
+    });
+    sync();
+    return { sync, selectView, selectCategory,
+      rememberScroll() { state.categoryScroll[state.category] = pages.scrollTop; state.viewScroll[state.view] = body.scrollTop; },
+      restoreScroll() { pages.scrollTop = state.categoryScroll[state.category] || 0; body.scrollTop = state.viewScroll[state.view] || 0; }
+    };
+  }
+  function prepareResults(next, summaryHTML, caption, incomplete) {
+    const doc = next.ownerDocument, stage = next.querySelector(".stage"), graphs = next.querySelector(".graphs");
+    const transport = stage.querySelector(".stage-toolbar"); transport.id = "workspace-transport"; transport.remove();
+    const disclosure = (id, label) => {
+      const details = doc.createElement("details"); details.id = id; details.className = "stage-disclosure"; details.setAttribute("data-preserve-open", "");
+      const summary = doc.createElement("summary"); summary.textContent = label; details.append(summary); return details;
+    };
+    const live = disclosure("liveValuesDetails", caption.live), help = disclosure("playbackDetails", caption.help);
+    live.append(stage.querySelector("#liveStrip"));
+    for (const element of Array.from(stage.children)) {
+      if (element.matches(".playback-reference, .playback-options, .results-note, p.small-note")) help.append(element);
+    }
+    const glance = doc.createElement("div"); glance.className = "tuning-summary"; glance.innerHTML = summaryHTML;
+    const flag = doc.createElement("p"); flag.className = "shot-caption"; flag.textContent = caption.flag;
+    stage.prepend(flag);
+    if (incomplete) {
+      const warning = doc.createElement("p"); warning.className = "shot-incomplete"; warning.setAttribute("role", "status"); warning.textContent = incomplete; stage.insertBefore(warning, flag.nextSibling);
+    }
+    stage.append(glance, live, help);
+    stage.id = "workspace-shot"; stage.dataset.workspacePanel = "shot";
+    graphs.id = "workspace-graphs"; graphs.dataset.workspacePanel = "graphs";
+    const details = doc.createElement("section"); details.id = "workspace-details"; details.dataset.workspacePanel = "details";
+    for (const child of Array.from(next.childNodes)) if (child !== stage && child !== graphs) details.append(child);
+    next.append(transport, stage, graphs, details);
+  }
+  const api = { mount, prepareResults, CATEGORIES, VIEWS };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.PneumaticWorkspace = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
 
 
@@ -838,6 +957,8 @@
   let optimizer = null;
   let playbackUniform = false, playbackSpeed = 1, calculationPending = false, playheadTime = 0;
   const chartCache = new Map();
+  const workspaceState = { category: "geometry", view: "shot", categoryScroll: {}, viewScroll: {} };
+  let workspace = null;
   const fields = {
     cylinderBore: ["Cylinder internal diameter", "Unutarnji promjer cilindra", "mm", 15, 35, .01],
     strokeLength: ["Actual piston stroke", "Stvarni hod pistona", "mm", 20, 150, .1],
@@ -961,17 +1082,19 @@
   function group(en, hr, keys, help = "") { return `<section class="control-group"><p class="group-label">${t(en, hr)}</p>${keys.map(field).join("")}${help ? `<p class="field-help">${help}</p>` : ""}</section>`; }
   function provenanceControl(key, en, hr) { return `<label class="provenance"><input type="checkbox" data-provenance="${key}" ${provenance[key] === "measured" ? "checked" : ""}>${t(en, hr)}</label>`; }
   function render() {
+    workspace?.rememberScroll();
     stop();
     const lab = location.hash === "#pneumatic-timing";
     document.documentElement.lang = language;
     document.title = lab ? t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera") : "Airsoft Tools";
     if (!lab) {
+      workspace = null;
       $("root").innerHTML = `<main class="tool-hub"><div class="hub-shell"><nav class="hub-nav"><div class="hub-brand"><span class="hub-brand-mark">AT</span><span>Airsoft Tools</span></div>${languageSwitch()}</nav><div class="hub-content"><div class="hub-intro"><p class="eyebrow">${t("Interactive workshop", "Interaktivna radionica")}</p><h1>Airsoft Tools</h1><p>${t("Explore the mechanics behind your setup.", "Istražite mehaniku svoje konfiguracije.")}</p></div><p class="hub-count">${t("1 tool available", "Dostupan je 1 alat")}</p><div class="tool-grid"><a class="tool-card" href="#pneumatic-timing"><span class="tool-icon" aria-hidden="true">↝</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h2><p>${t("Explore airflow, piston motion and BB timing. Compare measured setups and calibrate with chrono data.", "Istražite protok zraka, gibanje pistona i BB-a. Usporedite izmjerene konfiguracije i kalibrirajte kronografom.")}</p></span><span class="tool-arrow">→</span></a></div><p class="hub-footnote">${t("More tools will appear here later.", "Novi alati bit će dodani kasnije.")}</p></div></div></main>`;
       bindLanguage(); return;
     }
-    $("root").innerHTML = `<main class="app"><header><div><a href="#">${t("← All tools", "← Svi alati")}</a><p class="eyebrow">${t("Conservative pneumatic model · v3", "Konzervativni pneumatski model · v3")}</p><h1>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h1><p class="subtitle">${t("Follow the pressure, motion and energy through a shot—not just its final speed.", "Pratite tlak, gibanje i energiju tijekom opaljenja — ne samo konačnu brzinu.")}</p></div>${languageSwitch()}</header>
-      <div class="lab-warning">${t("Conditional physics predictions, not measured performance. Head/pin dimensions and spring data start as assumptions. A chrono fit does not validate internal timing or sound. No exact real-world joules or dB are claimed.", "Uvjetna predviđanja fizikalnog modela, a ne izmjerene performanse. Dimenzije glave/pina i podaci opruge početne su pretpostavke. Kalibracija kronografom ne potvrđuje unutarnji vremenski odnos ni zvuk. Ne tvrdimo da su stvarni jouli ili dB točno predviđeni.")}</div>
-      <div class="layout"><aside class="panel controls-panel ${window.innerWidth <= 760 ? "is-collapsed" : ""}" aria-label="${t("Simulation controls", "Kontrole simulacije")}"><div class="panel-heading"><h2>${t("Setup", "Postavke")}</h2><button class="secondary-button" id="toggleControls" type="button" aria-expanded="${window.innerWidth > 760}">${t("Show / hide", "Prikaži / sakrij")}</button></div>
+    $("root").innerHTML = `<main class="app tuning-app"><header class="lab-header"><div><a href="#">${t("← All tools", "← Svi alati")}</a><h1>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h1></div>${languageSwitch()}</header>
+      <details class="model-caveat"><summary>${t("Unvalidated model · not exact joules or dB", "Nepotvrđen model · nisu točni jouli ni dB")}</summary><p>${t("Conditional physics predictions, not measured performance. Head/pin dimensions and spring data start as assumptions. A chrono fit does not validate internal timing or sound. No exact real-world joules or dB are claimed.", "Uvjetna predviđanja fizikalnog modela, a ne izmjerene performanse. Dimenzije glave/pina i podaci opruge početne su pretpostavke. Kalibracija kronografom ne potvrđuje unutarnji vremenski odnos ni zvuk. Ne tvrdimo da su stvarni jouli ili dB točno predviđeni.")}</p></details>
+      <div class="layout"><aside class="panel controls-panel" aria-label="${t("Simulation controls", "Kontrole simulacije")}"><div class="panel-heading"><h2>${t("Setup", "Postavke")}</h2><button class="secondary-button" id="toggleControls" type="button" aria-expanded="true">${t("Show / hide", "Prikaži / sakrij")}</button></div>
         <section class="control-group"><label for="platformPreset">${t("Rifle starting point", "Početna konfiguracija replike")}</label><select id="platformPreset">${Object.entries(platforms).map(([id, v]) => `<option value="${id}" ${selectedPlatform === id ? "selected" : ""}>${v.name}</option>`).join("")}<option value="custom" ${selectedPlatform === "custom" ? "selected" : ""}>${t("Custom", "Prilagođeno")}</option></select>
         <p class="evidence">${t("Preset geometry is nominal or assumed—not a measurement of your rifle. Changing platforms resets the mechanical assumptions.", "Geometrija predloška nominalna je ili pretpostavljena — nije mjerenje vaše replike. Promjena platforme vraća mehaničke pretpostavke.")}</p>
         <label for="component">${t("Piston / head identity", "Piston / glava cilindra")}</label><select id="component"><option value="amp" ${component === "amp" ? "selected" : ""}>AMP / Tridos Ultimate SSG10</option><option value="scorpion" ${component === "scorpion" ? "selected" : ""}>Stalker Scorpion</option><option value="custom" ${component === "custom" ? "selected" : ""}>${t("Other / custom", "Drugo / prilagođeno")}</option></select>
@@ -986,7 +1109,12 @@
         <details><summary>${t("Airflow, friction and environment", "Protok, trenje i okoliš")}</summary>${["dischargeCoefficient", "pistonLeak", "nozzleLeak", "bbLeakCoefficient", "bbBreakaway", "barrelDrag", "heatTransfer", "ambientPressure", "airTemperature"].map(field).join("")}<p class="field-help">${t("Leak areas include their discharge coefficient. Zero heat conductance is an adiabatic starting approximation. All loss coefficients need evidence; they are not efficiency percentages.", "Površine curenja uključuju koeficijent protoka. Nulta toplinska vodljivost početna je adijabatska aproksimacija. Svi koeficijenti gubitaka zahtijevaju potvrdu; nisu postoci učinkovitosti.")}</p></details>
         <details><summary>${t("Timing criteria and solver", "Vremenski kriteriji i rješavač")}</summary>${["usefulFraction", "decelThreshold", "maxTime"].map(field).join("")}<p class="field-help">${t("Adaptive midpoint integration, maximum step 0.01 ms. Thresholds are user conventions, not physical switches. The model can end before contact or complete discharge.", "Adaptivna integracija metodom srednje točke, najveći korak 0,01 ms. Pragovi su dogovoreni kriteriji, a ne fizikalne sklopke. Model može završiti prije kontakta ili potpunog pražnjenja.")}</p></details>
       </aside><section class="main">${optimizerMarkup()}<div id="results"></div>${calibrationMarkup()}</section></div></main>`;
-    bindLanguage(); bindControls(); bindOptimizer(); syncSpringControls(); updateResults(); renderMeasurements(); renderOptimizerResults();
+    workspace = globalThis.PneumaticWorkspace.mount(document, workspaceState, t, view => {
+      if (view === "optimizer") { optimizer.open = true; $("optimizerBody").hidden = false; $("toggleOptimizer").setAttribute("aria-expanded", "true"); }
+      if (view === "calibration") $("calibrationPanel").open = true;
+      setFrame(fraction);
+    });
+    bindLanguage(); bindControls(); bindOptimizer(); syncSpringControls(); updateResults(); renderMeasurements(); renderOptimizerResults(); workspace.restoreScroll();
   }
   function calibrationMarkup() {
     return `<details class="panel calibration" id="calibrationPanel"><summary>${t("Calibration · actual chrono measurements", "Kalibracija · stvarna mjerenja kronografom")}</summary><div class="calibration-body"><p class="calibration-intro">${t("Your 0.46 g / 330 fps observation is a reference until its full setup is recorded. Energy is derived from mass and velocity, not an independent measurement. Record each shot. All data stays in this browser unless you export it.", "Mjerenje 0,46 g / 330 fps ostaje referenca dok se ne zabilježi potpuna konfiguracija. Energija se izvodi iz mase i brzine, nije neovisno mjerenje. Zabilježite svaki hitac. Podaci ostaju u ovom pregledniku osim ako ih izvezete.")}</p>
@@ -1104,6 +1232,11 @@
         if (keys.some(key => [...O.GROUPS.piston, ...O.GROUPS.head, ...O.GROUPS.airbrake].includes(key))) component = "custom";
         if (keys.some(key => O.GROUPS.airbrake.includes(key))) pinLabel = p.airbrakeLength ? "custom" : "plug";
         invalidateFit(); setStatus("A hypothetical optimizer setup is active. Existing measurements are preserved; this new hardware combination is not automatically calibrated.", "Aktivna je hipotetska konfiguracija optimizatora. Postojeća mjerenja sačuvana su; nova kombinacija dijelova nije automatski kalibrirana."); invalidateOptimizer(); syncSetupControls(); recalculate(); optimizer.status = ["Candidate applied. Frozen hardware and environmental/loss assumptions were preserved. Playback now observes up to 250 ms.", "Kandidat je primijenjen. Zamrznuti dijelovi i pretpostavke okoliša/gubitaka sačuvani su. Prikaz sada prati do 250 ms."]; $("optimizerStatus").textContent = t(...optimizer.status);
+        const category = keys.every(key => O.GROUPS.spring.includes(key)) ? "spring" : keys.some(key => [...O.GROUPS.head, ...O.GROUPS.airbrake].includes(key)) ? "airbrake" : keys.some(key => [...O.GROUPS.piston, ...O.GROUPS.bb].includes(key)) ? "masses" : "geometry";
+        workspace.selectCategory(category); workspace.selectView("shot");
+        setFrame(0); $("workspaceBody").scrollTop = 0;
+        if (window.innerWidth <= 960) $("previewPanel").scrollIntoView({ block: "start" });
+        $("playButton").focus({ preventScroll: true }); startPlayback();
       } catch (_) { invalidateOptimizer(); optimizer.status = ["Result is stale or failed rechecking. No candidate was applied; run the search again.", "Rezultat je zastario ili nije prošao ponovnu provjeru. Kandidat nije primijenjen; ponovite pretragu."]; $("optimizerStatus").textContent = t(...optimizer.status); }
     }));
   }
@@ -1136,6 +1269,7 @@
       bindResults();
     }
     results.dataset.state = state;
+    workspace?.sync();
     results.setAttribute("aria-busy", String(state === "pending"));
     $("resultContent").inert = state !== "ready";
     $("resultContent").setAttribute("aria-hidden", String(state === "invalid"));
@@ -1183,7 +1317,18 @@
       ${s.maxPreContactRetreat > .001 ? `<div class="lab-warning" role="status"><strong>${t("Large predicted reversal — check the model inputs", "Velik predviđeni povrat — provjerite ulaze modela")}</strong><p>${t(`The piston travels backward by up to ${fmt(s.maxPreContactRetreat * 1000, 2)} mm BEFORE touching the head. This is pressure-driven motion in this model, not a bumper bounce or a verified SSG10 prediction. Check pin clearance, head passage, spring force and losses. Motion has not been clipped or forced forward.`, `Piston se vraća do ${fmt(s.maxPreContactRetreat * 1000, 2)} mm PRIJE dodira s glavom. To je gibanje zbog tlaka u modelu, ne odskok od odbojnika ni potvrđeno predviđanje SSG10. Provjerite zazor pina, kanal glave, silu opruge i gubitke. Gibanje nije odrezano ni prisiljeno naprijed.`)}</p></div>` : ""}
       <div class="playback-options"><label for="playbackMode">${t("Playback", "Prikaz")}<select id="playbackMode"><option value="focus" ${!playbackUniform ? "selected" : ""}>${t("Firing focus + faster settling", "Fokus opaljenja + brže smirivanje")}</option><option value="uniform" ${playbackUniform ? "selected" : ""}>${t("Uniform full-run slow motion", "Jednoliko usporena cijela simulacija")}</option></select></label><label for="playbackSpeed">${t("Playback speed", "Brzina prikaza")}<select id="playbackSpeed">${[.5, 1, 2].map(v => `<option value="${v}" ${playbackSpeed === v ? "selected" : ""}>${v}×</option>`).join("")}</select></label></div><p id="playbackPhase" class="small-note" aria-live="off"></p>`);
     stage.insertAdjacentHTML("beforeend", `<p class="small-note">${t("Firing focus reserves 80% of playback for the shot and initial muzzle discharge when a long tail remains; it then speeds through the full settling interval. No motion or events are removed. The clock, scrubber and graph axes always use actual model time. The cylinder and head share one axial drawing scale; the barrel has a separate scale.", "Fokus opaljenja odvaja 80% prikaza za hitac i početno pražnjenje kad preostaje dugo smirivanje; zatim ubrzava prikaz cijelog preostalog intervala. Gibanje i događaji nisu uklonjeni. Sat, klizač i osi grafova uvijek koriste stvarno vrijeme modela. Cilindar i glava imaju zajedničko uzdužno mjerilo; cijev ima zasebno mjerilo.")} ${t("Maximum modeled backward travel", "Najveći modelirani povratni pomak")}: ${fmt(s.maxPistonRetreat * 1000, 3, "mm")}; ${t("before first contact", "prije prvog kontakta")}: ${fmt(s.maxPreContactRetreat * 1000, 3, "mm")}.</p>`);
-    next.prepend(stage, graphs);
+    const compactMetric = (label, value, note) => `<div><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`;
+    const summary = [
+      compactMetric(t("Predicted exit", "Predviđeni izlazak"), fmt(s.exitEnergy, 3, "J"), `${fmt(fps(s.exitVelocity), 1, "fps")} · ${t("volume ratio", "omjer volumena")} ${fmt(s.ratio, 2)}`),
+      compactMetric(t("Piston strike", "Udar pistona"), fmt(s.impactEnergy === null ? null : s.impactEnergy * 1000, 2, "mJ"), s.impactEnergy === null ? t("No contact recorded", "Kontakt nije zabilježen") : t("Contact energy · not dB", "Energija kontakta · ne dB")),
+      compactMetric(t("Muzzle pressure", "Tlak na ustima"), fmt(s.exitPressure === null ? null : (s.exitPressure - s.ambientPressure) / 1e5, 2, "bar(g)"), `${t("Peak outflow", "Vršni protok")}: ${fmt(s.exitTime === null ? null : s.peakOutflow * 1000, 2, "g/s")}`),
+      compactMetric(t("Useful energy → slowing", "Korisna energija → usporavanje"), fmt(delta, 2, "ms"), delta === null ? t("Timing unavailable", "Vrijeme nije dostupno") : delta >= 0 ? t("Threshold reached first", "Prag je dosegnut prvi") : t("Slowing begins first", "Usporavanje počinje prvo"))
+    ].join("");
+    globalThis.PneumaticWorkspace.prepareResults(next, summary, {
+      live: t("Live values · pressure, velocity & spring", "Vrijednosti uživo · tlak, brzina i opruga"),
+      help: t("Playback options & model notes", "Opcije prikaza i napomene modela"),
+      flag: p.airbrakeLength ? t("Airbrake active · conditional model, not measured performance", "Zračna kočnica uključena · uvjetni model, ne izmjerene performanse") : t("No-airbrake reference · conditional model, not measured performance", "Referenca bez kočnice · uvjetni model, ne izmjerene performanse")
+    }, s.complete ? "" : t("Incomplete run: ", "Nezavršena simulacija: ") + (s.exitTime === null ? t("BB has not exited. ", "BB nije izašao. ") : "") + (s.pistonHitTime === null ? t("Piston contact unknown—not a soft landing.", "Kontakt pistona nepoznat — nije mekan udar.") : ""));
     // Stable panel keys keep conditional warnings from replacing neighboring UI.
     for (const parent of [next, stage]) for (const element of parent.children) {
       if (!element.id && element.className) element.setAttribute("data-view-key", element.className);
@@ -1191,6 +1336,7 @@
     next.querySelectorAll("canvas, #liveStrip, #phaseText, #clock, #playbackPhase").forEach(element => element.setAttribute("data-live", ""));
     setResultState("ready");
     globalThis.PneumaticView.patchChildren($("resultContent"), next);
+    workspace?.sync();
     setFrame(fraction);
   }
   function bindLanguage() {
@@ -1455,7 +1601,8 @@
       if (item.firstChild.textContent !== label) item.firstChild.textContent = label;
       if (item.lastChild.textContent !== value) item.lastChild.textContent = value;
     });
-    drawMechanism(f); drawCharts(f.t);
+    if (workspaceState.view === "shot") drawMechanism(f);
+    if (workspaceState.view === "graphs") drawCharts(f.t);
   }
   function canvasContext(id, fallbackWidth = 900, fallbackHeight = 300) {
     const canvas = $(id), rect = canvas.getBoundingClientRect(), w = rect.width || fallbackWidth, h = rect.height || fallbackHeight, dpr = Math.min(devicePixelRatio || 1, 2);

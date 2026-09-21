@@ -11,10 +11,13 @@
     }
     // data-live leaves belong to the frame renderer, not the shot template.
     if (current.hasAttribute("data-live")) return;
+    const preserveOpen = current.nodeName === "DETAILS" && next.hasAttribute("data-preserve-open");
     for (const attribute of Array.from(current.attributes)) {
+      if (preserveOpen && attribute.name === "open") continue;
       if (!next.hasAttribute(attribute.name)) current.removeAttribute(attribute.name);
     }
     for (const attribute of Array.from(next.attributes)) {
+      if (preserveOpen && attribute.name === "open") continue;
       if (current.getAttribute(attribute.name) !== attribute.value) current.setAttribute(attribute.name, attribute.value);
     }
     patchChildren(current, next);

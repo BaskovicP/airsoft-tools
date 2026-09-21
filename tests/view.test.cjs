@@ -74,3 +74,13 @@ test("only changed text or attributes are written", () => {
   Object.defineProperty(node.firstChild, "nodeValue", { get: () => "unchanged", set: () => { throw new Error("Unnecessary text mutation"); } });
   patchChildren(el("DIV", {}, [node]), el("DIV", {}, [el("DIV", { class: "panel" }, [text("unchanged")])]));
 });
+
+test("open result disclosures survive edits without freezing their live contents", () => {
+  const details = el("DETAILS", { id: "liveValuesDetails", "data-preserve-open": "", open: "" }, [text("old")]);
+  const parent = el("DIV", {}, [details]);
+  patchChildren(parent, el("DIV", {}, [el("DETAILS", { id: "liveValuesDetails", "data-preserve-open": "" }, [text("new")])]));
+  assert.equal(parent.firstChild, details); assert.equal(details.hasAttribute("open"), true); assert.equal(details.firstChild.nodeValue, "new");
+  details.removeAttribute("open");
+  patchChildren(parent, el("DIV", {}, [el("DETAILS", { id: "liveValuesDetails", "data-preserve-open": "", open: "" }, [text("updated")])]));
+  assert.equal(details.hasAttribute("open"), false); assert.equal(details.firstChild.nodeValue, "updated");
+});
