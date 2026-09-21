@@ -399,6 +399,14 @@
 
     .control-explainer strong { color: var(--amber); }
 
+    .control-live-note {
+      display: block;
+      margin-top: 7px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+
     .control label {
       display: flex;
       align-items: baseline;
@@ -1120,6 +1128,7 @@
           <div class="control">
             <label for="strokeLength"><span>Usable piston stroke</span><output id="strokeLengthOut"></output></label>
             <input id="strokeLength" type="range" min="50" max="100" step="1" value="85">
+            <p class="control-explainer"><strong>What short stroking changes:</strong> In this model it moves the cocked piston closer to the cylinder head. With the same airbrake rod length, the piston has less free travel—and sweeps less air volume—before the rod enters the head and pneumatic cushioning begins. It also reduces total swept cylinder volume. Exact timing relative to BB exit can still change because pressure and BB motion change too.<span class="control-live-note" id="shortStrokeDynamic">—</span></p>
           </div>
         </section>
 
@@ -1489,6 +1498,8 @@
         "Inner-barrel length": "Duljina unutarnje cijevi",
         "Inner-barrel diameter": "Promjer unutarnje cijevi",
         "Usable piston stroke": "Iskoristivi hod pistona",
+        "What short stroking changes:": "Što mijenja skraćivanje hoda:",
+        "In this model it moves the cocked piston closer to the cylinder head. With the same airbrake rod length, the piston has less free travel—and sweeps less air volume—before the rod enters the head and pneumatic cushioning begins. It also reduces total swept cylinder volume. Exact timing relative to BB exit can still change because pressure and BB motion change too.": "U ovom modelu skraćivanje hoda pomiče napeti piston bliže glavi cilindra. Uz istu duljinu šipke zračne kočnice piston ima manje slobodnog hoda — i istiskuje manji volumen zraka — prije nego što šipka uđe u glavu i započne pneumatsko ublažavanje. Time se smanjuje i ukupni radni volumen cilindra. Točan vremenski odnos prema izlasku BB-a ipak se može promijeniti jer se mijenjaju i tlak te gibanje BB-a.",
         "MOVING MASS": "POKRETNA MASA",
         "Stalker Scorpion piston mass": "Masa Stalker Scorpion pistona",
         "Piston mass": "Masa pistona",
@@ -1646,6 +1657,8 @@
           "impact.moderate": "Moderate mechanical impact",
           "impact.hard": "Hard mechanical impact",
           "impact.veryHard": "Very hard mechanical impact",
+          "shortStroke.current": "Current pre-entry region: {travel} mm piston travel · ≈{volume} cm³ swept air",
+          "shortStroke.disabled": "Current pre-entry region: no active airbrake configured",
           "phase.1": "1 · Trigger release — spring unloads and accelerates the piston",
           "phase.2": "2 · Piston compresses the sealed air column — pressure rises behind the stationary BB",
           "phase.3": "3 · Pressure overcomes BB resistance — BB accelerates down the barrel",
@@ -1679,7 +1692,7 @@
           "factor.default": "All advanced inputs are at their baseline assumptions.",
           "factor.active": "{count} advanced inputs differ from baseline. The deltas below isolate their combined modeled effect while geometry, masses, spring selection and airbrake stay unchanged.",
           "preset.ssg10": "Published 430 × 6.01 mm barrel; cylinder, stroke, piston and airbrake values are the current SSG10 model defaults.",
-          "preset.ssg10-short": "Derived comparison: the same modeled cylinder bore with 20 mm less stroke reduces swept volume from 35.8 to 27.4 cm³. This is not a universal short-stroke recipe.",
+          "preset.ssg10-short": "Derived comparison: the same modeled cylinder bore with 20 mm less stroke reduces total swept volume from 35.8 to 27.4 cm³. With the same 20 mm airbrake rod, free piston travel before engagement falls from 65 to 45 mm and pre-entry swept volume from about 27.4 to 19.0 cm³. Cushioning therefore begins earlier in piston travel, but exact timing relative to BB exit remains model-dependent. This is not a universal short-stroke recipe.",
           "preset.tac41p": "Published baseline: 41 cm³ usable bolt volume and a 510 × 6.05 mm barrel. Stroke, piston mass and no-airbrake state are editable starting assumptions.",
           "preset.tac41ls": "Published baseline: 41 cm³ usable bolt volume and a 330 × 6.05 mm barrel. Stroke, piston mass and no-airbrake state are editable starting assumptions.",
           "preset.srs16": "Published baseline: 41 cm³ air displacement, 23.8 mm cylinder bore and a 420 × 6.05 mm barrel. Piston mass and no-airbrake state are starting assumptions.",
@@ -1703,6 +1716,8 @@
           "impact.moderate": "Umjeren mehanički udar",
           "impact.hard": "Jak mehanički udar",
           "impact.veryHard": "Vrlo jak mehanički udar",
+          "shortStroke.current": "Trenutačni prostor prije ulaska: {travel} mm hoda pistona · ≈{volume} cm³ istisnutog zraka",
+          "shortStroke.disabled": "Trenutačni prostor prije ulaska: aktivna zračna kočnica nije postavljena",
           "phase.1": "1 · Otpuštanje okidača — opruga se rasterećuje i ubrzava piston",
           "phase.2": "2 · Piston komprimira zatvoreni stupac zraka — tlak raste iza nepomičnog BB-a",
           "phase.3": "3 · Tlak nadvladava otpor BB-a — BB ubrzava kroz cijev",
@@ -1736,7 +1751,7 @@
           "factor.default": "Svi napredni ulazi postavljeni su na osnovne pretpostavke.",
           "factor.active": "Broj naprednih ulaza koji odstupaju od osnove: {count}. Donje razlike izdvajaju njihov zajednički modelirani učinak uz nepromijenjenu geometriju, mase, odabir opruge i zračnu kočnicu.",
           "preset.ssg10": "Objavljeni podaci za cijev: 430 × 6,01 mm; vrijednosti cilindra, hoda, pistona i zračne kočnice trenutačne su zadane vrijednosti SSG10 modela.",
-          "preset.ssg10-short": "Izvedena usporedba: isti modelirani promjer cilindra s 20 mm kraćim hodom smanjuje radni volumen s 35,8 na 27,4 cm³. Ovo nije univerzalna uputa za skraćivanje hoda.",
+          "preset.ssg10-short": "Izvedena usporedba: isti modelirani promjer cilindra s 20 mm kraćim hodom smanjuje ukupni radni volumen s 35,8 na 27,4 cm³. Uz istu šipku zračne kočnice od 20 mm slobodni hod pistona prije ulaska smanjuje se sa 65 na 45 mm, a istisnuti volumen prije ulaska s približno 27,4 na 19,0 cm³. Ublažavanje zato počinje ranije u hodu pistona, ali točan vremenski odnos prema izlasku BB-a i dalje ovisi o modelu. Ovo nije univerzalna uputa za skraćivanje hoda.",
           "preset.tac41p": "Objavljena osnova: 41 cm³ iskoristivog volumena cilindra i cijev 510 × 6,05 mm. Hod, masa pistona i stanje bez zračne kočnice početne su pretpostavke koje možete mijenjati.",
           "preset.tac41ls": "Objavljena osnova: 41 cm³ iskoristivog volumena cilindra i cijev 330 × 6,05 mm. Hod, masa pistona i stanje bez zračne kočnice početne su pretpostavke koje možete mijenjati.",
           "preset.srs16": "Objavljena osnova: 41 cm³ istisnine zraka, provrt cilindra 23,8 mm i cijev 420 × 6,05 mm. Masa pistona i stanje bez zračne kočnice početne su pretpostavke.",
@@ -2394,6 +2409,12 @@
         $("bbMassOut").textContent = `${p.bbMass.toFixed(2)} g`;
         $("airbrakeLengthOut").textContent = `${p.airbrakeLength} mm`;
         $("airbrakeEffectOut").textContent = `${Math.round(p.airbrakeEffect * 100)}%`;
+        const hasActiveAirbrake = p.airbrakeLength > 0 && p.airbrakeEffect > 0;
+        const preEntryTravel = Math.max(0, p.strokeLength - p.airbrakeLength);
+        const preEntryVolume = p.strokeLength > 0 ? p.cylinderVolume * preEntryTravel / p.strokeLength : 0;
+        $("shortStrokeDynamic").textContent = hasActiveAirbrake
+          ? tr("shortStroke.current", { travel: preEntryTravel.toFixed(0), volume: preEntryVolume.toFixed(1) })
+          : tr("shortStroke.disabled");
         $("springPreloadOut").textContent = `${p.springPreload.toFixed(1)} mm`;
         $("springConditionOut").textContent = `${Math.round(p.springCondition * 100)}%`;
         $("pistonFrictionOut").textContent = `${p.pistonFriction.toFixed(1)} N`;

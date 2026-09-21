@@ -35,6 +35,8 @@ Every advanced input updates the shot calculation, animation, graphs, impact/bla
 
 The airbrake control now explains the pneumatic cushion directly in the interface: a stronger modeled cushion traps more air near the cylinder head, decelerates the piston sooner, and usually leaves less kinetic energy for the final mechanical strike. The sound section keeps that piston-impact contribution separate from the compressed-air muzzle blast. Both are relative 0–100 heuristic indices—not acoustic dB measurements—and the impact card adds a plain-language landing severity for easier comparison.
 
+The usable-stroke control also explains short stroking. In the model, reducing stroke reduces total swept cylinder volume and—when airbrake rod length stays unchanged—reduces both the piston travel and swept-air volume between the cocked position and airbrake entry. A live note calculates that pre-entry travel and volume for the current setup; the SSG10 short-stroke preset documents its 65→45 mm travel and approximately 27.4→19.0 cm³ pre-entry-volume change.
+
 Published references: [SSG10 barrel](https://us.novritsch.com/product/ssg10-precision-inner-barrel-standard/), [SSG10 spring chart](https://us.novritsch.com/product/ssg-spring/), [TAC-41P](https://www.silverback-airsoft.com/t41p), [TAC-41 Lite Sport](https://www.silverback-airsoft.com/t41ls), [SRS A2 16-inch](https://www.silverback-airsoft.com/blt-13), [SRS 22-inch barrel](https://www.silverback-airsoft.com/ibl-a578), and [VSR-10 G-Spec](https://www.tokyo-marui.co.jp/products/aircocking/boltaction/73).
 
 ## Run the standalone app locally
