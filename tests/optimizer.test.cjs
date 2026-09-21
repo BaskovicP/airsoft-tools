@@ -112,8 +112,10 @@ test('apply preserves locks and environment; stale or tampered results are rejec
 test('real default completes at common horizon, while a trapping pin remains unrankable', () => {
   const base=P.normalize(),normal=P.simulate(base,{maxTime:250,sampleInterval:1});
   assert.equal(O.assess(base,normal).reason,null);
-  assert.ok(normal.pistonHitTime>.06);
-  const p=P.normalize({airbrakeDiameter:3.99}),s=P.simulate(p,{maxTime:250,sampleInterval:1});
+  assert.ok(normal.pistonHitTime>0 && normal.pistonHitTime<.06);
+  const delayed=P.simulate({airbrakeLength:20,airbrakeTaper:2},{maxTime:250,sampleInterval:1});
+  assert.ok(delayed.pistonHitTime>.06);
+  const p=P.normalize({airbrakeLength:20,airbrakeTaper:2,airbrakeDiameter:3.99}),s=P.simulate(p,{maxTime:250,sampleInterval:1});
   assert.equal(s.valid,true);assert.equal(s.pistonHitTime,null);assert.equal(O.assess(p,s).reason,'unfinished');
 });
 test('real solver search returns only energy-constrained, completed hardware candidates', async () => {

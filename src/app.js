@@ -1,7 +1,7 @@
 /* UI shared by the generated standalone file and Cloudflare build. */
 (() => {
   "use strict";
-  const P = globalThis.PneumaticPhysics, C = globalThis.PneumaticCalibration, O = globalThis.PneumaticOptimizer;
+  const P = globalThis.PneumaticPhysics, C = globalThis.PneumaticCalibration, O = globalThis.PneumaticOptimizer, B = globalThis.PneumaticPlayback;
   const $ = id => document.getElementById(id), finite = Number.isFinite;
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   let language = "en";
@@ -11,10 +11,11 @@
   const fps = v => v === null ? null : v / .3048;
   const stamp = v => fmt(v === null ? null : v * 1000, 2, "ms");
   const clone = v => JSON.parse(JSON.stringify(v));
-  let p = P.normalize(), selectedPlatform = "ssg10", component = "amp", springLabel = "unspecified", pinLabel = "custom";
+  let p = P.normalize(), selectedPlatform = "ssg10", component = "amp", springLabel = "unspecified", pinLabel = "plug";
   let provenance = { geometry: "assumed", spring: "assumed" }, shot = null, baseline = null, fraction = 0, playing = false, animation = 0;
   let measurements = [], fit = null, status = null, diagnostic = null, busy = false, debounce = null;
   let optimizer = null;
+  let playbackUniform = false, playbackSpeed = 1;
   const fields = {
     cylinderBore: ["Cylinder internal diameter", "Unutarnji promjer cilindra", "mm", 15, 35, .01],
     strokeLength: ["Actual piston stroke", "Stvarni hod pistona", "mm", 20, 150, .1],
@@ -76,7 +77,8 @@
     ["usefulTime", `${Math.round(p.usefulFraction * 100)}% ${t("of peak BB energy", "vršne energije BB-a")}`, "useful"],
     ["strongBrakeTime", t("Substantial slowing after entry", "Značajno usporavanje nakon ulaska"), "brake"],
     ["exitTime", t("BB exit", "Izlazak BB-a"), ""],
-    ["reboundTime", t("Piston rebound", "Povrat pistona"), ""],
+    ["preContactReversalTime", t("Reversal before contact (model)", "Povrat prije kontakta (model)"), ""],
+    ["contactReboundTime", t("Reverse motion after contact", "Povratno gibanje nakon kontakta"), ""],
     ["pistonHitTime", t("First piston contact", "Prvi kontakt pistona"), ""]
   ];
   function setStatus(en, hr) { status = [en, hr]; if ($("fitStatus")) $("fitStatus").textContent = t(en, hr); }
@@ -333,6 +335,12 @@
       <div class="fit-row"><button class="secondary-button" id="convergenceButton" type="button">${t("Check finer time steps", "Provjeri manje vremenske korake")}</button><button class="secondary-button" id="sensitivityButton" type="button">${t("Check input sensitivity", "Provjeri osjetljivost na ulaze")}</button><button class="secondary-button" id="exportRun" type="button">${t("Export setup and full trace", "Izvezi postavke i cijelu krivulju")}</button></div>
       <p class="small-note">${t("Sensitivity examples vary head and pin diameter by ±0.02 mm and spring force by ±5%, in all eight combinations. These are explicit test ranges, not measured tolerances or statistical confidence intervals.", "Primjeri osjetljivosti mijenjaju promjer glave i pina za ±0,02 mm te silu opruge za ±5%, u svih osam kombinacija. To su izričito zadani ispitni rasponi, a ne izmjerene tolerancije ili statistički intervali pouzdanosti.")}</p><p id="diagnosticReport" class="status-line" role="status">${diagnostic ? esc(t(...diagnostic)) : ""}</p>
       <div class="source-links"><a href="https://tridos.design/products/ultimate-ssg10-vsr10-piston-cylinder-head-kit" target="_blank" rel="noreferrer">AMP / Tridos</a><a href="https://www.grc.nasa.gov/www/k-12/airplane/mflchk.html" target="_blank" rel="noreferrer">${t("Compressible mass flow", "Stlačivi protok")}</a><a href="https://cris.technion.ac.il/en/publications/the-internal-ballistics-of-airguns/" target="_blank" rel="noreferrer">${t("Thermodynamic model reference", "Referenca termodinamičkog modela")}</a></div></section>`;
+    const stage = $("results").querySelector(".stage"), graphs = $("results").querySelector(".graphs");
+    stage.insertAdjacentHTML("afterbegin", `<p class="playback-reference">${p.airbrakeLength === 0 ? t("Reference shot · airbrake off. No pin dimensions are implied for your AMP/SSG10. Enter your measured pin geometry to enable it; the other starting values are illustrative, not a verified rifle setup.", "Referentni hitac · zračna kočnica isključena. Dimenzije pina vašeg AMP/SSG10 nisu pretpostavljene. Unesite izmjerenu geometriju pina za uključivanje; ostale početne vrijednosti su ilustrativne, ne potvrđena konfiguracija replike.") : t("Airbrake active · motion depends on the entered passage, pin, spring and loss assumptions. Internal timing needs experimental validation.", "Zračna kočnica uključena · gibanje ovisi o unesenom kanalu, pinu, opruzi i gubicima. Unutarnji vremenski odnos traži eksperimentalnu provjeru.")}</p>
+      ${s.maxPreContactRetreat > .001 ? `<div class="lab-warning" role="status"><strong>${t("Large predicted reversal — check the model inputs", "Velik predviđeni povrat — provjerite ulaze modela")}</strong><p>${t(`The piston travels backward by up to ${fmt(s.maxPreContactRetreat * 1000, 2)} mm BEFORE touching the head. This is pressure-driven motion in this model, not a bumper bounce or a verified SSG10 prediction. Check pin clearance, head passage, spring force and losses. Motion has not been clipped or forced forward.`, `Piston se vraća do ${fmt(s.maxPreContactRetreat * 1000, 2)} mm PRIJE dodira s glavom. To je gibanje zbog tlaka u modelu, ne odskok od odbojnika ni potvrđeno predviđanje SSG10. Provjerite zazor pina, kanal glave, silu opruge i gubitke. Gibanje nije odrezano ni prisiljeno naprijed.`)}</p></div>` : ""}
+      <div class="playback-options"><label for="playbackMode">${t("Playback", "Prikaz")}<select id="playbackMode"><option value="focus" ${!playbackUniform ? "selected" : ""}>${t("Firing focus + faster settling", "Fokus opaljenja + brže smirivanje")}</option><option value="uniform" ${playbackUniform ? "selected" : ""}>${t("Uniform full-run slow motion", "Jednoliko usporena cijela simulacija")}</option></select></label><label for="playbackSpeed">${t("Playback speed", "Brzina prikaza")}<select id="playbackSpeed">${[.5, 1, 2].map(v => `<option value="${v}" ${playbackSpeed === v ? "selected" : ""}>${v}×</option>`).join("")}</select></label></div><p id="playbackPhase" class="small-note" aria-live="off"></p>`);
+    stage.insertAdjacentHTML("beforeend", `<p class="small-note">${t("Firing focus reserves 80% of playback for the shot and initial muzzle discharge when a long tail remains; it then speeds through the full settling interval. No motion or events are removed. The clock, scrubber and graph axes always use actual model time. The cylinder and head share one axial drawing scale; the barrel has a separate scale.", "Fokus opaljenja odvaja 80% prikaza za hitac i početno pražnjenje kad preostaje dugo smirivanje; zatim ubrzava prikaz cijelog preostalog intervala. Gibanje i događaji nisu uklonjeni. Sat, klizač i osi grafova uvijek koriste stvarno vrijeme modela. Cilindar i glava imaju zajedničko uzdužno mjerilo; cijev ima zasebno mjerilo.")} ${t("Maximum modeled backward travel", "Najveći modelirani povratni pomak")}: ${fmt(s.maxPistonRetreat * 1000, 3, "mm")}; ${t("before first contact", "prije prvog kontakta")}: ${fmt(s.maxPreContactRetreat * 1000, 3, "mm")}.</p>`);
+    $("results").prepend(stage, graphs);
     bindResults(); setFrame(fraction);
   }
   function bindLanguage() {
@@ -367,6 +375,7 @@
       const pair = input.dataset.number ? document.querySelector(`[data-range="${key}"]`) : $(key);
       pair.value = input.value;
       selectedPlatform = "custom"; $("platformPreset").value = "custom";
+      if (key.startsWith("airbrake")) { pinLabel = p.airbrakeLength > 0 ? "custom" : "plug"; $("pinLabel").value = pinLabel; }
       if (key.startsWith("spring")) { provenance.spring = "assumed"; invalidateFit(); }
       else if (["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "headBore", "headLength", "nozzleBore", "nozzleLength", "airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "deadVolume", "breechVolume"].includes(key)) provenance.geometry = "assumed";
       document.querySelectorAll("[data-provenance]").forEach(box => { box.checked = provenance[box.dataset.provenance] === "measured"; });
@@ -389,7 +398,7 @@
         p = P.normalize({ cylinderBore: Math.sqrt(v.volume * 1000 / v.stroke / Math.PI) * 2, strokeLength: v.stroke, barrelLength: v.barrel, barrelDiameter: v.bore, pistonMass: v.mass });
         component = selectedPlatform.startsWith("ssg10") ? "amp" : "custom";
         if (component !== "amp") { p.airbrakeLength = 0; p.airbrakeTaper = 0; }
-        provenance = { geometry: "assumed", spring: "assumed" }; pinLabel = component === "amp" ? "custom" : "plug"; springLabel = "unspecified"; fit = null;
+        provenance = { geometry: "assumed", spring: "assumed" }; pinLabel = "plug"; springLabel = "unspecified"; fit = null;
       }
       recalculate(); render();
     });
@@ -464,12 +473,15 @@
     const a = document.createElement("a"); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function bindResults() {
+    $("playbackMode").addEventListener("change", e => { stop(); playbackUniform = e.target.value === "uniform"; setFrame(fraction); });
+    $("playbackSpeed").addEventListener("change", e => { stop(); playbackSpeed = Number(e.target.value); });
     $("playButton").addEventListener("click", () => {
       if (playing) { stop(); return; }
       if (fraction > .999) fraction = 0;
       playing = true; $("playButton").textContent = t("Pause", "Pauza");
-      const start = performance.now() - fraction * 7000;
-      function tick(now) { if (!playing) return; setFrame(Math.min(1, (now - start) / 7000)); if (fraction >= 1) stop(); else animation = requestAnimationFrame(tick); }
+      const timeline = B.timeline(shot, playbackUniform), screenMs = 8000 / playbackSpeed;
+      const start = performance.now() - timeline.progressAt(fraction * shot.duration) * screenMs;
+      function tick(now) { if (!playing) return; const progress = Math.min(1, (now - start) / screenMs); setFrame(timeline.timeAt(progress) / shot.duration); if (progress >= 1) stop(); else animation = requestAnimationFrame(tick); }
       animation = requestAnimationFrame(tick);
     });
     $("resetButton").addEventListener("click", () => { stop(); setFrame(0); });
@@ -513,25 +525,19 @@
   }
   function stop() { playing = false; cancelAnimationFrame(animation); if ($("playButton")) $("playButton").textContent = t("Fire / play", "Opali / pokreni"); }
   function atTime(time) {
-    const f = shot.frames;
-    let lo = 0, hi = f.length - 1;
-    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (f[mid].t <= time) lo = mid; else hi = mid; }
-    const a = f[lo], b = f[hi], mix = b.t > a.t ? Math.max(0, Math.min(1, (time - a.t) / (b.t - a.t))) : 0;
-    const out = { ...a, t: time };
-    for (const key of Object.keys(a)) if (typeof a[key] === "number" && key !== "t") out[key] = a[key] + (b[key] - a[key]) * mix;
-    out.bbExited = shot.exitTime !== null && time >= shot.exitTime;
-    out.pistonHit = shot.pistonHitTime !== null && time >= shot.pistonHitTime;
-    return out;
+    return B.frameAt(shot, time);
   }
   function setFrame(next) {
     if (!shot?.valid || !$("mechanism")) return;
     fraction = Math.max(0, Math.min(1, next));
     const f = atTime(shot.duration * fraction);
     $("scrubber").value = fraction * 1000; $("clock").textContent = stamp(f.t);
+    const timeline = B.timeline(shot, playbackUniform);
+    $("playbackPhase").textContent = playbackUniform || timeline.split === 1 ? t("Uniform slow motion · clock shows actual model time", "Jednoliko usporeno · sat prikazuje stvarno vrijeme modela") : f.t <= timeline.focusEnd ? t("Firing focus · slower playback", "Fokus opaljenja · sporiji prikaz") : t("Post-exit settling · faster playback, no states removed", "Smirivanje nakon izlaska · brži prikaz, bez uklanjanja stanja");
     const parts = [];
     if (f.t === 0) parts.push(t("Spring held; gas at atmospheric pressure.", "Opruga zapeta; plin na atmosferskom tlaku."));
     else {
-      if (f.pistonV < -.005) parts.push(t("Piston rebounding.", "Piston se vraća."));
+      if (f.pistonV < -.005) parts.push(f.pistonHit ? t("Modeled reverse motion after head contact.", "Modelirano povratno gibanje nakon kontakta s glavom.") : t("Modeled pressure-driven reversal before head contact; not verified rifle behavior.", "Modelirani povrat zbog tlaka prije kontakta s glavom; nije potvrđeno gibanje replike."));
       else if (f.pistonV > .02) parts.push(f.pistonA < 0 ? t("Piston decelerating.", "Piston usporava.") : t("Spring releasing; piston accelerating.", "Opruga se otpušta; piston ubrzava."));
       else parts.push(t("Piston at rest or turning.", "Piston miruje ili mijenja smjer."));
       if (f.insertion > 0) parts.push(t("Pin overlaps the passage; pressure difference and clearance set airflow.", "Pin ulazi u kanal; razlika tlaka i zazor određuju protok."));
@@ -544,6 +550,7 @@
     $("liveStrip").innerHTML = [
       [t("Cylinder / BB pressure", "Tlak cilindra / iza BB-a"), `${fmt((f.cylinderPressure - shot.ambientPressure) / 1e5, 2)} / ${fmt((f.pressure - shot.ambientPressure) / 1e5, 2, "bar(g)")}`],
       [t("Piston velocity", "Brzina pistona"), fmt(f.pistonV, 2, "m/s")],
+      [t("Piston travel / full stroke", "Pomak pistona / puni hod"), `${fmt(f.pistonX * 1000, 2)} / ${fmt(p.strokeLength, 1, "mm")}`],
       [t("Piston momentum", "Količina gibanja pistona"), fmt(f.pistonV * p.pistonMass / 1000, 3, "kg·m/s")],
       [t("BB velocity", "Brzina BB-a"), fmt(f.bbV, 2, "m/s")],
       [t("BB acceleration", "Ubrzanje BB-a"), fmt(f.bbA, 0, "m/s²")],
@@ -561,30 +568,33 @@
   function drawMechanism(f) {
     const { ctx, w, h } = canvasContext("mechanism"), sy = h / 300;
     ctx.save(); ctx.scale(w / 1100, sy);
-    const wall = 40, head = 460, face0 = 110, face = face0 + f.pistonX / shot.stroke * (head - face0), barrelStart = 520, end = 1020;
-    const bb = f.bbExited ? end + Math.min(65, (f.t - shot.exitTime) * 70000) : barrelStart + f.bbX / shot.barrelLength * (end - barrelStart);
+    const layout = B.mechanism(p, f.pistonX), { wall, head, face, step, passageEnd, barrelStart, end } = layout;
+    const bb = f.bbExited ? end + (f.t - shot.exitTime) * shot.exitVelocity * (end - barrelStart) / shot.barrelLength : barrelStart + f.bbX / shot.barrelLength * (end - barrelStart);
+    const radialScale = 26 / Math.max(p.headBore, p.nozzleBore, p.airbrakeDiameter), headHeight = p.headBore * radialScale, nozzleHeight = p.nozzleBore * radialScale;
     const pressureAlpha = v => Math.max(.06, Math.min(.85, .12 + (v - shot.ambientPressure) / Math.max(1, shot.peakCylinderPressure - shot.ambientPressure) * .7));
     ctx.lineWidth = 2; ctx.strokeStyle = "#687881"; ctx.fillStyle = "#10171c";
     ctx.fillRect(wall, 90, head - wall, 110); ctx.strokeRect(wall, 90, head - wall, 110);
     ctx.fillStyle = `rgba(255,191,105,${pressureAlpha(f.cylinderPressure)})`; ctx.fillRect(face, 94, Math.max(0, head - face), 102);
-    ctx.fillStyle = "#303c43"; ctx.fillRect(head, 112, 60, 65);
-    ctx.fillStyle = "#090d10"; ctx.fillRect(head, 134, 60, 22); ctx.strokeRect(head, 134, 60, 22);
+    ctx.fillStyle = "#303c43"; ctx.fillRect(head, 112, passageEnd - head, 65);
+    ctx.fillStyle = "#090d10"; ctx.fillRect(head, 145 - headHeight / 2, step - head, headHeight); ctx.strokeRect(head, 145 - headHeight / 2, step - head, headHeight);
+    ctx.fillRect(step, 145 - nozzleHeight / 2, passageEnd - step, nozzleHeight); ctx.strokeRect(step, 145 - nozzleHeight / 2, passageEnd - step, nozzleHeight);
+    ctx.setLineDash([3, 3]); ctx.strokeRect(passageEnd, 132, barrelStart - passageEnd, 26); ctx.setLineDash([]);
     ctx.strokeRect(barrelStart, 132, end - barrelStart, 26);
     ctx.fillStyle = `rgba(93,228,231,${pressureAlpha(f.pressure)})`; ctx.fillRect(barrelStart, 134, Math.max(0, Math.min(bb, end) - barrelStart), 22);
     ctx.strokeStyle = "#ffbf69"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(wall + 5, 145);
     for (let i = 0; i <= 22; i++) ctx.lineTo(wall + 10 + (face - wall - 47) * i / 22, i === 0 || i === 22 ? 145 : i % 2 ? 122 : 168);
     ctx.stroke(); ctx.fillStyle = "#87969e"; ctx.fillRect(face - 30, 95, 30, 100);
     if (p.airbrakeLength > 0) {
-      const length = p.airbrakeLength / p.strokeLength * (head - face0), thick = Math.min(18, p.airbrakeDiameter / p.headBore * 22), tip = Math.min(length, length * p.airbrakeTaper / p.airbrakeLength);
+      const length = layout.pinLength, thick = p.airbrakeDiameter * radialScale, tip = Math.min(length, p.airbrakeTaper * layout.scale);
       ctx.fillStyle = "#e4edef"; ctx.beginPath(); ctx.moveTo(face, 145 - thick / 2); ctx.lineTo(face + length - tip, 145 - thick / 2); ctx.lineTo(face + length, 145 - thick * p.airbrakeTipDiameter / p.airbrakeDiameter / 2); ctx.lineTo(face + length, 145 + thick * p.airbrakeTipDiameter / p.airbrakeDiameter / 2); ctx.lineTo(face + length - tip, 145 + thick / 2); ctx.lineTo(face, 145 + thick / 2); ctx.closePath(); ctx.fill();
     }
     const arrow = (x, y, delta, color) => { if (Math.abs(delta) < 1) return; ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + delta, y); ctx.lineTo(x + delta - Math.sign(delta) * 9, y - 5); ctx.moveTo(x + delta, y); ctx.lineTo(x + delta - Math.sign(delta) * 9, y + 5); ctx.stroke(); };
     arrow(face - 20, 70, Math.sign(f.pistonV) * Math.min(65, Math.abs(f.pistonV) * 12), "#ffbf69");
-    arrow(Math.min(bb, 1020), 110, Math.sign(f.bbV) * Math.min(55, Math.abs(f.bbV)), "#5de4e7");
-    arrow(475, 216, Math.sign(f.flow) * Math.min(65, Math.abs(f.flow) * 25000), "#5de4e7");
+    if (bb < 1090) arrow(bb, 110, Math.sign(f.bbV) * Math.min(55, Math.abs(f.bbV)), "#5de4e7");
+    arrow(head + (passageEnd - head) / 2, 216, Math.sign(f.flow) * Math.min(65, Math.abs(f.flow) * 25000), "#5de4e7");
     if (f.insertion > 0 && f.cylinderPressure > f.pressure) { ctx.fillStyle = `rgba(255,191,105,${Math.min(.5, (f.cylinderPressure - f.pressure) / 1e6)})`; ctx.beginPath(); ctx.ellipse(head - 15, 145, 22, 46, 0, 0, Math.PI * 2); ctx.fill(); }
     if (f.bbExited && f.outflow > 0) { ctx.fillStyle = `rgba(93,228,231,${Math.min(.55, f.outflow / Math.max(shot.peakOutflow, 1e-10) * .55)})`; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(end + 15 + i * 14, 145 + (i - 1) * 10, 15, 9 + i * 4, 0, 0, Math.PI * 2); ctx.fill(); } }
-    ctx.fillStyle = "#f5faf9"; ctx.beginPath(); ctx.arc(bb, 145, 8, 0, Math.PI * 2); ctx.fill();
+    if (bb < 1090) { ctx.fillStyle = "#f5faf9"; ctx.beginPath(); ctx.arc(bb, 145, 8, 0, Math.PI * 2); ctx.fill(); }
     ctx.font = `${Math.max(14, 12 * 1100 / w)}px system-ui`; ctx.fillStyle = "#bcc9ce";
     if (w >= 650) {
       ctx.fillText(t("SPRING / PISTON", "OPRUGA / PISTON"), 40, 35); ctx.fillText(t("HEAD / NOZZLE", "GLAVA / MLAZNICA"), 430, 35); ctx.fillText(t("INNER BARREL", "UNUTARNJA CIJEV"), 720, 35);

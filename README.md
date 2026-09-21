@@ -19,7 +19,7 @@ The lab now solves connected cylinder and behind-BB gas volumes with mass/energy
 - Optional spring free/installed lengths and a cut-spring estimate; derived preload, active-coil rate adjustment and known-solid-height checks.
 - Seal and nozzle leakage, BB clearance leakage, hop release/moving resistance, seal friction, approximate bumper restitution, optional spring effective mass, heat exchange, air temperature and pressure.
 
-AMP / Tridos Ultimate is the user's identified assembly; Scorpion remains a separate identity option. AMP pin selections do not invent dimensions. The Tridos listing says nominal 71 g, while AMP lists 69 g without a brake / 72 g with its longest pin. Weigh the actual assembly. Current 4 mm head / 3.8 mm pin example dimensions are **not verified AMP specifications**.
+AMP / Tridos Ultimate is the user's identified assembly; Scorpion remains a separate identity option. AMP pin selections do not invent dimensions. The Tridos listing says nominal 71 g, while AMP lists 69 g without a brake / 72 g with its longest pin. Weigh the actual assembly. The **default is a clearly labeled no-airbrake reference** (zero pin projection), not a verified model of the installed rifle. Enter measured pin geometry to enable an airbrake. The 4 mm passage and inactive 3.8 mm pin-diameter starting values are **not verified AMP specifications**.
 
 Platform starting points include SSG10, a forward-cocked-position −20 mm short-stroke comparison, TAC-41P/Lite Sport, SRS A2 16/22-inch, VSR-10 Pro/G-Spec and APS2/L96. Internal dimensions remain editable assumptions unless measured. Short stroking with a front stop or changed spring/piston geometry requires entering the corresponding actual measurements.
 
@@ -35,7 +35,11 @@ A pre-cut measured curve cannot be reused for a hypothetical cut. For an already
 
 ### Animation and outputs
 
-The animation uses solver states, independent cylinder/BB pressure colors and signed arrows. Three graphs show both pressures, piston velocity and BB velocity, including negative values.
+The animation and three graphs appear before the numerical readout cards. They use solver states, independent cylinder/BB pressure colors and signed arrows. Cylinder stroke, pin and both head passages share one axial drawing scale, so visible pin entry matches the calculated event; the barrel has its own scale. Exact pre/post-contact samples prevent interpolation from showing a reverse velocity before impact.
+
+**Firing focus + faster settling** reserves most playback time for the shot and initial discharge, then shows the entire later interval faster. Uniform full-run slow motion and playback-speed controls are also available. Nothing is cut from the trajectory: the clock, scrubber, graphs, event buttons and exported data keep physical model time.
+
+Pressure-driven reversal **before** head contact is distinguished from reverse motion **after** contact. Maximum modeled backward travel is reported in millimeters. A pre-contact retreat above 1 mm gets an explicit input/model-validation warning; that display threshold is a convention, not a physical limit. The previous tight 20 mm pin example produces about 12.2 mm of pre-contact retreat under its assumptions and is retained as a test fixture, not a normal SSG10 default. No velocity clipping or hidden damping suppresses such predictions.
 
 Clickable events show entry, initial deceleration, a user-defined substantial-deceleration threshold after entry, the selected share of maximum pre-exit BB energy (95% by default), BB exit, rebound and contact. A deceleration after entry is not automatically caused entirely by the airbrake. The no-pin comparison keeps piston mass fixed but changes occupied gas volume.
 
@@ -73,6 +77,7 @@ Searches are deterministic and capped at 60/120/240 combinations, can be cancell
 - `src/physics.js`: pure solver, also loadable by Node;
 - `src/calibration.js`: record validation, migration and one-parameter fitting;
 - `src/optimizer.js`: hardware-only search, locks, eligibility and tradeoff ranking;
+- `src/playback.js`: physical-time sampling, phase-paced playback and consistent drawing geometry;
 - `src/app.js`: bilingual controls, canvas animation, graphs and data UI.
 
 Run:

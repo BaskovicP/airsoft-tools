@@ -1,13 +1,14 @@
 /* Pure, dependency-free conservative lumped model. See docs/MODEL.md. */
 (function (root) {
   "use strict";
-  const VERSION = "3.1.0";
+  const VERSION = "3.1.1";
   const R = 287.05, GAMMA = 1.4, CV = R / (GAMMA - 1), CP = CV + R;
   const area = d => Math.PI * (d / 2000) ** 2;
   const DEFAULTS = Object.freeze({
     cylinderBore: 23.157256696, strokeLength: 85, barrelLength: 430, barrelDiameter: 6.01,
     pistonMass: 71, bbMass: .46, bbDiameter: 5.95,
-    airbrakeLength: 20, airbrakeDiameter: 3.8, airbrakeTipDiameter: 2, airbrakeTaper: 2,
+    // Start with an explicitly labelled no-pin reference, not an invented AMP brake fit.
+    airbrakeLength: 0, airbrakeDiameter: 3.8, airbrakeTipDiameter: 2, airbrakeTaper: 0,
     headBore: 4, headLength: 12, nozzleBore: 4, nozzleLength: 15,
     deadVolume: .55, breechVolume: .45, dischargeCoefficient: .75,
     pistonLeak: .005, nozzleLeak: .005, bbLeakCoefficient: .15,
@@ -178,6 +179,7 @@
     let t = 0, exited = false, hit = false, contactLoss = 0, muzzleMass = 0, peakOutflow = 0, peakPressure = pa;
     let exitTime = null, exitVelocity = null, exitPressure = null, exitGasMass = null, pistonHitTime = null, impactVelocity = null;
     let engageTime = null, decelTime = null, strongBrakeTime = null, momentumAtEngage = null, brakeEnergy = null, reboundTime = null;
+    let preContactReversalTime = null, contactReboundTime = null, peakPistonX = 0, maxPistonRetreat = 0, maxPreContactRetreat = 0;
     let maxBbEnergy = 0, maxBbTime = 0, peakPistonV = 0, peakCylinderPressure = pa, rejectedSteps = 0, steps = 0, nextStore = 0;
     const frames = [], history = [], maxTime = (options.maxTime ?? p.maxTime) / 1000;
     const maxDt = options.dt ?? 1e-5, tolerance = options.tolerance ?? 2e-5;
@@ -247,9 +249,13 @@
       }
       if (s[0] >= g0.stroke - 1e-11 && s[1] > 0) {
         s[0] = g0.stroke;
+        // Preserve the contact discontinuity for playback; never interpolate a
+        // negative post-impact velocity backwards into the pre-impact trajectory.
+        frames.push(frame(evaluate(s)));
         if (pistonHitTime === null) { pistonHitTime = t; impactVelocity = s[1]; }
         hit = true; contactLoss += .5 * mp * s[1] ** 2 * (1 - p.restitution ** 2); s[1] *= -p.restitution;
         if (Math.abs(s[1]) < .005) { contactLoss += .5 * mp * s[1] ** 2; s[1] = 0; }
+        frames.push(frame(evaluate(s)));
       }
       e = evaluate(s);
       if (!exited && s[2] >= L - 1e-11 && s[3] > 0) {
@@ -260,6 +266,11 @@
       if (decelTime === null && s[1] > .05 && e.ap < 0) decelTime = t;
       if (strongBrakeTime === null && e.g.insertion > 0 && s[1] > .05 && e.ap < -p.decelThreshold) { strongBrakeTime = t; brakeEnergy = .5 * mbb * s[3] ** 2; }
       if (reboundTime === null && s[1] < -.005) reboundTime = t;
+      if (!hit && preContactReversalTime === null && s[1] < -.005) preContactReversalTime = t;
+      if (hit && contactReboundTime === null && s[1] < -.005) contactReboundTime = t;
+      peakPistonX = Math.max(peakPistonX, s[0]);
+      maxPistonRetreat = Math.max(maxPistonRetreat, peakPistonX - s[0]);
+      if (!hit) maxPreContactRetreat = Math.max(maxPreContactRetreat, peakPistonX - s[0]);
       const ke = .5 * mbb * s[3] ** 2;
       if (!exited || exitTime === t) { history.push([t, ke]); if (ke > maxBbEnergy) { maxBbEnergy = ke; maxBbTime = t; } }
       peakPressure = Math.max(peakPressure, e.pb); peakCylinderPressure = Math.max(peakCylinderPressure, e.pc); peakPistonV = Math.max(peakPistonV, s[1]);
@@ -281,6 +292,7 @@
     return { version: VERSION, params: p, valid: !numericalFailure, errors: numericalFailure ? ["solver:convergence"] : [], frames,
       duration: t, stroke: g0.stroke, barrelLength: L, barrelVolume: g0.barrelVolume, cylinderVolume: g0.sweptVolume, ratio: g0.sweptVolume / g0.barrelVolume,
       ambientPressure: pa, engageTime, decelTime, strongBrakeTime, reboundTime, usefulTime, exitTime, pistonHitTime,
+      preContactReversalTime, contactReboundTime, maxPistonRetreat, maxPreContactRetreat,
       exitVelocity, exitEnergy, exitPressure, exitGasMass, pistonImpactVelocity: impactVelocity,
       impactEnergy: impactVelocity === null ? null : .5 * p.pistonMass / 1000 * impactVelocity ** 2,
       momentumAtEngage, preBrakeShare: brakeEnergy === null || !exitEnergy ? null : brakeEnergy / exitEnergy,

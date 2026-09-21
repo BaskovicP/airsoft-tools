@@ -74,6 +74,16 @@ Piston friction is signed Coulomb resistance plus optional pressure-dependent se
 
 Front contact uses a dissipative restitution coefficient. Repeated contacts remain possible; the displayed impact is the **first** one. This is not a resolved rubber spring/damper or prediction of peak contact force/duration. Changing a real bumper's thickness changes the contact plane and thus the entered stroke, remaining gas volume and spring compression. Restitution alone cannot describe these geometric changes.
 
+### Default reference and reverse motion (v3.1.1)
+
+The app now starts with zero airbrake projection, explicitly labeled a **no-pin reference**, not a measured AMP/SSG10 configuration. Other example dimensions, masses and spring/loss data are still conditional assumptions. The old 20 mm projection, 3.8 mm shaft, 4 mm passage, 2 mm taper combination remains an explicit regression fixture. It predicts about 12.2 mm of pre-contact retreat, independent of contact restitution. Timestep refinement preserves the reversal; its force balance and assumed restriction cause it, rather than an impact or broad numerical instability. Removing that unverified restriction from the default does not establish accuracy for an actual airbrake.
+
+The solver retains signed motion with no new damping, reverse-velocity clamp or artificial front-contact constraint. Separate timestamps identify the first velocity below −0.005 m/s before contact and after contact; the legacy `reboundTime` remains available. Running maximum position minus current position gives maximum rearward excursion, with a separate pre-contact maximum. These diagnostics are collected every accepted step, independent of display sampling. The UI warns when pre-contact excursion exceeds 1 mm; this is a visibility convention, not an invalidity criterion or a real-rifle limit.
+
+Exact pre/post-impact samples at the contact timestamp preserve the velocity discontinuity. Playback interpolates to the pre-impact sample before that time and selects the post-impact sample at it. This changes presentation, not dynamics. Cylinder, head and pin use a common axial drawing scale, including the full passage length; the barrel uses a separate scale so the model's long barrel remains readable.
+
+The default phase-paced playback allocates 80% of screen time to the interval through BB exit + 1.5 ms if that interval is less than 80% of the full run. The remainder shows **all** subsequent settling states faster, with a visible phase label. No-exit or short-tail runs and the uniform mode use one linear mapping. Clock, scrubber and graph axes remain physical milliseconds, and export/optimization still use the complete solution. Every timeline mapping is continuous, monotone, invertible and ends at the actual run duration.
+
 The short-stroke control changes the cocked position, keeping bore, front stop, pin projection and spring compression at the front stop fixed. Thus it reduces swept volume and released spring energy, not spring stiffness. Other constructions must be represented by separately measured input changes.
 
 ## Events and indicators

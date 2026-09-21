@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const P = require('../src/physics.js');
 const C = require('../src/calibration.js');
+const RESTRICTIVE_PIN = { airbrakeLength: 20, airbrakeTaper: 2 };
 const close = (a, b, tolerance = 1e-8) => assert.ok(Math.abs(a - b) <= tolerance, `${a} differs from ${b} by ${Math.abs(a-b)}`);
 
 test('fixed bore, stroke and cylinder/barrel geometry', () => {
@@ -15,11 +16,11 @@ test('fixed bore, stroke and cylinder/barrel geometry', () => {
 test('pin clearance fixtures and profile volume', () => {
   close(P.geometry({ airbrakeDiameter: 3.8 }, 0, 0).annulus * 1e6, 1.2252211349, 1e-9);
   close(P.geometry({ airbrakeDiameter: 3.9 }, 0, 0).annulus * 1e6, .6204645491, 1e-9);
-  const p = P.normalize({ airbrakeTaper: 0 });
+  const p = P.normalize({ ...RESTRICTIVE_PIN, airbrakeTaper: 0 });
   close(P.pinVolume(p, .02), Math.PI * (.0038 / 2) ** 2 * .02, 1e-15);
 });
 test('pin volume transfer and pressure-force derivatives conserve work', () => {
-  const p = P.normalize();
+  const p = P.normalize(RESTRICTIVE_PIN);
   for (const x of [.02, .0655, .07, .08]) {
     const h = 1e-8, a = P.geometry(p, x-h, .1), b = P.geometry(p, x+h, .1), g = P.geometry(p, x, .1);
     close(((b.vc+b.vb)-(a.vc+a.vb))/(2*h), -g.ac, 1e-10);
@@ -34,7 +35,7 @@ test('orifice flow: equilibrium, reversal and choking', () => {
   close(P.massFlow(4e5, 293, 1e5, 293, 1e-6), P.massFlow(4e5, 293, .5e5, 293, 1e-6));
 });
 test('narrow laminar clearance matches thin-gap limit, not arbitrary iteration floor', () => {
-  const p = P.normalize({ airbrakeDiameter: 3.99, airbrakeTipDiameter: 3.99, airbrakeTaper: 0 });
+  const p = P.normalize({ ...RESTRICTIVE_PIN, airbrakeDiameter: 3.99, airbrakeTipDiameter: 3.99, airbrakeTaper: 0 });
   const actual = P.passage(p, .02, 101335, 293.15, 101325, 293.15).mdot;
   assert.ok(actual > 4.33e-12 && actual < 4.35e-12, String(actual));
   const lessOverlap = P.passage(p, .01, 101335, 293.15, 101325, 293.15).mdot;
@@ -48,8 +49,8 @@ test('spring force is invariant at fixed compression, linear and measured curves
   assert.ok(P.validate({ springCurve: [[50,25],[100,50]] }).includes('spring:coverage'));
 });
 for (const [name, params] of Object.entries({
-  bbTooWide: { bbDiameter: 6.02 }, pinTooWide: { airbrakeDiameter: 4.1 }, negativeMass: { pistonMass: -1 }, nonfinite: { headBore: NaN },
-  longPin: { airbrakeLength: 90 }, impossibleTemperature: { airTemperature: -274 }, displacedBreech: { breechVolume: .05 },
+  bbTooWide: { bbDiameter: 6.02 }, pinTooWide: { ...RESTRICTIVE_PIN, airbrakeDiameter: 4.1 }, negativeMass: { pistonMass: -1 }, nonfinite: { headBore: NaN },
+  longPin: { airbrakeLength: 90 }, impossibleTemperature: { airTemperature: -274 }, displacedBreech: { ...RESTRICTIVE_PIN, breechVolume: .05 },
   reversedCurve: { springCurve: [[100,40],[50,20]] }, impossiblePinTip: { airbrakeTipDiameter: 4.2 }
 })) test(`invalid geometry/input: ${name}`, () => { const s = P.simulate(params); assert.equal(s.valid, false); assert.equal(s.exitTime, null); assert.equal(s.pistonHitTime, null); });
 test('no drive gives equilibrium, not fictional exit or contact', () => {
@@ -57,13 +58,15 @@ test('no drive gives equilibrium, not fictional exit or contact', () => {
   assert.equal(s.valid, true); assert.equal(s.exitTime, null); assert.equal(s.exitVelocity, null); assert.equal(s.exitEnergy, null); assert.equal(s.impactEnergy, null);
   assert.equal(s.frames.at(-1).pistonV, 0); assert.equal(s.frames.at(-1).bbV, 0); close(s.energyResidual, 0);
 });
-test('default energy and mass accounting, signed rebound and honest missing contact', () => {
-  const s = P.simulate();
+test('restrictive-pin fixture retains signed pressure reversal and honest missing contact', () => {
+  const s = P.simulate(RESTRICTIVE_PIN);
   assert.equal(s.valid, true); assert.ok(s.exitVelocity > 0); assert.ok(s.frames.some(f => f.pistonV < 0));
   assert.ok(Math.abs(s.energyResidual) / s.energyScale < 1e-4); assert.ok(Math.abs(s.massResidual) < 1e-14);
   assert.equal(s.pistonHitTime, null); assert.equal(s.impactEnergy, null); assert.ok(s.strongBrakeTime >= s.engageTime);
   assert.ok(s.usefulTime < s.exitTime); assert.ok(s.peakCylinderPressure > s.peakPressure);
   assert.ok(s.muzzleMass > 0); assert.ok(s.exitGasMass > 0);
+  assert.ok(s.preContactReversalTime < s.exitTime); assert.equal(s.contactReboundTime, null);
+  assert.ok(s.maxPreContactRetreat > .012 && s.maxPreContactRetreat < .0125);
 });
 test('absent pin does not invent airbrake events; contact is still possible', () => {
   const s = P.simulate({ airbrakeLength: 0, airbrakeTaper: 0 });
@@ -111,9 +114,9 @@ test('contact before BB exit survives refinement and conserves energy within bud
   assert.ok(Math.abs(a.energyResidual)/a.energyScale < .001);
 });
 test('geometry, losses, spring, temperature and piston/BB mass dynamically affect predictions', () => {
-  const base = P.simulate().exitVelocity;
+  const base = P.simulate(RESTRICTIVE_PIN).exitVelocity;
   for (const changes of [{ headBore: 4.5 }, { airbrakeDiameter: 3.6 }, { springStiffness: 650 }, { pistonMass: 58 }, { bbMass: .32 }, { pistonLeak: .2 }, { airTemperature: 40 }, { barrelLength: 303 }, { strokeLength: 65 }]) {
-    const s = P.simulate(changes); assert.equal(s.valid, true, JSON.stringify(changes));
+    const s = P.simulate({ ...RESTRICTIVE_PIN, ...changes }); assert.equal(s.valid, true, JSON.stringify(changes));
     assert.ok(s.exitVelocity === null || Math.abs(s.exitVelocity-base) > .001, JSON.stringify(changes));
   }
 });
@@ -150,6 +153,7 @@ test('browser bundle is classic standalone JS and exports identical solver', () 
   const ctx = vm.createContext({ setTimeout }); vm.runInContext(pure, ctx);
   assert.equal(ctx.PneumaticPhysics.VERSION, P.VERSION);
   assert.equal(ctx.PneumaticOptimizer.VERSION, '1.0.0');
+  assert.equal(typeof ctx.PneumaticPlayback.frameAt, 'function');
   close(ctx.PneumaticPhysics.simulate({ maxTime: 10 }).frames.at(-1).pistonX, P.simulate({ maxTime: 10 }).frames.at(-1).pistonX);
   assert.equal(fs.readFileSync('dist/app.js','utf8').trim(), script.trim());
 });
