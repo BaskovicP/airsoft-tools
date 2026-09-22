@@ -32,11 +32,11 @@ test("rich cutaway uses finite canvas geometry at every sampled default and airb
 });
 
 test("installed bumper is visible and gets a contact-state deformation cue", () => {
-  const p = P.normalize({ bumperThickness: 4, restitution: 0 }), shot = P.simulate(p), layout = B.mechanism(p, 0);
+  const p = P.normalize({ bumperThickness: 4, bumperBore: 8, headBore: 4, restitution: 0 }), shot = P.simulate(p), layout = B.mechanism(p, 0);
   assert.ok(shot.valid && shot.pistonHitTime !== null && layout.bumperWidth > 0);
   const before = context(); A.draw(before, 950, 330, p, shot, shot.frames[0], en => en, format);
   const atContact = context(); A.draw(atContact, 950, 330, p, shot, B.frameAt(shot, shot.pistonHitTime), en => en, format);
-  const padRects = ctx => ctx.calls.filter(([method, x, , width]) => method === "fillRect" && Math.abs(x - layout.head) < 1e-9 && Math.abs(width - layout.bumperWidth) < 1e-9);
+  const padRects = ctx => ctx.calls.filter(([method, x, y, width]) => method === "fillRect" && Math.abs(x - layout.head) < 1e-9 && Math.abs(width - layout.bumperWidth) < 1e-9 && (y < 130 || y > 160));
   assert.equal(padRects(before).length, 2); assert.equal(padRects(atContact).length, 2);
   assert.ok(padRects(atContact)[0][2] < padRects(before)[0][2], "contact cue should bulge the pad radially");
 });

@@ -1,7 +1,7 @@
 /* Pure, dependency-free conservative lumped model. See docs/MODEL.md. */
 (function (root) {
   "use strict";
-  const VERSION = "3.2.0";
+  const VERSION = "3.3.0";
   const R = 287.05, GAMMA = 1.4, CV = R / (GAMMA - 1), CP = CV + R;
   const area = d => Math.PI * (d / 2000) ** 2;
   const DEFAULTS = Object.freeze({
@@ -10,9 +10,9 @@
     // Start with an explicitly labelled no-pin reference, not an invented AMP brake fit.
     airbrakeLength: 0, airbrakeDiameter: 3.8, airbrakeTipDiameter: 2, airbrakeTaper: 0,
     headBore: 4, headLength: 12, nozzleBore: 4, nozzleLength: 15,
-    // Added annular pad ahead of the rigid head. Zero preserves the bare-head
-    // geometry. The central opening is approximated by headBore.
-    bumperThickness: 0,
+    // Added annular pad ahead of the rigid head. Zero thickness preserves the
+    // bare-head geometry; its bore remains explicit for installed pads.
+    bumperThickness: 0, bumperBore: 4,
     deadVolume: .55, breechVolume: .45, dischargeCoefficient: .75,
     pistonLeak: .005, nozzleLeak: .005, bbLeakCoefficient: .15,
     springStiffness: 550, springPreload: 50, springMass: 0, springCurve: [],
@@ -47,13 +47,17 @@
   }
   function validate(raw) {
     const p = normalize(raw), errors = [];
-    const positive = ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "headBore", "headLength", "nozzleBore", "nozzleLength", "deadVolume", "breechVolume", "ambientPressure", "maxTime"];
+    const positive = ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "bumperBore", "headBore", "headLength", "nozzleBore", "nozzleLength", "deadVolume", "breechVolume", "ambientPressure", "maxTime"];
     for (const key of Object.keys(DEFAULTS)) if (key !== "springCurve" && !Number.isFinite(p[key])) errors.push(`${key}:finite`);
     for (const key of positive) if (!(p[key] > 0)) errors.push(`${key}:positive`);
     for (const key of ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "bumperThickness", "springStiffness", "springPreload", "springMass", "pistonLeak", "nozzleLeak", "pistonFriction", "sealFriction", "rearDamping", "bbBreakaway", "barrelDrag", "heatTransfer", "decelThreshold"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
     if (p.bbDiameter >= p.barrelDiameter) errors.push("bb:clearance");
-    if (p.cylinderBore <= p.headBore || p.cylinderBore <= p.airbrakeDiameter) errors.push("cylinder:clearance");
-    if (p.airbrakeLength > 0 && (p.airbrakeDiameter >= p.headBore || (p.airbrakeLength > p.bumperThickness + p.headLength && p.airbrakeDiameter >= p.nozzleBore))) errors.push("pin:clearance");
+    if ((p.bumperThickness > 0 && p.cylinderBore <= p.bumperBore) || p.cylinderBore <= p.headBore || p.cylinderBore <= p.airbrakeDiameter) errors.push("cylinder:clearance");
+    if (p.airbrakeLength > 0 && (
+      (p.bumperThickness > 0 && p.airbrakeDiameter >= p.bumperBore) ||
+      (p.airbrakeLength > p.bumperThickness && p.airbrakeDiameter >= p.headBore) ||
+      (p.airbrakeLength > p.bumperThickness + p.headLength && p.airbrakeDiameter >= p.nozzleBore)
+    )) errors.push("pin:clearance");
     if (!(p.bumperThickness < p.strokeLength)) errors.push("bumper:thickness");
     const travel = p.strokeLength - p.bumperThickness;
     if (p.airbrakeLength > travel || p.airbrakeLength > p.bumperThickness + p.headLength + p.nozzleLength) errors.push("pin:length");
@@ -97,7 +101,7 @@
   function geometry(raw, x, y) {
     const p = normalize(raw), ac = area(p.cylinderBore), ab = area(p.barrelDiameter), stroke = contactStroke(p);
     const bumper = p.bumperThickness / 1000;
-    const bumperSolidVolume = Math.max(0, ac - area(p.headBore)) * bumper;
+    const bumperSolidVolume = Math.max(0, ac - area(p.bumperBore)) * bumper;
     const insertion = Math.max(0, p.airbrakeLength / 1000 - (stroke - x));
     const displaced = pinVolume(p, insertion), ap = area(pinDiameter(p, insertion));
     return {
@@ -107,6 +111,8 @@
       dvc: -ac + ap, dvb: -ap,
       sweptVolume: ac * stroke, barrelVolume: ab * p.barrelLength / 1000,
       bumperSolidVolume,
+      bumperGap: (p.bumperBore - p.airbrakeDiameter) / 2,
+      bumperAnnulus: Math.PI / 4 * ((p.bumperBore / 1000) ** 2 - (p.airbrakeDiameter / 1000) ** 2),
       gap: (p.headBore - p.airbrakeDiameter) / 2,
       annulus: Math.PI / 4 * ((p.headBore / 1000) ** 2 - (p.airbrakeDiameter / 1000) ** 2)
     };
@@ -148,8 +154,9 @@
   // Not a resolved nozzle/pressure-wave model: see model limitations.
   function passage(p, insertion, pc, tc, pb, tb) {
     const parts = [];
-    const firstLength = (p.bumperThickness + p.headLength) / 1000;
-    for (const [start, length, bore] of [[0, firstLength, p.headBore], [firstLength, p.nozzleLength / 1000, p.nozzleBore]]) {
+    const bumperLength = p.bumperThickness / 1000, headLength = p.headLength / 1000;
+    for (const [start, length, bore] of [[0, bumperLength, p.bumperBore], [bumperLength, headLength, p.headBore], [bumperLength + headLength, p.nozzleLength / 1000, p.nozzleBore]]) {
+      if (length <= 0) continue;
       const overlap = Math.min(length, Math.max(0, insertion - start));
       if (overlap > 0) {
         const d = pinDiameter(p, insertion - start);

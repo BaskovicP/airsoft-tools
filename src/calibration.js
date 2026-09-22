@@ -3,7 +3,7 @@
   const P = typeof module !== "undefined" && module.exports ? require("./physics.js") : root.PneumaticPhysics;
   const SCHEMA = 3, KEY = "ssg10-pneumatic-lab-v3", OLD_KEY = "ssg10-pneumatic-lab-v2";
   const LENGTH_FIELDS = ["springLengthMode", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"];
-  const BUMPER_FIELDS = ["bumperThickness"];
+  const BUMPER_FIELDS = ["bumperThickness", "bumperBore"];
   const fps = v => v / .3048;
   const energy = (mass, speed) => .5 * mass / 1000 * (speed * .3048) ** 2;
   function reference() {
@@ -14,14 +14,20 @@
     const mass = Number(row.bbMass ?? row.mass ?? row.setup?.bbMass), speed = Number(row.fps ?? row.velocityFps);
     if (!(mass > 0 && mass <= 2 && speed > 0 && speed <= 2000)) return null;
     const sigma = Number(row.sigma ?? 1);
-    // v3.0 had no length mode: only add inactive defaults to a complete old snapshot.
-    // Preserve confirmation/role/version; the old solver version remains fit-ineligible.
+    // Only fill fields that did not exist in an otherwise complete historical
+    // snapshot. v3.2 used headBore as the implicit bumper opening, so preserve
+    // that geometry explicitly instead of inventing the new default.
     const previousComplete = row.setup && (
       row.solverVersion === "3.0.0" && [...LENGTH_FIELDS, ...BUMPER_FIELDS].every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => ![...LENGTH_FIELDS, ...BUMPER_FIELDS].includes(k)).every(k => Object.hasOwn(row.setup, k)) ||
-      row.solverVersion === "3.1.1" && BUMPER_FIELDS.every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => !BUMPER_FIELDS.includes(k)).every(k => Object.hasOwn(row.setup, k))
+      row.solverVersion === "3.1.1" && BUMPER_FIELDS.every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => !BUMPER_FIELDS.includes(k)).every(k => Object.hasOwn(row.setup, k)) ||
+      row.solverVersion === "3.2.0" && !Object.hasOwn(row.setup, "bumperBore") && Object.keys(P.DEFAULTS).filter(k => k !== "bumperBore").every(k => Object.hasOwn(row.setup, k))
     );
     const setupComplete = row.setup && (previousComplete || Object.keys(P.DEFAULTS).every(k => Object.hasOwn(row.setup, k)));
-    const setup = !legacy && setupComplete && P.validate(row.setup).length === 0 ? P.normalize(row.setup) : null;
+    const migratedSetup = previousComplete ? { ...row.setup,
+      ...(!Object.hasOwn(row.setup, "bumperThickness") ? { bumperThickness: 0 } : {}),
+      ...(!Object.hasOwn(row.setup, "bumperBore") ? { bumperBore: row.setup.headBore } : {})
+    } : row.setup;
+    const setup = !legacy && setupComplete && P.validate(migratedSetup).length === 0 ? P.normalize(migratedSetup) : null;
     const provenance = Object.fromEntries(Object.entries(row.provenance || {}).filter(([k, v]) => ["geometry", "spring"].includes(k) && ["assumed", "measured"].includes(v)));
     const confirmed = row.confirmed === true && Boolean(setup);
     const role = confirmed && ["train", "validation"].includes(row.role) ? row.role : "reference";

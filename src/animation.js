@@ -8,7 +8,7 @@
     const { wall, head, rigidHead, bumperWidth, face, step, passageEnd, barrelStart, end, pinLength, scale } = B.mechanism(p, f.pistonX);
     const axis = 156, top = 100, bottom = 212;
     const bb = f.bbExited ? end + (f.t - shot.exitTime) * shot.exitVelocity * (end - barrelStart) / shot.barrelLength : barrelStart + f.bbX / shot.barrelLength * (end - barrelStart);
-    const radial = 26 / Math.max(p.headBore, p.nozzleBore, p.airbrakeDiameter);
+    const radial = 26 / Math.max(p.bumperBore, p.headBore, p.nozzleBore, p.airbrakeDiameter);
     const peak = Math.max(1, shot.peakCylinderPressure - shot.ambientPressure, shot.peakPressure - shot.ambientPressure);
     const cylinderGlow = clamp((f.cylinderPressure - shot.ambientPressure) / peak);
     const barrelGlow = clamp((f.pressure - shot.ambientPressure) / peak);
@@ -79,12 +79,11 @@
     rect(face - 32, top + 7, 32, 98, pistonMetal, "#bbd0d8");
     rect(face - 7, top + 6, 5, 100, "#182e31", "#78c6bd");
     for (let i = 0; i < 3; i++) line(face - 26 + i * 5, top + 16, face - 26 + i * 5, bottom - 16, "#142a394d");
-    // Stepped rigid head and nozzle. An installed bumper occupies the annular
-    // space ahead of the head; its opening is approximated by headBore.
+    // The bumper, rigid head and nozzle are three distinct axial passages.
     rect(rigidHead, axis - 35, passageEnd - rigidHead, 70, gradient(0, axis - 35, 0, axis + 35, [[0, "#abbbc3"], [.1, "#526675"], [.55, "#273d49"], [1, "#758d9a"]]), "#8199a5");
     for (let x = rigidHead + 5; x < passageEnd; x += 7) line(x, axis - 34, x, axis - 26, "#a9bbc544");
     if (bumperWidth > 0) {
-      const hole = p.headBore * radial, touching = f.pistonHit && Math.abs(face - head) < Math.max(.8, scale * .03);
+      const hole = p.bumperBore * radial, touching = f.pistonHit && Math.abs(face - head) < Math.max(.8, scale * .03);
       const bulge = touching ? Math.min(5, 1 + bumperWidth * .2) : 0;
       const rubber = gradient(head, 0, rigidHead, 0, [[0, touching ? "#7ff4ce" : "#42bca0"], [.48, "#173f3b"], [1, "#0d2828"]]);
       rect(head, top + 5 - bulge, bumperWidth, axis - hole / 2 - (top + 5) + bulge, rubber, "#72d7c3");
@@ -94,7 +93,7 @@
         line(head + Math.min(bumperWidth * .35, 3), axis + hole / 2 + 3, head + Math.min(bumperWidth * .35, 3), bottom - 9, "#c7fff0", 2);
       }
     }
-    for (const [x, width, height] of [[head, step - head, p.headBore * radial], [step, passageEnd - step, p.nozzleBore * radial]]) {
+    for (const [x, width, height] of [[head, rigidHead - head, p.bumperBore * radial], [rigidHead, step - rigidHead, p.headBore * radial], [step, passageEnd - step, p.nozzleBore * radial]]) {
       rect(x, axis - height / 2, width, height, "#081119", "#738b97");
       gas(x, axis - height / 2, width, height, barrelGlow, cyan, 8, f.flow);
     }

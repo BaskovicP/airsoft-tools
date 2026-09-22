@@ -119,7 +119,7 @@ test('hypothetical cut estimates never masquerade as measured calibration inputs
 });
 test('older complete snapshots migrate inactive defaults without losing metadata or reusing fits', () => {
   const old={...P.DEFAULTS};
-  for(const key of ['springLengthMode','springFreeLength','springInstalledLength','springCutLength','springActiveCoils','springRemovedCoils','springSolidLength','bumperThickness']) delete old[key];
+  for(const key of ['springLengthMode','springFreeLength','springInstalledLength','springCutLength','springActiveCoils','springRemovedCoils','springSolidLength','bumperThickness','bumperBore']) delete old[key];
   const row={...C.reference(),setup:old,confirmed:true,role:'train',solverVersion:'3.0.0'};
   const imported=C.decode({schemaVersion:3,measurements:[row]}).measurements[0];
   assert.deepEqual(imported.setup,P.normalize(old));assert.deepEqual(imported.legacySetup,old);assert.equal(imported.fps,330);assert.equal(imported.role,'train');assert.equal(imported.confirmed,true);
@@ -127,11 +127,18 @@ test('older complete snapshots migrate inactive defaults without losing metadata
   assert.deepEqual(C.decode(C.encode([imported])).measurements[0].legacySetup,old);
 });
 test('v3.1 snapshots gain an explicit zero bumper without becoming current calibration data', () => {
-  const old={...P.DEFAULTS};delete old.bumperThickness;
+  const old={...P.DEFAULTS};delete old.bumperThickness;delete old.bumperBore;
   const row={...C.reference(),setup:old,confirmed:true,role:'train',solverVersion:'3.1.1'};
   const imported=C.decode({schemaVersion:3,measurements:[row]}).measurements[0];
   assert.equal(imported.setup.bumperThickness,0);assert.deepEqual(imported.legacySetup,old);
   assert.equal(imported.confirmed,true);assert.equal(imported.role,'train');assert.equal(C.eligible(imported),false);
+});
+test('v3.2 snapshots preserve their implicit head-bore-sized bumper opening', () => {
+  const old={...P.DEFAULTS,headBore:4.7,bumperThickness:3};delete old.bumperBore;
+  const row={...C.reference(),setup:old,confirmed:true,role:'train',solverVersion:'3.2.0'};
+  const imported=C.decode({schemaVersion:3,measurements:[row]}).measurements[0];
+  assert.equal(imported.setup.bumperBore,4.7);assert.equal(imported.setup.bumperThickness,3);
+  assert.deepEqual(imported.legacySetup,old);assert.equal(imported.confirmed,true);assert.equal(C.eligible(imported),false);
 });
 test('inactive spring inputs do not manufacture independent calibration conditions', () => {
   const setups=[P.normalize(),P.normalize({springFreeLength:400,springInstalledLength:300,springActiveCoils:50}),lengths({springPreload:100})];

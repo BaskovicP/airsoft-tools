@@ -2,7 +2,7 @@
 
 Standalone English/Croatian tools for exploring spring-airsoft pneumatic timing. Open `index.html` directly—no server, account, network access or runtime dependencies are required. The first screen is a tool menu; the pneumatic timing lab is its first tool.
 
-## Physics model v3.2
+## Physics model v3.3
 
 The lab now solves connected cylinder and behind-BB gas volumes with mass/energy accounting, compressible reversible flow, head/airbrake restriction, spring force, signed piston/BB motion, leakage and post-exit discharge. It exposes integration/conservation diagnostics, step-refinement checks and explicit input-sensitivity scenarios.
 
@@ -11,7 +11,7 @@ The lab now solves connected cylinder and behind-BB gas volumes with mass/energy
 ### Geometry and mechanics
 
 - Fixed cylinder bore; nominal stroke changes swept volume without resizing the cylinder.
-- Optional annular cylinder-head bumper thickness. It moves the contact plane rearward, reduces effective piston travel/swept volume, occupies modeled gas volume and extends the head-bore passage. The opening is approximated by the entered head bore.
+- Optional annular cylinder-head bumper thickness and independent inner diameter. The pad moves the contact plane rearward, reduces effective piston travel/swept volume and occupies modeled gas volume. Its opening is a separate first passage before the rigid-head bore, so a short pin can finish entirely inside the bumper without entering the metal head.
 - Head receiving-bore and downstream nozzle diameters/lengths.
 - Airbrake projection, shaft diameter, tip diameter and taper; dynamic overlap, clearance and pin displacement.
 - Cylinder residual and downstream storage volumes (each cavity counted once).
@@ -48,7 +48,7 @@ Short/narrow screens use normal page flow rather than a fixed-height workspace. 
 
 ### Animation and outputs
 
-The animation and three graphs have dedicated views next to the settings. They use solver states, independent cylinder/BB pressure colors and signed arrows. Cylinder stroke, bumper, pin and both head passages share one axial drawing scale, so visible pad contact and pin entry match the calculated geometry; the barrel has its own scale. An installed bumper is drawn as a green annular pad and receives a symbolic contact-deformation highlight. Exact pre/post-contact samples prevent interpolation from showing a reverse velocity before impact.
+The animation and three graphs have dedicated views next to the settings. They use solver states, independent cylinder/BB pressure colors and signed arrows. Cylinder stroke, bumper, pin and the bumper/head/nozzle passages share one axial drawing scale, so visible pad contact and pin entry match the calculated geometry; the barrel has its own scale. The green annular pad uses the entered inner diameter and receives a symbolic contact-deformation highlight. Exact pre/post-contact samples prevent interpolation from showing a reverse velocity before impact.
 
 Parameter edits update the existing panels, canvases and readouts in place. Playback pauses at the same model time (clamped to a shorter run if necessary), with a small updating indicator; it does not reset to the beginning. Presets, the no-pin option and optimizer application preserve open sections and unfinished chrono notes. Invalid inputs hide stale results without collapsing their layout. Stale optimizer tables stay visibly marked and cannot be applied or exported until another search.
 
@@ -72,7 +72,7 @@ Contact speed/kinetic energy and muzzle pressure/gas inventory/discharge replace
 - Fit only one shared bounded head discharge coefficient. Repeats improve repeatability information, not the number of identifiable parameters.
 - Report training and held-out errors, parameter-bound/weak-constraint warnings, and export the fit profile/residuals.
 - Preserve old v2 records as unverified references and discard old fitted coefficients.
-- Preserve complete v3.0 setup snapshots/roles when adding inactive length defaults; retain their original solver version and exclude them from new fits. Original snapshots remain in exports.
+- Preserve complete v3.0/v3.1 setup snapshots when adding inactive defaults, and preserve a v3.2 pad's former implicit head-bore-sized opening as an explicit bumper diameter. Old versions remain excluded from new fits and their original snapshots stay in exports.
 - JSON import/export; full setup and shot-trace export; local storage only.
 - Limits: 2,000 records and 32 distinct configurations per fit. Export a backup before deleting measurements.
 
