@@ -5,15 +5,16 @@
   const B = typeof module !== "undefined" && module.exports ? require("./playback.js") : root.PneumaticPlayback;
   const clamp = (v, low = 0, high = 1) => Math.max(low, Math.min(high, v));
   function draw(ctx, w, h, p, shot, f, t, fmt) {
-    const { wall, head, rigidHead, bumperWidth, face, step, passageEnd, barrelStart, end, pinLength, scale } = B.mechanism(p, f.pistonX);
+    const { wall, head, rigidHead, bumperWidth, face, step, passageEnd, barrelStart, end, silencerEnd, barrelScale, pinLength, scale } = B.mechanism(p, f.pistonX);
     const axis = 156, top = 100, bottom = 212;
-    const bb = f.bbExited ? end + (f.t - shot.exitTime) * shot.exitVelocity * (end - barrelStart) / shot.barrelLength : barrelStart + f.bbX / shot.barrelLength * (end - barrelStart);
+    const bb = f.bbExited ? end + (f.t - shot.exitTime) * shot.exitVelocity * 1000 * barrelScale : barrelStart + f.bbX / shot.barrelLength * (end - barrelStart);
     const radial = 26 / Math.max(p.bumperBore, p.headBore, p.nozzleBore, p.airbrakeDiameter);
-    const peak = Math.max(1, shot.peakCylinderPressure - shot.ambientPressure, shot.peakPressure - shot.ambientPressure, shot.peakFrontPressure - shot.ambientPressure);
+    const peak = Math.max(1, shot.peakCylinderPressure - shot.ambientPressure, shot.peakPressure - shot.ambientPressure, shot.peakFrontPressure - shot.ambientPressure, (shot.peakSilencerPressure || shot.ambientPressure) - shot.ambientPressure);
     const cylinderGlow = clamp((f.cylinderPressure - shot.ambientPressure) / peak);
     const barrelGlow = clamp((f.pressure - shot.ambientPressure) / peak);
     const frontGlow = clamp((f.frontPressure - shot.ambientPressure) / peak);
-    const amber = "#ffbf69", cyan = "#5de4e7", violet = "#b99cff";
+    const silencerGlow = clamp(((f.silencerPressure || shot.ambientPressure) - shot.ambientPressure) / peak);
+    const amber = "#ffbf69", cyan = "#5de4e7", violet = "#b99cff", green = "#6ee7a8";
     const gradient = (x1, y1, x2, y2, stops) => {
       const g = ctx.createLinearGradient(x1, y1, x2, y2);
       stops.forEach(([at, color]) => g.addColorStop(at, color)); return g;
@@ -124,24 +125,50 @@
     gas(barrelStart, axis - 12, Math.max(0, Math.min(bb, end) - barrelStart), 24, barrelGlow, cyan, 30, f.flow);
     if (!f.bbExited) gas(Math.max(barrelStart, bb), axis - 12, Math.max(0, end - Math.max(barrelStart, bb)), 24, frontGlow, violet, 24, f.frontOutflow);
     line(end, axis - 23, end, axis + 23, "#c8d9dd", 3);
+    if (p.silencerEnabled) {
+      const chamberTop = axis - 37, chamberBottom = axis + 37;
+      const boreHeight = clamp(p.silencerBaffleBore / Math.max(p.silencerInnerDiameter, .1) * 68, 9, 30);
+      const endBoreHeight = clamp(p.silencerEndCapBore / Math.max(p.silencerInnerDiameter, .1) * 68, 9, 30);
+      rect(end - 5, chamberTop - 7, silencerEnd - end + 7, chamberBottom - chamberTop + 14,
+        gradient(0, chamberTop, 0, chamberBottom, [[0, "#71848d"], [.1, "#293b44"], [.48, "#0e191e"], [.9, "#334951"], [1, "#83959c"]]), "#70868e");
+      rect(end, chamberTop, silencerEnd - end, chamberBottom - chamberTop, "#071510", "#527066");
+      gas(end, chamberTop + 1, silencerEnd - end - 2, chamberBottom - chamberTop - 2, silencerGlow, green, 28, f.silencerOutflow);
+      const visibleBaffles = Math.min(12, Math.max(0, Math.round(p.silencerBaffleCount)));
+      for (let index = 0; index < visibleBaffles; index++) {
+        const x = end + (index + 1) / (visibleBaffles + 1) * (silencerEnd - end);
+        const thickness = clamp(p.silencerBaffleThickness * barrelScale, 1.5, 5);
+        rect(x - thickness / 2, chamberTop, thickness, (chamberBottom - chamberTop - boreHeight) / 2, "#617780", "#9fb1b5");
+        rect(x - thickness / 2, axis + boreHeight / 2, thickness, (chamberBottom - chamberTop - boreHeight) / 2, "#617780", "#9fb1b5");
+      }
+      rect(silencerEnd - 4, chamberTop - 1, 5, (chamberBottom - chamberTop - endBoreHeight) / 2 + 1, "#84979d", "#bed0d3");
+      rect(silencerEnd - 4, axis + endBoreHeight / 2, 5, (chamberBottom - chamberTop - endBoreHeight) / 2 + 1, "#84979d", "#bed0d3");
+      if (p.silencerPackingFraction > 0) {
+        ctx.save(); ctx.globalAlpha = clamp(.12 + p.silencerPackingFraction * .45, .12, .5);
+        for (let x = end + 8; x < silencerEnd - 6; x += 9) {
+          line(x, chamberTop + 4, x + 5, chamberTop + 13, "#9bf4c0", 1);
+          line(x, chamberBottom - 4, x + 5, chamberBottom - 13, "#9bf4c0", 1);
+        }
+        ctx.restore();
+      }
+    }
     const plume = f.bbExited ? clamp(f.outflow / Math.max(shot.peakOutflow, 1e-10)) : 0;
     if (plume > .001) {
       ctx.save(); ctx.globalAlpha = plume;
       for (let i = 0; i < 5; i++) {
-        const radius = 9 + i * 4, x = end + 6 + i * 10;
+        const radius = 9 + i * 4, x = silencerEnd + 6 + i * 10;
         const glow = ctx.createRadialGradient(x, axis, 1, x, axis, radius);
         glow.addColorStop(0, "#5de4e73d"); glow.addColorStop(1, "#5de4e700");
         dot(x, axis, radius, glow);
       }
       for (let i = 0; i < 15; i++) {
         const progress = ((f.t - shot.exitTime) * 220 + i / 15) % 1;
-        const x = end + 4 + progress * 54, y = axis + (i % 5 - 2) * (2 + progress * 7);
+        const x = silencerEnd + 4 + progress * 54, y = axis + (i % 5 - 2) * (2 + progress * 7);
         line(x - 3, y, x, y, "#a0fbf3", 1);
       }
       ctx.restore();
     }
     if (bb >= barrelStart && bb < 1110) {
-      const direction = Math.sign(f.bbV), trail = Math.max(0, Math.min(70, Math.abs(f.bbV) * .5, direction < 0 ? end - bb : bb - barrelStart));
+      const direction = Math.sign(f.bbV), trail = Math.max(0, Math.min(70, Math.abs(f.bbV) * .5, direction < 0 ? silencerEnd - bb : bb - barrelStart));
       const tail = bb - direction * trail;
       if (trail > 0) rect(Math.min(tail, bb), axis - 3, trail, 6, gradient(tail, 0, bb, 0, [[0, "#5de4e700"], [1, "#b8ffffbb"]]));
       const sphere = ctx.createRadialGradient(bb - 2, axis - 3, 1, bb, axis, 8);
@@ -156,13 +183,14 @@
     if (w >= 650) {
       ctx.fillText(t("SPRING / PISTON", "OPRUGA / PISTON"), 40, 36);
       ctx.fillText(p.bumperThickness > 0 ? t("BUMPER / HEAD / NOZZLE", "ODBOJNIK / GLAVA / MLAZNICA") : t("HEAD / NOZZLE", "GLAVA / MLAZNICA"), 425, 36);
-      ctx.fillText(t("INNER BARREL", "UNUTARNJA CIJEV"), 760, 36);
+      ctx.fillText(p.silencerEnabled ? t("INNER BARREL / SILENCER", "UNUTARNJA CIJEV / PRIGUŠIVAČ") : t("INNER BARREL", "UNUTARNJA CIJEV"), 760, 36);
       ctx.fillStyle = amber; ctx.fillText(`${t("Cylinder", "Cilindar")}  ${fmt((f.cylinderPressure - shot.ambientPressure) / 1e5, 2)} bar(g)`, 40, 266);
       ctx.fillStyle = cyan; ctx.fillText(`${t("Behind / ahead BB", "Iza / ispred BB-a")}  ${fmt((f.pressure - shot.ambientPressure) / 1e5, 2)} / ${fmt((f.frontPressure - shot.ambientPressure) / 1e5, 2)} bar(g)`, 620, 266);
       rect(40, 279, 270, 3, "#2c363b"); rect(40, 279, cylinderGlow * 270, 3, amber);
       rect(620, 279, 390, 3, "#2c363b"); rect(620, 279, barrelGlow * 390, 3, cyan); rect(620, 284, frontGlow * 390, 2, violet);
       ctx.fillStyle = "#99aeb9";
-      ctx.fillText(`${t("Pin overlap", "Preklapanje pina")} ${fmt(f.insertion * 1000, 2)} mm  ·  ${t("Open area", "Otvor")} ${fmt(f.openArea * 1e6, 3)} mm²`, 40, 311);
+      const silencerReadout = p.silencerEnabled ? `  ·  ${t("Silencer", "Prigušivač")} ${fmt((f.silencerPressure - shot.ambientPressure) / 1e5, 2)} bar(g)` : "";
+      ctx.fillText(`${t("Pin overlap", "Preklapanje pina")} ${fmt(f.insertion * 1000, 2)} mm  ·  ${t("Open area", "Otvor")} ${fmt(f.openArea * 1e6, 3)} mm²${silencerReadout}`, 40, 311);
     } else {
       ctx.fillText(p.bumperThickness > 0 ? t("PISTON → BUMPER → BB", "PISTON → GUMICA → BB") : t("PISTON → HEAD → BB", "PISTON → GLAVA → BB"), 40, 36);
       ctx.fillText(`${t("Pin overlap", "Preklapanje pina")}: ${fmt(f.insertion * 1000, 2)} mm`, 40, 266);

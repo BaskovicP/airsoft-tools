@@ -6,8 +6,10 @@
   const BUMPER_FIELDS = ["bumperThickness", "bumperBore"];
   const MODEL_34_FIELDS = ["bumperStiffness", "bumperDamping", "bumperMaxCompression", "muzzleDischargeCoefficient"];
   const MODEL_40_FIELDS = ["frontDeadVolume", "bumperCurve"];
+  const MODEL_41_FIELDS = ["silencerEnabled", "silencerLength", "silencerInnerDiameter", "silencerBaffleCount", "silencerBaffleThickness", "silencerBaffleBore", "silencerEndCapBore", "silencerPackingFraction", "silencerDischargeCoefficient", "silencerHeatTransfer"];
   const PARAMETER_SPECS = Object.freeze({
     dischargeCoefficient: { min: .1, max: 1 }, muzzleDischargeCoefficient: { min: .1, max: 1 },
+    silencerDischargeCoefficient: { min: .1, max: 1 },
     bbLeakCoefficient: { min: 0, max: 1 }, barrelDrag: { min: 0, max: 2 },
     pistonFriction: { min: 0, max: 20 }, sealFriction: { min: 0, max: .2 },
     bumperStiffness: { min: 10, max: 5000 }, bumperDamping: { min: 0, max: 1000 },
@@ -27,11 +29,12 @@
     // snapshot. v3.2 used headBore as the implicit bumper opening, so preserve
     // that geometry explicitly instead of inventing the new default.
     const missingByVersion = {
-      "3.4.0": MODEL_40_FIELDS,
-      "3.0.0": [...LENGTH_FIELDS, ...BUMPER_FIELDS, ...MODEL_34_FIELDS, ...MODEL_40_FIELDS],
-      "3.1.1": [...BUMPER_FIELDS, ...MODEL_34_FIELDS, ...MODEL_40_FIELDS],
-      "3.2.0": ["bumperBore", ...MODEL_34_FIELDS, ...MODEL_40_FIELDS],
-      "3.3.0": [...MODEL_34_FIELDS, ...MODEL_40_FIELDS]
+      "4.0.0": MODEL_41_FIELDS,
+      "3.4.0": [...MODEL_40_FIELDS, ...MODEL_41_FIELDS],
+      "3.0.0": [...LENGTH_FIELDS, ...BUMPER_FIELDS, ...MODEL_34_FIELDS, ...MODEL_40_FIELDS, ...MODEL_41_FIELDS],
+      "3.1.1": [...BUMPER_FIELDS, ...MODEL_34_FIELDS, ...MODEL_40_FIELDS, ...MODEL_41_FIELDS],
+      "3.2.0": ["bumperBore", ...MODEL_34_FIELDS, ...MODEL_40_FIELDS, ...MODEL_41_FIELDS],
+      "3.3.0": [...MODEL_34_FIELDS, ...MODEL_40_FIELDS, ...MODEL_41_FIELDS]
     };
     const expectedMissing = missingByVersion[row.solverVersion];
     const previousComplete = row.setup && expectedMissing && expectedMissing.every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => !expectedMissing.includes(k)).every(k => Object.hasOwn(row.setup, k));
@@ -39,7 +42,7 @@
     const migratedSetup = previousComplete ? { ...row.setup,
       ...(!Object.hasOwn(row.setup, "bumperThickness") ? { bumperThickness: 0 } : {}),
       ...(!Object.hasOwn(row.setup, "bumperBore") ? { bumperBore: row.setup.headBore } : {}),
-      ...Object.fromEntries([...MODEL_34_FIELDS, ...MODEL_40_FIELDS].filter(key => !Object.hasOwn(row.setup, key)).map(key => [key, P.DEFAULTS[key]]))
+      ...Object.fromEntries([...MODEL_34_FIELDS, ...MODEL_40_FIELDS, ...MODEL_41_FIELDS].filter(key => !Object.hasOwn(row.setup, key)).map(key => [key, P.DEFAULTS[key]]))
     } : row.setup;
     const setup = !legacy && setupComplete && P.validate(migratedSetup).length === 0 ? P.normalize(migratedSetup) : null;
     const provenance = Object.fromEntries(Object.entries(row.provenance || {}).filter(([k, v]) => ["geometry", "spring"].includes(k) && ["assumed", "measured"].includes(v)));
@@ -49,6 +52,7 @@
     return { id: String(row.id || `measurement-${Math.random().toString(36).slice(2)}`).slice(0, 100), bbMass: mass, fps: speed, sigma: sigma > 0 && sigma <= 100 ? sigma : 1,
       pistonHitMs: optional(row.pistonHitMs, 0, 1000), pistonHitSigmaMs: optional(row.pistonHitSigmaMs, .001, 100) || .1,
       peakCylinderBarG: optional(row.peakCylinderBarG, 0, 100), peakCylinderSigmaBar: optional(row.peakCylinderSigmaBar, .001, 20) || .05,
+      peakSilencerBarG: optional(row.peakSilencerBarG, 0, 100), peakSilencerSigmaBar: optional(row.peakSilencerSigmaBar, .001, 20) || .05,
       peakBumperForceN: optional(row.peakBumperForceN, 0, 100000), peakBumperForceSigmaN: optional(row.peakBumperForceSigmaN, .01, 10000) || 5,
       role, setup, confirmed, provenance, notes: String(row.notes || "").slice(0, 2000), solverVersion: legacy ? null : String(row.solverVersion || ""),
       legacySetup: legacy || !setup || previousComplete ? row.setup || row.legacySetup || null : row.legacySetup || null };
@@ -89,6 +93,7 @@
       terms.push({ kind: "pistonHitMs", raw: shot.pistonHitTime * 1000 - row.pistonHitMs, sigma: row.pistonHitSigmaMs });
     }
     if (Number.isFinite(row.peakCylinderBarG)) terms.push({ kind: "peakCylinderBarG", raw: (shot.peakCylinderPressure - shot.ambientPressure) / 1e5 - row.peakCylinderBarG, sigma: row.peakCylinderSigmaBar });
+    if (Number.isFinite(row.peakSilencerBarG)) terms.push({ kind: "peakSilencerBarG", raw: (shot.peakSilencerPressure - shot.ambientPressure) / 1e5 - row.peakSilencerBarG, sigma: row.peakSilencerSigmaBar });
     if (Number.isFinite(row.peakBumperForceN)) {
       if (!Number.isFinite(shot.peakBumperForce)) return null;
       terms.push({ kind: "peakBumperForceN", raw: shot.peakBumperForce - row.peakBumperForceN, sigma: row.peakBumperForceSigmaN });
@@ -105,6 +110,7 @@
     if (training.length < parameters.length) throw new Error("fit:not-identifiable");
     if (parameters.includes("springStiffness") && training.some(group => group.setup.springCurve.length)) throw new Error("fit:measured-spring");
     if (parameters.includes("bumperStiffness") && training.some(group => group.setup.bumperCurve.length)) throw new Error("fit:measured-bumper");
+    if (parameters.includes("silencerDischargeCoefficient") && training.every(group => group.setup.silencerEnabled !== 1)) throw new Error("fit:silencer-disabled");
     const profile = [];
     async function loss(values) {
       let weighted = 0, n = 0;

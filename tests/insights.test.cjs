@@ -75,6 +75,19 @@ test("muzzle bar compares observed mass flow, not exit pressure or acoustic inte
   assert.match(html, /not measured loudness/); assert.doesNotMatch(html, /0–100|SOFT MECHANICAL|quiet setup/i);
 });
 
+test("installed silencer compares the actual end-cap outlet with the same setup unsilenced", () => {
+  const silenced = fixture({ peakOutflow: .003, peakMuzzleTransfer: .012, peakSilencerPressure: 131325, silencerVolume: 8e-5, outflowPulseDuration: .018,
+    params: { pistonMass: 71, airbrakeLength: 10, silencerEnabled: 1 } });
+  const noAirbrake = fixture({ peakOutflow: .006 }), unsilenced = fixture({ peakOutflow: .012 });
+  const q = I.soundQuantities(silenced, noAirbrake, unsilenced);
+  assert.equal(q.flowReferenceKind, "unsilenced"); assert.equal(q.flowComparison.percent, 25);
+  const html = I.soundMarkup(silenced, noAirbrake, unsilenced, t, fmt);
+  assert.match(html, /Against this setup without the silencer/);
+  assert.match(html, /flow to atmosphere through the end cap/);
+  assert.match(html, /barrel transfer \/ outlet peak/);
+  assert.match(html, /does not resolve individual jets|does not resolve.*dB attenuation/);
+});
+
 test("cap is disclosed, numbers stay uncapped, and unfinished discharge remains explicit", () => {
   const html = I.soundMarkup(fixture({ impactEnergy: .006, dischargeComplete: false }), fixture(), t, fmt);
   assert.match(html, /300\.0 %/); assert.match(html, /Bar capped at 200%/); assert.match(html, /width:100\.00000%/);

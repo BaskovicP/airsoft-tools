@@ -1,22 +1,24 @@
 /* Bounded hardware-only search. Rankings are engineering preferences, not acoustics. */
 (function (root) {
   "use strict";
-  const VERSION = "2.0.0";
+  const VERSION = "2.1.0";
   const P = typeof module !== "undefined" && module.exports ? require("./physics.js") : root.PneumaticPhysics;
   const GROUPS = Object.freeze({
     cylinder: ["cylinderBore", "strokeLength", "deadVolume"],
     barrel: ["barrelLength", "barrelDiameter", "frontDeadVolume"],
+    silencer: ["silencerLength", "silencerInnerDiameter", "silencerBaffleCount", "silencerBaffleThickness", "silencerBaffleBore", "silencerEndCapBore", "silencerPackingFraction"],
     head: ["headBore", "headLength", "nozzleBore", "nozzleLength", "bumperThickness", "bumperBore", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "breechVolume"],
     piston: ["pistonMass"],
     airbrake: ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper"],
     spring: ["springStiffness", "springPreload", "springMass", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils"],
     bb: ["bbMass", "bbDiameter"]
   });
-  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], frontDeadVolume: [.001,2], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], bumperThickness: [0,20], bumperBore: [.5,30], bumperStiffness: [0,5000], bumperDamping: [0,1000], bumperMaxCompression: [0,10], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], springFreeLength: [0,500], springInstalledLength: [0,500], springCutLength: [0,400], springActiveCoils: [0,200], springRemovedCoils: [0,200], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
+  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], frontDeadVolume: [.001,2], silencerLength: [20,500], silencerInnerDiameter: [7,80], silencerBaffleCount: [0,50], silencerBaffleThickness: [.1,15], silencerBaffleBore: [5.5,30], silencerEndCapBore: [5.5,30], silencerPackingFraction: [0,.89], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], bumperThickness: [0,20], bumperBore: [.5,30], bumperStiffness: [0,5000], bumperDamping: [0,1000], bumperMaxCompression: [0,10], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], springFreeLength: [0,500], springInstalledLength: [0,500], springCutLength: [0,400], springActiveCoils: [0,200], springRemovedCoils: [0,200], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
   const WEIGHTS = Object.freeze({ balanced: [.30,.17,.13,.25,.15], quiet: [.38,.20,.17,.10,.15], efficient: [.12,.08,.05,.60,.15] });
   const HORIZON_MS = 250;
   const clone = v => JSON.parse(JSON.stringify(v));
   function fixedReason(p, key) {
+    if (GROUPS.silencer.includes(key) && p.silencerEnabled !== 1) return "silencer-disabled";
     if (p.springCurve.length && ["springStiffness", "springMass", "springFreeLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"].includes(key)) return "measured-spring";
     if (p.bumperCurve.length && key === "bumperStiffness") return "measured-bumper";
     if (p.springLengthMode === 1 && key === "springPreload" || p.springLengthMode !== 1 && ["springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"].includes(key)) return "spring-mode";

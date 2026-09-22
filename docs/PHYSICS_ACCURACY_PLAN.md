@@ -2,7 +2,16 @@
 
 Research and source review: 21 September 2026. Code reviewed: `index.html` at commit `0b3ede8`. This document specifies proposed changes; it does not change the simulation or validate its present predictions.
 
-Implementation follow-up: model v4.0 now implements the conservative three-control-volume core, profile-resolved concentric pin overlap, gas ahead of the BB and pre-exit muzzle venting, measured nonlinear bumper force curves, stricter static-contact/settling logic, explicit solver-exhaustion failure, multi-parameter/instrumented calibration screening, and an all-contact/uncertainty-aware optimizer. It also adds a causal travel-time envelope to flag pressure-wave timing risk. That envelope is deliberately **not** described as a solved 1D flow field. This original research checklist is retained as the audit baseline, not marked wholesale complete. See [implemented model, tests and remaining work](MODEL.md), especially the unresolved spherical-clearance and coupled 1D pressure-wave validation items.
+Implementation follow-up: model v4.1 now implements the conservative three-volume core plus an optional fourth lumped silencer volume, profile-resolved concentric pin overlap, gas ahead of the BB and pre-exit muzzle venting, measured nonlinear bumper force curves, stricter static-contact/settling logic, explicit solver-exhaustion failure, multi-parameter/instrumented calibration screening, and an all-contact/uncertainty-aware optimizer. It also adds a causal travel-time envelope to flag pressure-wave timing risk. The silencer closure calculates gas storage and outlet-flow spreading but is deliberately **not** described as baffle-resolved CFD, acoustic attenuation or dB. The pressure-wave envelope remains **not** a solved 1D flow field. This original research checklist is retained as the audit baseline, not marked wholesale complete. See [implemented model, tests and remaining work](MODEL.md), especially the unresolved spherical-clearance, moving-BB-in-silencer and coupled 1D pressure-wave validation items.
+
+### v4.1 silencer follow-up completed
+
+1. Added measured internal length/diameter, baffle count/thickness/bore, end-cap bore and fill fraction with BB-clearance and positive-free-volume validation.
+2. Added a conservative silencer mass/internal-energy state, pre-exit front-gas transfer, post-exit barrel transfer, final end-cap outflow and heat exchange.
+3. Separated calculated geometry/transient pressure from the heuristic lumped baffle/fill loss and unknown outlet Cd/heat conductance.
+4. Added live chamber pressure/outlet flow, pressure trace, Results comparison against the same setup unsilenced, a sectioned Parts diagram and a geometry-aware animation.
+5. Added optional peak-silencer-pressure calibration, installed-only optimizer search and regression checks for conservation and expected area/pressure/flow trends.
+6. Kept BB motion after the inner-barrel crown outside the solved dynamics; the UI explicitly says its silencer traversal is drawn at constant exit speed.
 
 ### v4.0 implementation order completed
 

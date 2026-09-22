@@ -125,5 +125,5 @@ test("full-render scroll snapshot restores both workspace panes", () => {
   const pages = doc.getElementById("settingsPages"), body = doc.getElementById("workspaceBody");
   pages.scrollTop = 45; body.scrollTop = 115; workspace.rememberScroll(); pages.scrollTop = 0; body.scrollTop = 0;
   workspace.restoreScroll(); assert.equal(pages.scrollTop, 45); assert.equal(body.scrollTop, 115);
-  assert.equal(W.CATEGORIES.length, 7); assert.equal(W.VIEWS.length, 6);
+  assert.equal(W.CATEGORIES.length, 8); assert.equal(W.VIEWS.length, 6);
 });

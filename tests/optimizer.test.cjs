@@ -14,8 +14,19 @@ test('optimizer parses finite decimal lists and rejects malformed/excessive list
   for (const v of ['', 'NaN', '1e999', '58g', Array(13).fill('1').join(',')]) assert.throws(() => O.parseValues(v));
 });
 test('hardware allowlist never permits weather, calibration, losses or numerical settings', () => {
-  for (const key of ['airTemperature','ambientPressure','dischargeCoefficient','muzzleDischargeCoefficient','pistonLeak','barrelDrag','restitution','maxTime','usefulFraction','springCurve']) assert.throws(() => O.searchSpace(P.DEFAULTS, { values: { [key]: [1] } }), /forbidden/);
+  for (const key of ['airTemperature','ambientPressure','dischargeCoefficient','muzzleDischargeCoefficient','silencerDischargeCoefficient','silencerHeatTransfer','pistonLeak','barrelDrag','restitution','maxTime','usefulFraction','springCurve']) assert.throws(() => O.searchSpace(P.DEFAULTS, { values: { [key]: [1] } }), /forbidden/);
   assert.throws(() => O.searchSpace(P.DEFAULTS, { locks: { weather: false } }), /unknown-group/);
+});
+test('silencer geometry is searchable only for an installed and unlocked part', () => {
+  assert.throws(() => O.searchSpace(P.DEFAULTS, { locks: { silencer: false }, values: { silencerLength: [180] } }), /silencer-disabled/);
+  const base = P.normalize({ silencerEnabled: 1 });
+  const space = O.searchSpace(base, { locks: { silencer: false }, values: { silencerLength: [150, 180], silencerEndCapBore: [8, 10] } });
+  assert.equal(space.total, 4);
+  for (let index = 0; index < space.total; index++) {
+    const candidate = O.candidateAt(space, index);
+    assert.equal(candidate.silencerEnabled, 1);
+    assert.equal(candidate.silencerDischargeCoefficient, base.silencerDischargeCoefficient);
+  }
 });
 test('bumper geometry and contact properties are explicit head hardware while restitution remains fixed', () => {
   const space=O.searchSpace(P.DEFAULTS,{locks:{head:false},values:{bumperThickness:[0,2,4],bumperBore:[4,6]}});

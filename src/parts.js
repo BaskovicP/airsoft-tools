@@ -13,6 +13,9 @@
     bumperThickness: "mm", bumperBore: "mm", airbrakeLength: "mm", airbrakeDiameter: "mm",
     airbrakeTipDiameter: "mm", airbrakeTaper: "mm", headBore: "mm", headLength: "mm",
     nozzleBore: "mm", nozzleLength: "mm", breechVolume: "cm³", frontDeadVolume: "cm³", barrelLength: "mm",
+    silencerEnabled: "", silencerLength: "mm", silencerInnerDiameter: "mm", silencerBaffleCount: "",
+    silencerBaffleThickness: "mm", silencerBaffleBore: "mm", silencerEndCapBore: "mm", silencerPackingFraction: "",
+    silencerDischargeCoefficient: "", silencerHeatTransfer: "W/K",
     barrelDiameter: "mm", bbDiameter: "mm", bbMass: "g", springFreeLength: "mm",
     springInstalledLength: "mm", springCutLength: "mm", springActiveCoils: "turns",
     springRemovedCoils: "turns", springSolidLength: "mm", springStiffness: "N/m",
@@ -28,7 +31,8 @@
     airbrakeDiameter: 2, airbrakeTipDiameter: 2, headBore: 2, nozzleBore: 2,
     deadVolume: 2, breechVolume: 2, frontDeadVolume: 3, pistonLeak: 3, nozzleLeak: 3,
     sealFriction: 3, bbLeakCoefficient: 2, restitution: 2, dischargeCoefficient: 2, muzzleDischargeCoefficient: 2,
-    heatTransfer: 3, usefulFraction: 3
+    heatTransfer: 3, silencerInnerDiameter: 2, silencerBaffleThickness: 2, silencerBaffleBore: 2, silencerEndCapBore: 2,
+    silencerPackingFraction: 2, silencerDischargeCoefficient: 2, silencerHeatTransfer: 3, usefulFraction: 3
   };
   const UNKNOWN_ZERO = new Set(["springFreeLength", "springInstalledLength", "springActiveCoils", "springSolidLength", "springMass"]);
 
@@ -72,6 +76,20 @@
       ]
     },
     {
+      title: ["Silencer / suppressor", "Prigušivač"],
+      note: ["Measure the internal gas space and every minimum bore along the BB path. Exterior length or diameter alone does not define the expansion volume.", "Izmjerite unutarnji prostor plina i svaki najmanji provrt na putu BB-a. Sama vanjska duljina ili promjer ne određuju ekspanzijski volumen."],
+      rows: [
+        ["silencerEnabled", ["Installed for this shot", "Ugrađen za ovaj hitac"], ["Assembly record", "Zapis sklopa"], ["Enable only when this exact silencer was mounted. Disabled geometry is retained for later comparison but does not enter the shot model.", "Uključite samo kada je ovaj prigušivač stvarno ugrađen. Isključena geometrija ostaje za kasniju usporedbu, ali ne ulazi u model hica."]],
+        ["silencerLength", ["Internal expansion length", "Unutarnja ekspanzijska duljina"], ["Depth rod", "Dubinomjer"], ["Usable axial chamber length from the inner-barrel crown/entrance plane to the inside of the end cap—not the complete exterior length including threads.", "Uporabljiva uzdužna duljina komore od krune unutarnje cijevi/ulazne ravnine do unutarnje strane završne kape — ne ukupna vanjska duljina s navojem."]],
+        ["silencerInnerDiameter", ["Internal chamber diameter", "Unutarnji promjer komore"], ["Bore gauge / derived", "Mjerač provrta / izvedeno"], ["Diameter of the main expansion cavity. Together with internal length it sets gross volume and pressure rise.", "Promjer glavne ekspanzijske šupljine. Zajedno s unutarnjom duljinom određuje bruto volumen i porast tlaka."]],
+        ["silencerBaffleCount", ["Baffle count", "Broj pregrada"], ["Count", "Brojanje"], ["Count plates/cones that materially interrupt the axial flow. More entered baffles displace gas volume and increase the conditional lumped flow-loss factor.", "Brojite ploče/konuse koji bitno prekidaju uzdužni protok. Više unesenih pregrada oduzima volumen plina i povećava uvjetni koncentrirani faktor gubitka protoka."]],
+        ["silencerBaffleThickness", ["Average baffle thickness", "Prosječna debljina pregrade"], ["Caliper", "Pomično mjerilo"], ["Representative axial solid thickness per baffle. The model subtracts its annular solid volume and adds a finite-thickness loss term.", "Reprezentativna uzdužna debljina pune pregrade. Model oduzima njezin puni prstenasti volumen i dodaje član gubitka zbog konačne debljine."]],
+        ["silencerBaffleBore", ["Smallest baffle/core bore", "Najmanji provrt pregrade/jezgre"], ["Pin gauges", "Mjerni trnovi"], ["Smallest clear diameter repeated through the baffle stack. It must exceed the actual BB diameter with real alignment clearance; the model does not certify strike safety.", "Najmanji slobodni promjer koji se ponavlja kroz sklop pregrada. Mora biti veći od stvarnog BB-a uz stvarni zazor poravnanja; model ne potvrđuje sigurnost od udara BB-a."]],
+        ["silencerEndCapBore", ["Exit end-cap bore", "Provrt izlazne završne kape"], ["Pin gauges", "Mjerni trnovi"], ["Smallest clear exit diameter. Along with the baffle bore and conditional Cd, it controls the modeled final atmospheric outflow.", "Najmanji slobodni izlazni promjer. Zajedno s provrtom pregrada i uvjetnim Cd-om određuje modelirani konačni protok u atmosferu."]],
+        ["silencerPackingFraction", ["Solid fill fraction", "Udio punog volumena ispune"], ["Volume / mass estimate", "Procjena volumena / mase"], ["Estimated fraction of otherwise open chamber volume occupied by foam, mesh or other solid fill. It reduces free gas volume and increases the heuristic flow loss; it is not porosity measured by this app.", "Procijenjeni udio inače otvorenog volumena komore koji zauzima pjena, mrežica ili druga čvrsta ispuna. Smanjuje slobodni volumen plina i povećava heuristički gubitak protoka; aplikacija ne mjeri poroznost."]]
+      ]
+    },
+    {
       title: ["Spring & seats", "Opruga i oslonci"],
       note: ["Length mode and direct-compression mode describe the same installed spring in different ways; do not mix their reference planes.", "Način s duljinama i način s izravnim stlačenjem opisuju istu ugrađenu oprugu na različite načine; nemojte miješati njihove referentne ravnine."],
       rows: [
@@ -99,6 +117,8 @@
     ["restitution", ["Rigid / bottom-out restitution", "Odskok krutog graničnika"], ["High-speed contact measurement", "Brzo mjerenje kontakta"], ["Fraction controlling velocity reversal only when a rigid head is struck or the bumper reaches its compression cap. Zero means no idealized rigid rebound; it does not control the pneumatic cushion.", "Faktor koji određuje promjenu smjera brzine samo pri udaru u krutu glavu ili dosezanju granice stlačenja gumice. Nula znači bez idealiziranog krutog odskoka; ne upravlja pneumatskim jastukom."]],
     ["dischargeCoefficient", ["Head discharge coefficient Cd", "Koeficijent protoka glave Cd"], ["Flow bench or chrono fit", "Protočna klupa ili chrono prilagodba"], ["Effective loss coefficient for mass flow through the bumper opening, receiving bore and downstream nozzle. It combines contraction and turbulence losses; it is not an efficiency percentage.", "Efektivni koeficijent gubitaka masenog protoka kroz otvor gumice, ulazni provrt i izlazni kanal mlaznice. Vrijednost 1 i dalje nije postotak učinkovitosti; koeficijent sažima suženje i turbulentne gubitke."]],
     ["muzzleDischargeCoefficient", ["Muzzle discharge coefficient Cd", "Koeficijent protoka na ustima Cd"], ["Transient muzzle-flow test", "Mjerenje prijelaznog protoka na ustima"], ["Effective coefficient for front-gas venting before BB exit and compressed-gas discharge after exit. It can influence both exit speed and the modeled muzzle-flow contributor.", "Efektivni koeficijent odzračivanja zraka ispred BB-a prije izlaska i pražnjenja stlačenog plina nakon izlaska. Može utjecati i na izlaznu brzinu i na modelirani doprinos protoka na ustima."]],
+    ["silencerDischargeCoefficient", ["Silencer outlet discharge Cd", "Koeficijent protoka izlaza prigušivača Cd"], ["Pressure/flow transient fit", "Prilagodba prijelaza tlaka/protoka"], ["Effective contraction/turbulence coefficient applied after the measured baffle/end-cap geometry. It strongly affects peak outlet flow and decay time but is not an acoustic attenuation rating.", "Efektivni koeficijent suženja/turbulencije nakon izmjerene geometrije pregrada i završne kape. Snažno utječe na vršni izlazni protok i vrijeme pada, ali nije ocjena akustičkog prigušenja."]],
+    ["silencerHeatTransfer", ["Silencer heat conductance", "Toplinska vodljivost prigušivača"], ["Instrumented transient fit", "Instrumentirana prilagodba prijelaza"], ["Lumped heat exchange between silencer gas and its internals/wall. More conductance removes gas energy faster in the model; material, surface area and shot cadence are not separately resolved.", "Koncentrirana izmjena topline između plina te unutrašnjosti/stijenke prigušivača. Veća vodljivost brže oduzima energiju plinu u modelu; materijal, površina i ritam pucanja nisu zasebno razriješeni."]],
     ["pistonLeak", ["Piston-seal leak area", "Površina curenja brtve pistona"], ["Leak-down fit", "Prilagodba pada tlaka"], ["Equivalent area for air bypassing the piston seal from the compressed cylinder side. It already represents an effective leak path and is not a visible geometric hole that must have this shape.", "Ekvivalentna površina zraka koji zaobilazi brtvu pistona sa stlačene strane cilindra. Već predstavlja efektivni put curenja i nije nužno vidljiva rupa toga oblika."]],
     ["nozzleLeak", ["Nozzle / hop leak area", "Površina curenja mlaznice / hopa"], ["Leak-down fit", "Prilagodba pada tlaka"], ["Equivalent leak area from the downstream head/nozzle/hop system to atmosphere, separate from controlled flow into the barrel. Use leak-down evidence or calibration.", "Ekvivalentna površina curenja iz izlaznog sklopa glave, mlaznice i hopa prema atmosferi, odvojena od kontroliranog protoka u cijev. Koristite mjerenje pada tlaka ili kalibraciju."]],
     ["bbLeakCoefficient", ["BB-clearance leak coefficient", "Koeficijent curenja oko BB-a"], ["Calibration parameter", "Kalibracijski parametar"], ["Multiplier for air bypass through the annular clearance between the measured BB and barrel diameters. Zero disables that modeled path; one applies the full effective-clearance estimate.", "Množitelj protoka zraka kroz prstenasti zazor između izmjerenog BB-a i promjera cijevi. Nula isključuje taj modelirani put; jedan primjenjuje puni procijenjeni efektivni zazor."]],
@@ -123,6 +143,8 @@
   function fieldValue(p, key, t) {
     const value = p[key];
     if (key === "bumperCurve") return Array.isArray(value) && value.length ? t(`${value.length} measured points`, `${value.length} izmjerenih točaka`) : t("Not entered", "Nije uneseno");
+    if (key === "silencerEnabled") return value === 1 ? t("Installed", "Ugrađen") : t("Not installed", "Nije ugrađen");
+    if (key === "silencerPackingFraction" && Number.isFinite(value)) return `${(value * 100).toFixed(1)}%`;
     if (!Number.isFinite(value)) return "—";
     if (UNKNOWN_ZERO.has(key) && value === 0) return t("Unknown / not entered", "Nepoznato / nije uneseno");
     const digits = DIGITS[key] ?? (Math.abs(value) < 1 && value !== 0 ? 2 : 1);
@@ -231,6 +253,38 @@
       </svg><p class="parts-scale-note">${t("Entered radial clearance", "Uneseni radijalni zazor")}: <strong>${radial.toFixed(3)} mm</strong> · ${t("diametral difference", "razlika promjera")}: <strong>${Math.max(0, p.barrelDiameter - p.bbDiameter).toFixed(3)} mm</strong>. ${t("This is geometry, not a measured leakage rate.", "To je geometrija, ne izmjerena stopa curenja.")}</p></div>`;
   }
 
+  function silencerSvg(p, t) {
+    const id = "silencer", center = 137, left = 46, right = 514;
+    const geometry = P.silencerGeometry(p);
+    const chamberHalf = 47;
+    const coreHalf = clamp(p.silencerBaffleBore / Math.max(p.silencerInnerDiameter, .1) * chamberHalf, 7, 30);
+    const outletHalf = clamp(p.silencerEndCapBore / Math.max(p.silencerInnerDiameter, .1) * chamberHalf, 7, 30);
+    const count = Math.min(12, Math.max(0, Math.round(p.silencerBaffleCount)));
+    const baffles = Array.from({ length: count }, (_, index) => {
+      const x = left + (index + 1) / (count + 1) * (right - left - 12);
+      const width = clamp(p.silencerBaffleThickness / Math.max(p.silencerLength, 1) * (right - left), 2, 9);
+      return `<path class="parts-silencer-baffle" d="M${x - width / 2} ${center - chamberHalf}H${x + width / 2}V${center - coreHalf}H${x - width / 2}ZM${x - width / 2} ${center + coreHalf}H${x + width / 2}V${center + chamberHalf}H${x - width / 2}Z"/>`;
+    }).join("");
+    const packing = p.silencerPackingFraction > 0 ? `<g class="parts-silencer-packing">${Array.from({ length: 28 }, (_, index) => {
+      const x = left + 8 + index * (right - left - 26) / 27;
+      return `<path d="M${x} ${center - chamberHalf + 6}l6 10M${x} ${center + chamberHalf - 6}l6 -10"/>`;
+    }).join("")}</g>` : "";
+    const state = p.silencerEnabled ? t("installed in shot model", "ugrađen u modelu hica") : t("stored geometry · inactive", "spremljena geometrija · neaktivno");
+    return `<div class="parts-figure"><div class="parts-figure-heading"><div><h3>${t("Silencer expansion chamber", "Ekspanzijska komora prigušivača")}</h3><p>${t("Sectioned schematic locates every requested internal measurement; baffle profile is representative, not manufacturing CAD.", "Presjek označuje svaku traženu unutarnju mjeru; oblik pregrada je reprezentativan, nije proizvodni CAD.")}</p></div><span class="tag ${p.silencerEnabled ? "measured" : "unknown"}">${state}</span></div>
+      <svg class="parts-svg" viewBox="0 0 560 285" role="img" aria-label="${esc(t("Silencer cutaway with internal length, chamber diameter, baffle bore, end-cap bore and packing", "Presjek prigušivača s unutarnjom duljinom, promjerom komore, provrtom pregrada, provrtom završne kape i ispunom"))}">${defs(id)}
+        <line class="parts-centerline" x1="28" y1="${center}" x2="535" y2="${center}"/>
+        <path class="parts-silencer-shell" d="M${left - 8} ${center - chamberHalf - 12}H${right + 7}V${center - chamberHalf}H${left}V${center + chamberHalf}H${right + 7}V${center + chamberHalf + 12}H${left - 8}Z"/>
+        <rect class="parts-silencer-chamber" x="${left}" y="${center - chamberHalf}" width="${right - left}" height="${2 * chamberHalf}"/>
+        ${packing}${baffles}
+        <path class="parts-silencer-endcap" d="M${right - 5} ${center - chamberHalf}H${right + 7}V${center - outletHalf}H${right - 5}ZM${right - 5} ${center + outletHalf}H${right + 7}V${center + chamberHalf}H${right - 5}Z"/>
+        <path class="parts-motion" d="M58 ${center}H132" marker-end="url(#arrow-${id})"/><circle class="parts-bb" cx="74" cy="${center}" r="7"/><text class="parts-part-label" x="74" y="${center + 4}" text-anchor="middle">BB</text>
+        ${dimH(id, left, right, 247, `${t("internal expansion length", "unutarnja ekspanzijska duljina")} ${fieldValue(p, "silencerLength", t)}`)}
+        ${dimV(id, 27, center - chamberHalf, center + chamberHalf, `Ø ${fieldValue(p, "silencerInnerDiameter", t)}`)}
+        <g class="parts-leader"><path d="M${left + (right - left) * .55} ${center - coreHalf}L355 48"/><text x="360" y="46">${esc(`${t("baffle bore", "provrt pregrade")} Ø ${fieldValue(p, "silencerBaffleBore", t)}`)}</text><path d="M${right} ${center + outletHalf}L455 218"/><text x="450" y="232" text-anchor="end">${esc(`${t("end cap", "završna kapa")} Ø ${fieldValue(p, "silencerEndCapBore", t)}`)}</text></g>
+        <text class="parts-caption" x="280" y="78" text-anchor="middle">${esc(`${p.silencerBaffleCount} × ${fieldValue(p, "silencerBaffleThickness", t)} · ${t("fill", "ispuna")} ${(p.silencerPackingFraction * 100).toFixed(1)}%`)}</text>
+      </svg><p class="parts-scale-note">${t("Calculated free gas volume", "Izračunati slobodni volumen plina")}: <strong>${(geometry.freeVolume * 1e6).toFixed(2)} cm³</strong> · ${t("gross / baffle solid / packing solid", "bruto / pregrade / puna ispuna")}: <strong>${(geometry.grossVolume * 1e6).toFixed(2)} / ${(geometry.baffleSolidVolume * 1e6).toFixed(2)} / ${(geometry.packingSolidVolume * 1e6).toFixed(2)} cm³</strong> · ${t("conditional equivalent outlet", "uvjetni ekvivalentni izlaz")}: <strong>${(geometry.effectiveOutletArea * 1e6).toFixed(2)} mm²</strong>. ${t("The drawing does not certify BB-strike clearance or predict dB.", "Crtež ne potvrđuje sigurnost zazora od udara BB-a niti predviđa dB.")}</p></div>`;
+  }
+
   function springPath(x1, x2, center, amplitude, turns) {
     const count = Math.max(5, Math.min(18, Math.round(turns || 11))), step = (x2 - x1) / count;
     let path = `M${x1} ${center}`;
@@ -270,7 +324,7 @@
     return `<section class="panel parts-atlas" aria-labelledby="partsAtlasTitle">
       <div class="parts-atlas-heading"><div><span class="parts-eyebrow">${t("Dynamic measurement atlas", "Dinamički mjerni atlas")}</span><h2 id="partsAtlasTitle">${t("Parts & measurement references", "Dijelovi i reference mjerenja")}</h2><p>${t("Every number and diagram below follows the current setup. Use the drawings to identify the intended feature, then record the real measurement—not a value estimated from the illustration.", "Svaki broj i dijagram u nastavku prati trenutačnu konfiguraciju. Crtež koristite za prepoznavanje tražene značajke, a zatim zabilježite stvarno mjerenje — ne vrijednost procijenjenu sa slike.")}</p></div><span class="tag geometry">${t("current setup", "trenutačna konfiguracija")}</span></div>
       <div class="parts-safety" role="note"><strong>${t("Before measuring", "Prije mjerenja")}</strong><span>${t("Unload and fully decock the replica. Remove spring load and disassemble according to the manufacturer before placing tools inside the cylinder or spring assembly.", "Ispraznite i potpuno otpustite repliku. Uklonite opterećenje opruge i rastavite prema uputama proizvođača prije stavljanja alata u cilindar ili sklop opruge.")}</span></div>
-      <div class="parts-diagrams">${airPathSvg(p, t)}<div class="parts-figure-grid">${cylinderSvg(p, t)}${barrelSvg(p, t)}${springSvg(p, t)}</div></div>
+      <div class="parts-diagrams">${airPathSvg(p, t)}<div class="parts-figure-grid">${cylinderSvg(p, t)}${barrelSvg(p, t)}${silencerSvg(p, t)}${springSvg(p, t)}</div></div>
       <div class="parts-measurement-intro"><h2>${t("What each setup value means", "Što znači svaka vrijednost konfiguracije")}</h2><p>${t("The method labels distinguish dimensions you can measure directly from quantities that need a fixture, calculation or calibration.", "Oznake metoda razlikuju dimenzije koje možete izravno izmjeriti od veličina koje traže prihvat, izračun ili kalibraciju.")}</p></div>
       <div class="parts-measure-groups">${GROUPS.map(group => measurementGroup(group, p, t)).join("")}</div>
       <details class="parts-model-parameters" data-preserve-open><summary>${t("Model, bench-test and environmental inputs — not ordinary part dimensions", "Ulazi modela, ispitivanja i okoliša — nisu obične dimenzije dijelova")}</summary><p>${t("These inputs still affect the simulation, but a caliper cannot establish them. Treat unmeasured values as assumptions and use the stated evidence route or chrono calibration where applicable.", "Ovi ulazi i dalje utječu na simulaciju, ali ih pomično mjerilo ne može odrediti. Neizmjerene vrijednosti tretirajte kao pretpostavke i koristite navedeni način provjere ili chrono kalibraciju gdje je primjenjivo.")}</p><div class="table-wrap"><table class="parts-parameter-table"><thead><tr><th>${t("Parameter", "Parametar")}</th><th>${t("Current input", "Trenutačni ulaz")}</th><th>${t("How to establish it", "Kako ga odrediti")}</th></tr></thead><tbody>${modelRows(p, t)}</tbody></table></div></details>

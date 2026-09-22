@@ -1472,6 +1472,10 @@
       .parts-svg .parts-contact-plane { stroke:var(--green); stroke-width:2; }
       .parts-svg .parts-rigid-plane { stroke:var(--amber); stroke-width:2; stroke-dasharray:5 4; }
       .parts-svg .parts-motion { fill:none; stroke:var(--cyan); stroke-width:2; }
+      .parts-svg .parts-silencer-shell { fill:var(--line-bright); stroke:var(--muted); stroke-width:1.8; }
+      .parts-svg .parts-silencer-chamber { fill:#06130f; stroke:color-mix(in srgb,var(--green) 45%,var(--line-bright)); stroke-width:1.2; }
+      .parts-svg .parts-silencer-baffle,.parts-svg .parts-silencer-endcap { fill:#60757e; stroke:#aabdc2; stroke-width:1; }
+      .parts-svg .parts-silencer-packing { fill:none; stroke:var(--green); stroke-width:1.2; opacity:.45; }
       .parts-svg .parts-spring-seat { stroke:var(--line-bright); stroke-width:8; }
       .parts-svg .parts-spring { fill:none; stroke:var(--amber); stroke-width:8; stroke-linecap:round; filter:drop-shadow(0 0 7px rgba(255,191,105,.18)); }
       .parts-svg .parts-cut line { stroke:var(--red); stroke-width:2; stroke-dasharray:5 4; }

@@ -1,7 +1,7 @@
 /* Pure, dependency-free conservative lumped model. See docs/MODEL.md. */
 (function (root) {
   "use strict";
-  const VERSION = "4.0.0";
+  const VERSION = "4.1.0";
   const R = 287.05, GAMMA = 1.4, CV = R / (GAMMA - 1), CP = CV + R;
   const STICK_SPEED = 1e-5;
   const area = d => Math.PI * (d / 2000) ** 2;
@@ -19,6 +19,12 @@
     bumperStiffness: 250, bumperDamping: 160, bumperMaxCompression: 1,
     bumperCurve: [],
     deadVolume: .55, breechVolume: .45, frontDeadVolume: .05, dischargeCoefficient: .75, muzzleDischargeCoefficient: .85,
+    // Optional muzzle suppressor/silencer. Geometry defines a fourth conservative
+    // gas volume; outlet Cd, packing fraction and heat transfer remain conditional
+    // effective inputs rather than an acoustic/dB model.
+    silencerEnabled: 0, silencerLength: 150, silencerInnerDiameter: 28,
+    silencerBaffleCount: 5, silencerBaffleThickness: 2, silencerBaffleBore: 8, silencerEndCapBore: 8,
+    silencerPackingFraction: 0, silencerDischargeCoefficient: .65, silencerHeatTransfer: .02,
     pistonLeak: .005, nozzleLeak: .005, bbLeakCoefficient: .15,
     springStiffness: 550, springPreload: 50, springMass: 0, springCurve: [],
     springLengthMode: 0, springFreeLength: 0, springInstalledLength: 0, springCutLength: 0,
@@ -56,10 +62,10 @@
   }
   function validate(raw) {
     const p = normalize(raw), errors = [];
-    const positive = ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "bumperBore", "headBore", "headLength", "nozzleBore", "nozzleLength", "deadVolume", "breechVolume", "frontDeadVolume", "ambientPressure", "maxTime"];
+    const positive = ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "bumperBore", "headBore", "headLength", "nozzleBore", "nozzleLength", "deadVolume", "breechVolume", "frontDeadVolume", "silencerLength", "silencerInnerDiameter", "silencerBaffleThickness", "silencerBaffleBore", "silencerEndCapBore", "ambientPressure", "maxTime"];
     for (const key of Object.keys(DEFAULTS)) if (!["springCurve", "bumperCurve"].includes(key) && !Number.isFinite(p[key])) errors.push(`${key}:finite`);
     for (const key of positive) if (!(p[key] > 0)) errors.push(`${key}:positive`);
-    for (const key of ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "bumperThickness", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "springStiffness", "springPreload", "springMass", "pistonLeak", "nozzleLeak", "pistonFriction", "sealFriction", "rearDamping", "bbBreakaway", "barrelDrag", "heatTransfer", "decelThreshold"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
+    for (const key of ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "bumperThickness", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "silencerBaffleCount", "silencerPackingFraction", "silencerHeatTransfer", "springStiffness", "springPreload", "springMass", "pistonLeak", "nozzleLeak", "pistonFriction", "sealFriction", "rearDamping", "bbBreakaway", "barrelDrag", "heatTransfer", "decelThreshold"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
     if (p.bbDiameter >= p.barrelDiameter) errors.push("bb:clearance");
     if ((p.bumperThickness > 0 && p.cylinderBore <= p.bumperBore) || p.cylinderBore <= p.headBore || p.cylinderBore <= p.airbrakeDiameter) errors.push("cylinder:clearance");
     const maximumPinReach = p.airbrakeLength + Math.min(p.bumperThickness, p.bumperMaxCompression);
@@ -76,8 +82,18 @@
     const travel = p.strokeLength - p.bumperThickness;
     if (p.airbrakeLength > travel || maximumPinReach > p.bumperThickness + p.headLength + p.nozzleLength) errors.push("pin:length");
     if (p.airbrakeTipDiameter > p.airbrakeDiameter || p.airbrakeTaper > p.airbrakeLength && p.airbrakeLength > 0) errors.push("pin:profile");
-    if (!(p.dischargeCoefficient > 0 && p.dischargeCoefficient <= 1) || !(p.muzzleDischargeCoefficient > 0 && p.muzzleDischargeCoefficient <= 1) || !(p.bbLeakCoefficient >= 0 && p.bbLeakCoefficient <= 1) || !(p.restitution >= 0 && p.restitution <= 1)) errors.push("coefficient:range");
+    if (!(p.dischargeCoefficient > 0 && p.dischargeCoefficient <= 1) || !(p.muzzleDischargeCoefficient > 0 && p.muzzleDischargeCoefficient <= 1) || !(p.silencerDischargeCoefficient > 0 && p.silencerDischargeCoefficient <= 1) || !(p.bbLeakCoefficient >= 0 && p.bbLeakCoefficient <= 1) || !(p.restitution >= 0 && p.restitution <= 1)) errors.push("coefficient:range");
     if (!(p.usefulFraction > 0 && p.usefulFraction <= 1) || p.airTemperature <= -273.15 || p.maxTime > 250) errors.push("range:invalid");
+    if (![0, 1].includes(p.silencerEnabled)) errors.push("silencer:enabled");
+    if (!Number.isInteger(p.silencerBaffleCount) || p.silencerBaffleCount > 50) errors.push("silencer:baffles");
+    if (!(p.silencerPackingFraction >= 0 && p.silencerPackingFraction < .9)) errors.push("silencer:packing");
+    if (p.silencerBaffleBore >= p.silencerInnerDiameter || p.silencerEndCapBore >= p.silencerInnerDiameter) errors.push("silencer:clearance");
+    if (p.silencerEnabled === 1 && (p.silencerBaffleBore <= p.bbDiameter || p.silencerEndCapBore <= p.bbDiameter)) errors.push("silencer:bb-clearance");
+    if (p.silencerBaffleCount * p.silencerBaffleThickness >= p.silencerLength) errors.push("silencer:length");
+    if (p.silencerEnabled === 1) {
+      const silencer = silencerGeometry(p);
+      if (!(silencer.freeVolume > 0 && silencer.effectiveOutletArea > 0)) errors.push("silencer:volume");
+    }
     if (![0, 1].includes(p.springLengthMode)) errors.push("spring:mode");
     for (const key of ["springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
     const spring = springState(p);
@@ -142,6 +158,26 @@
       gap: (p.headBore - p.airbrakeDiameter) / 2,
       annulus: Math.PI / 4 * ((p.headBore / 1000) ** 2 - (p.airbrakeDiameter / 1000) ** 2)
     };
+  }
+  function silencerGeometry(raw) {
+    const p = normalize(raw), enabled = p.silencerEnabled === 1;
+    const length = p.silencerLength / 1000, chamberArea = area(p.silencerInnerDiameter);
+    const baffleArea = Math.max(0, chamberArea - area(p.silencerBaffleBore));
+    const baffleSolidVolume = p.silencerBaffleCount * baffleArea * p.silencerBaffleThickness / 1000;
+    const grossVolume = chamberArea * length;
+    const openBeforePacking = Math.max(0, grossVolume - baffleSolidVolume);
+    const packingSolidVolume = openBeforePacking * p.silencerPackingFraction;
+    const freeVolume = openBeforePacking - packingSolidVolume;
+    const apertureArea = Math.min(area(p.silencerBaffleBore), area(p.silencerEndCapBore));
+    const openRatio = Math.max(1e-6, area(p.silencerBaffleBore) / chamberArea);
+    // A transparent lumped minor-loss proxy: each abrupt baffle contraction,
+    // finite plate thickness and porous fill reduce the equivalent outlet area.
+    // It is deliberately not presented as CFD or an acoustic transfer function.
+    const plateFraction = p.silencerBaffleCount * p.silencerBaffleThickness / p.silencerLength;
+    const lossFactor = 1 + p.silencerBaffleCount * (1 - openRatio) ** 2
+      + 2 * plateFraction / openRatio + 3 * p.silencerPackingFraction / Math.max(.1, 1 - p.silencerPackingFraction);
+    return { enabled, length, chamberArea, grossVolume, baffleSolidVolume, packingSolidVolume, freeVolume,
+      apertureArea, openRatio, lossFactor, effectiveOutletArea: enabled ? apertureArea * p.silencerDischargeCoefficient / Math.sqrt(lossFactor) : 0 };
   }
   function springForce(p, x) {
     const spring = springState(p), c = spring.preload + spring.contactTravel - x * 1000;
@@ -263,14 +299,16 @@
   function simulate(raw = {}, options = {}) {
     const p = normalize(raw), errors = validate(p);
     if (errors.length) return { version: VERSION, valid: false, errors, frames: [], exitTime: null, pistonHitTime: null };
-    const g0 = geometry(p, 0, 0), pa = p.ambientPressure * 1000, ta = p.airTemperature + 273.15;
+    const g0 = geometry(p, 0, 0), sg = silencerGeometry(p), pa = p.ambientPressure * 1000, ta = p.airTemperature + 273.15;
     const mp = (p.pistonMass + p.springMass / 3) / 1000, mbb = p.bbMass / 1000, L = p.barrelLength / 1000;
     // x,v,y,w,mc,Uc,mb,Ub, friction dissipation, external enthalpy,
     // wall heat, ambient boundary work, external mass, BB positive/negative net
-    // work, and energy dissipated by the compliant bumper.
+    // work, energy dissipated by the compliant bumper, silencer gas mass and
+    // silencer gas internal energy. Disabled silencers retain zero state.
     let s = [0, 0, 0, 0, pa * g0.vc / (R * ta), pa * g0.vc / (GAMMA - 1), pa * g0.vb / (R * ta), pa * g0.vb / (GAMMA - 1), 0, 0, 0, 0, 0, 0, 0, 0,
-      pa * g0.vf / (R * ta), pa * g0.vf / (GAMMA - 1)];
-    let t = 0, exited = false, hit = false, contactLoss = 0, rigidContactLoss = 0, muzzleMass = 0, peakOutflow = 0, peakPressure = pa, peakFrontPressure = pa;
+      pa * g0.vf / (R * ta), pa * g0.vf / (GAMMA - 1),
+      sg.enabled ? pa * sg.freeVolume / (R * ta) : 0, sg.enabled ? pa * sg.freeVolume / (GAMMA - 1) : 0];
+    let t = 0, exited = false, hit = false, contactLoss = 0, rigidContactLoss = 0, muzzleMass = 0, peakOutflow = 0, peakMuzzleTransfer = 0, peakPressure = pa, peakFrontPressure = pa, peakSilencerPressure = pa;
     let exitTime = null, exitVelocity = null, exitPressure = null, exitFrontPressure = null, exitGasMass = null, pistonHitTime = null, impactVelocity = null;
     let engageTime = null, decelTime = null, strongBrakeTime = null, momentumAtEngage = null, brakeEnergy = null, reboundTime = null;
     let preContactReversalTime = null, contactReboundTime = null, peakPistonX = 0, maxPistonRetreat = 0, maxPreContactRetreat = 0;
@@ -280,23 +318,28 @@
     const frames = [], history = [], maxTime = (options.maxTime ?? p.maxTime) / 1000;
     const maxDt = options.dt ?? 1e-5, tolerance = options.tolerance ?? 2e-5;
     let dt = maxDt;
-    const initialEnergy = s[5] + s[7] + s[17] + springEnergy(p, 0), initialMass = s[4] + s[6] + s[16];
+    const initialEnergy = s[5] + s[7] + s[17] + s[19] + springEnergy(p, 0), initialMass = s[4] + s[6] + s[16] + s[18];
     function evaluate(v) {
       const g = geometry(p, v[0], exited ? L : v[2]);
       const pc = (GAMMA - 1) * v[5] / g.vc, pb = (GAMMA - 1) * v[7] / g.vb, pf = (GAMMA - 1) * v[17] / g.vf;
       const tc = v[5] / (v[4] * CV), tb = v[7] / (v[6] * CV), tf = v[17] / (v[16] * CV);
+      const ps = sg.enabled ? (GAMMA - 1) * v[19] / sg.freeVolume : pa;
+      const ts = sg.enabled ? v[19] / (v[18] * CV) : ta;
       const pass = passage(p, g.insertion, pc, tc, pb, tb);
       const lc = massFlow(pc, tc, pa, ta, p.pistonLeak * 1e-6);
       const gap = Math.max(0, g.ab - area(p.bbDiameter));
       const nozzleLeak = massFlow(pb, tb, pa, ta, p.nozzleLeak * 1e-6);
       const bbBypass = exited ? 0 : massFlow(pb, tb, pf, tf, gap * p.bbLeakCoefficient);
-      const behindMuzzle = exited ? massFlow(pb, tb, pa, ta, g.ab * p.muzzleDischargeCoefficient) : 0;
-      const frontMuzzle = exited ? 0 : massFlow(pf, tf, pa, ta, g.ab * p.muzzleDischargeCoefficient);
+      const downstreamPressure = sg.enabled ? ps : pa, downstreamTemperature = sg.enabled ? ts : ta;
+      const behindMuzzle = exited ? massFlow(pb, tb, downstreamPressure, downstreamTemperature, g.ab * p.muzzleDischargeCoefficient) : 0;
+      const frontMuzzle = exited ? 0 : massFlow(pf, tf, downstreamPressure, downstreamTemperature, g.ab * p.muzzleDischargeCoefficient);
+      const silencerOutflow = sg.enabled ? massFlow(ps, ts, pa, ta, sg.effectiveOutletArea) : 0;
       const hc = lc * CP * (lc >= 0 ? tc : ta);
       const hn = nozzleLeak * CP * (nozzleLeak >= 0 ? tb : ta);
       const hbb = bbBypass * CP * (bbBypass >= 0 ? tb : tf);
-      const hbm = behindMuzzle * CP * (behindMuzzle >= 0 ? tb : ta);
-      const hfm = frontMuzzle * CP * (frontMuzzle >= 0 ? tf : ta);
+      const hbm = behindMuzzle * CP * (behindMuzzle >= 0 ? tb : downstreamTemperature);
+      const hfm = frontMuzzle * CP * (frontMuzzle >= 0 ? tf : downstreamTemperature);
+      const hso = silencerOutflow * CP * (silencerOutflow >= 0 ? ts : ta);
       const h = pass.mdot * CP * (pass.mdot >= 0 ? tc : tb);
       const fs = springForce(p, v[0]), gasForce = pa * g.ac + pc * g.dvc + pb * g.dvb;
       const rear = p.rearDamping * v[1];
@@ -318,16 +361,20 @@
       if (v[2] <= 0 && v[3] <= 0 && ab < 0) ab = 0;
       const vx = v[1], vy = exited ? 0 : v[3];
       const qc = p.heatTransfer * (ta - tc), qb = p.heatTransfer * (ta - tb), qf = p.heatTransfer * (ta - tf);
+      const qs = sg.enabled ? p.silencerHeatTransfer * (ta - ts) : 0;
       const power = exited ? 0 : (thrust - fb) * vy;
       return {
         d: [vx, ap, vy, ab, -pass.mdot - lc, -pc * g.dvc * vx - h - hc + qc,
           pass.mdot - nozzleLeak - bbBypass - behindMuzzle, -pb * (g.dvb * vx + g.ab * vy) + h - hn - hbb - hbm + qb,
-          fp * vx + rear * vx + fb * vy, -hc - hn - hbm - hfm, qc + qb + qf, pa * g.ac * vx, -lc - nozzleLeak - behindMuzzle - frontMuzzle, Math.max(0, power), Math.max(0, -power),
+          fp * vx + rear * vx + fb * vy, -hc - hn - (sg.enabled ? hso : hbm + hfm), qc + qb + qf + qs, pa * g.ac * vx, -lc - nozzleLeak - (sg.enabled ? silencerOutflow : behindMuzzle + frontMuzzle), Math.max(0, power), Math.max(0, -power),
           bumperEffectiveDamping * vx ** 2,
-          bbBypass - frontMuzzle, -pf * g.dvf * vy + hbb - hfm + qf],
-        pc, pb, pf, tc, tb, tf, g, fs, ap, ab, bumperCompression, bumperForce,
-        flow: pass.mdot, bbBypass, hbb, hfm, qf, frontOutflow: frontMuzzle,
-        outflow: exited ? behindMuzzle + frontMuzzle : 0, minArea: pass.minArea
+          bbBypass - frontMuzzle, -pf * g.dvf * vy + hbb - hfm + qf,
+          sg.enabled ? behindMuzzle + frontMuzzle - silencerOutflow : 0,
+          sg.enabled ? hbm + hfm - hso + qs : 0],
+        pc, pb, pf, ps, tc, tb, tf, ts, g, fs, ap, ab, bumperCompression, bumperForce,
+        flow: pass.mdot, bbBypass, hbb, hfm, qf, qs, frontOutflow: frontMuzzle,
+        muzzleTransfer: behindMuzzle + frontMuzzle, silencerOutflow,
+        outflow: exited ? (sg.enabled ? silencerOutflow : behindMuzzle + frontMuzzle) : 0, minArea: pass.minArea
       };
     }
     // The small gas pocket in front of the BB becomes numerically stiff near
@@ -338,15 +385,17 @@
       const gStart = geometry(p, start[0], exited ? L : start[2]);
       const gEnd = geometry(p, target[0], exited ? L : target[2]);
       const pb = (GAMMA - 1) * target[7] / gEnd.vb, tb = target[7] / (target[6] * CV);
+      const ps = sg.enabled ? (GAMMA - 1) * target[19] / sg.freeVolume : pa;
+      const ts = sg.enabled ? target[19] / (target[18] * CV) : ta;
       const gap = Math.max(0, gEnd.ab - area(p.bbDiameter));
       const dVolume = gEnd.vf - gStart.vf;
       const m0 = start[16], u0 = start[17];
       const transport = (m, u) => {
         const pf = (GAMMA - 1) * u / gEnd.vf, tf = u / (m * CV);
         const bypass = exited ? 0 : massFlow(pb, tb, pf, tf, gap * p.bbLeakCoefficient);
-        const muzzle = massFlow(pf, tf, pa, ta, gEnd.ab * p.muzzleDischargeCoefficient);
+        const muzzle = massFlow(pf, tf, ps, ts, gEnd.ab * p.muzzleDischargeCoefficient);
         const hb = bypass * CP * (bypass >= 0 ? tb : tf);
-        const hm = muzzle * CP * (muzzle >= 0 ? tf : ta);
+        const hm = muzzle * CP * (muzzle >= 0 ? tf : ts);
         const q = p.heatTransfer * (ta - tf);
         return { pf, bypass, muzzle, hb, hm, q };
       };
@@ -379,12 +428,12 @@
       return { mass: m, energy: u, bypassMass: h * transfer.bypass, muzzleMass: h * transfer.muzzle,
         bypassEnergy: h * transfer.hb, muzzleEnergy: h * transfer.hm, heatEnergy: h * transfer.q };
     }
-    const validState = v => v.every(Number.isFinite) && v[4] > 0 && v[5] > 0 && v[6] > 0 && v[7] > 0 && v[16] > 0 && v[17] > 0 && geometry(p, v[0], exited ? L : v[2]).vc > 0 && geometry(p, v[0], exited ? L : v[2]).vb > 0 && geometry(p, v[0], exited ? L : v[2]).vf > 0;
+    const validState = v => v.every(Number.isFinite) && v[4] > 0 && v[5] > 0 && v[6] > 0 && v[7] > 0 && v[16] > 0 && v[17] > 0 && (!sg.enabled || v[18] > 0 && v[19] > 0) && geometry(p, v[0], exited ? L : v[2]).vc > 0 && geometry(p, v[0], exited ? L : v[2]).vb > 0 && geometry(p, v[0], exited ? L : v[2]).vf > 0;
     const bumperEnergy = v => bumperPotential(p, Math.max(0, v[0] - g0.stroke));
-    const totalEnergy = v => v[5] + v[7] + v[17] + springEnergy(p, v[0]) + .5 * mp * v[1] ** 2 + .5 * mbb * v[3] ** 2 + bumperEnergy(v);
+    const totalEnergy = v => v[5] + v[7] + v[17] + v[19] + springEnergy(p, v[0]) + .5 * mp * v[1] ** 2 + .5 * mbb * v[3] ** 2 + bumperEnergy(v);
     function frame(e) {
-      return { t, pistonX: s[0], pistonV: s[1], pistonA: e.ap, bbX: s[2], bbV: s[3], bbA: e.ab, pressure: e.pb, frontPressure: e.pf, cylinderPressure: e.pc, cylinderTemperature: e.tc, bbTemperature: e.tb, frontTemperature: e.tf,
-        insertion: e.g.insertion, flow: e.flow, frontOutflow: e.frontOutflow, outflow: e.outflow, openArea: e.minArea,
+      return { t, pistonX: s[0], pistonV: s[1], pistonA: e.ap, bbX: s[2], bbV: s[3], bbA: e.ab, pressure: e.pb, frontPressure: e.pf, silencerPressure: e.ps, cylinderPressure: e.pc, cylinderTemperature: e.tc, bbTemperature: e.tb, frontTemperature: e.tf, silencerTemperature: e.ts,
+        insertion: e.g.insertion, flow: e.flow, frontOutflow: e.frontOutflow, muzzleTransfer: e.muzzleTransfer, silencerOutflow: e.silencerOutflow, outflow: e.outflow, openArea: e.minArea,
         bumperCompression: e.bumperCompression, bumperForce: e.bumperForce, pistonHit: hit, bbExited: exited,
         energyResidual: totalEnergy(s) + s[8] + contactLoss + s[15] - initialEnergy - s[9] - s[10] - s[11] };
     }
@@ -441,12 +490,17 @@
         // arbitrary external source.
         next[6] -= frontFull.bypassMass - h * em.bbBypass;
         next[7] -= frontFull.bypassEnergy - h * em.hbb;
-        next[12] -= frontFull.muzzleMass - h * em.frontOutflow;
-        next[9] -= frontFull.muzzleEnergy - h * em.hfm;
+        if (sg.enabled) {
+          next[18] += frontFull.muzzleMass - h * em.frontOutflow;
+          next[19] += frontFull.muzzleEnergy - h * em.hfm;
+        } else {
+          next[12] -= frontFull.muzzleMass - h * em.frontOutflow;
+          next[9] -= frontFull.muzzleEnergy - h * em.hfm;
+        }
         next[10] += frontFull.heatEnergy - h * em.qf;
         next[16] = frontFull.mass; next[17] = frontFull.energy;
       }
-      const scales = [g0.hardStop, 10, L, 100, initialMass, initialEnergy, initialMass, initialEnergy, 1, 1, 1, 1, initialMass, 1, 1, 1, initialMass, initialEnergy];
+      const scales = [g0.hardStop, 10, L, 100, initialMass, initialEnergy, initialMass, initialEnergy, 1, 1, 1, 1, initialMass, 1, 1, 1, initialMass, initialEnergy, initialMass, initialEnergy];
       let error = 0;
       for (let i = 0; i < 8; i++) error = Math.max(error, Math.abs((em.d[i] - e.d[i]) * h) / Math.max(scales[i] * .01, Math.abs(s[i]), Math.abs(next[i])));
       if (!frontFull || !validState(next) || error > tolerance && h > 1e-9) { dt = h * Math.max(.15, .8 * Math.sqrt(tolerance / Math.max(error, tolerance))); rejectedSteps++; if (dt < 1e-10) { convergenceFailure = true; terminationReason = "minimum-step"; break; } continue; }
@@ -503,7 +557,11 @@
         // exact mass/energy exchange before continuing the post-exit solution.
         const exitGeometry = geometry(p, s[0], L);
         const ambientFrontMass = pa * exitGeometry.vf / (R * ta), ambientFrontEnergy = pa * exitGeometry.vf / (GAMMA - 1);
-        s[12] += ambientFrontMass - s[16]; s[9] += ambientFrontEnergy - s[17];
+        if (sg.enabled) {
+          s[18] += s[16] - ambientFrontMass; s[19] += s[17] - ambientFrontEnergy;
+        } else {
+          s[12] += ambientFrontMass - s[16]; s[9] += ambientFrontEnergy - s[17];
+        }
         s[16] = ambientFrontMass; s[17] = ambientFrontEnergy;
         e = evaluate(s);
       }
@@ -518,9 +576,10 @@
       if (!hit) maxPreContactRetreat = Math.max(maxPreContactRetreat, peakPistonX - s[0]);
       const ke = .5 * mbb * s[3] ** 2;
       if (!exited || exitTime === t) { history.push([t, ke]); if (ke > maxBbEnergy) { maxBbEnergy = ke; maxBbTime = t; } }
-      peakPressure = Math.max(peakPressure, e.pb); peakFrontPressure = Math.max(peakFrontPressure, e.pf); peakCylinderPressure = Math.max(peakCylinderPressure, e.pc); peakPistonV = Math.max(peakPistonV, s[1]);
+      peakPressure = Math.max(peakPressure, e.pb); peakFrontPressure = Math.max(peakFrontPressure, e.pf); peakSilencerPressure = Math.max(peakSilencerPressure, e.ps); peakCylinderPressure = Math.max(peakCylinderPressure, e.pc); peakPistonV = Math.max(peakPistonV, s[1]);
+      peakMuzzleTransfer = Math.max(peakMuzzleTransfer, e.muzzleTransfer);
       peakOutflow = Math.max(peakOutflow, e.outflow); muzzleMass += Math.max(0, em.outflow) * h;
-      const quietGas = exited && hit && t > Math.max(exitTime, pistonHitTime) + .004 && Math.abs(e.pc - pa) < .002 * pa && Math.abs(e.pb - pa) < .002 * pa;
+      const quietGas = exited && hit && t > Math.max(exitTime, pistonHitTime) + .004 && Math.abs(e.pc - pa) < .002 * pa && Math.abs(e.pb - pa) < .002 * pa && (!sg.enabled || Math.abs(e.ps - pa) < .002 * pa);
       const stablePiston = Math.abs(s[1]) < .005 && Math.abs(e.ap) < 1;
       if (quietGas && stablePiston) {
         if (settledSince === null) settledSince = t;
@@ -540,7 +599,9 @@
       }
     }
     const exitEnergy = exitVelocity === null ? null : .5 * mbb * exitVelocity ** 2;
-    const massResidual = s[4] + s[6] + s[16] - initialMass - s[12];
+    const massResidual = s[4] + s[6] + s[16] + s[18] - initialMass - s[12];
+    const pulseFrames = exited && peakOutflow > 0 ? frames.filter(value => value.t >= exitTime && value.outflow >= peakOutflow * .1) : [];
+    const outflowPulseDuration = pulseFrames.length > 1 ? pulseFrames.at(-1).t - pulseFrames[0].t : null;
     for (const value of frames) { value.waveTransit = 0; value.wavePressureEstimate = value.pressure; }
     const waveFrames = frames.filter(value => exitTime === null || value.t <= exitTime + 1e-12);
     const interpolatePressure = time => {
@@ -582,6 +643,7 @@
     return { version: VERSION, params: p, valid: !numericalFailure, errors: numericalFailure ? ["solver:convergence"] : [], frames,
       duration: t, stroke: g0.stroke, hardStop: g0.hardStop, nominalStroke: p.strokeLength / 1000, bumperThickness: p.bumperThickness / 1000,
       barrelLength: L, barrelVolume: g0.barrelVolume, cylinderVolume: g0.sweptVolume, ratio: g0.sweptVolume / g0.barrelVolume,
+      silencerEnabled: sg.enabled, silencerVolume: sg.freeVolume, silencerExpansionRatio: sg.enabled ? sg.freeVolume / g0.barrelVolume : null,
       ambientPressure: pa, engageTime, decelTime, strongBrakeTime, reboundTime, usefulTime, exitTime, pistonHitTime,
       preContactReversalTime, contactReboundTime, maxPistonRetreat, maxPreContactRetreat,
       pistonImpacts, maxBumperCompression, peakBumperForce, bumperDissipatedEnergy: s[15],
@@ -589,15 +651,15 @@
       impactEnergy: impactVelocity === null ? null : .5 * p.pistonMass / 1000 * impactVelocity ** 2,
       momentumAtEngage, preBrakeShare: brakeEnergy === null || !exitEnergy ? null : brakeEnergy / exitEnergy,
       maxBbEnergy, maxBbTime, bbEnergyLoss: exitEnergy === null ? null : Math.max(0, maxBbEnergy - exitEnergy),
-      positiveBbWork: s[13], negativeBbWork: s[14], peakPressure, peakFrontPressure, peakCylinderPressure, peakPistonV, peakOutflow, muzzleMass,
+      positiveBbWork: s[13], negativeBbWork: s[14], peakPressure, peakFrontPressure, peakSilencerPressure, peakCylinderPressure, peakPistonV, peakOutflow, peakMuzzleTransfer, outflowPulseDuration, muzzleMass,
       energyResidual: frame(final).energyResidual, massResidual, releasedSpringEnergy: springEnergy(p, 0) - springEnergy(p, s[0]),
       energyScale: Math.max(.01, springEnergy(p, 0)), steps, rejectedSteps,
       soundCrossingTime: L / Math.sqrt(GAMMA * R * ta), complete: exited && hit,
       terminationReason, pistonSettled, waveDiagnostics,
-      dischargeComplete: exited && Math.abs(final.pc - pa) < .01 * pa && Math.abs(final.pb - pa) < .01 * pa
+      dischargeComplete: exited && Math.abs(final.pc - pa) < .01 * pa && Math.abs(final.pb - pa) < .01 * pa && (!sg.enabled || Math.abs(final.ps - pa) < .01 * pa)
     };
   }
-  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, contactStroke, bumperLimit, geometry, pinVolume, pinDiameter, springState, springForce, springEnergy, bumperElasticForce, bumperPotential, massFlow, passage, simulate };
+  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, contactStroke, bumperLimit, geometry, silencerGeometry, pinVolume, pinDiameter, springState, springForce, springEnergy, bumperElasticForce, bumperPotential, massFlow, passage, simulate };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PneumaticPhysics = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

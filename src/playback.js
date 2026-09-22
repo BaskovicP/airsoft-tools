@@ -41,8 +41,15 @@
     const contact = face0 + (p.strokeLength - p.bumperThickness) * scale;
     const rigidHead = face0 + p.strokeLength * scale, step = rigidHead + p.headLength * scale;
     const head = contact, passageEnd = step + p.nozzleLength * scale, face = face0 + pistonX * 1000 * scale;
-    return { wall: 40, face0, face, contact, rigidHead, bumperWidth: rigidHead - contact, head, step, passageEnd, barrelStart: passageEnd + 20, end: 1040,
-      pinLength: p.airbrakeLength * scale, pinTip: face + p.airbrakeLength * scale, scale };
+    const barrelStart = passageEnd + 20, outlet = 1040;
+    // Preserve one physical axial scale from the BB start plane to the final
+    // outlet. With a silencer installed, `end` remains the inner-barrel crown
+    // and `silencerEnd` becomes the end-cap outlet.
+    const downstreamLength = p.barrelLength + (p.silencerEnabled ? p.silencerLength : 0);
+    const barrelScale = (outlet - barrelStart) / Math.max(1, downstreamLength);
+    const end = barrelStart + p.barrelLength * barrelScale;
+    return { wall: 40, face0, face, contact, rigidHead, bumperWidth: rigidHead - contact, head, step, passageEnd, barrelStart, end,
+      silencerEnd: p.silencerEnabled ? outlet : end, barrelScale, pinLength: p.airbrakeLength * scale, pinTip: face + p.airbrakeLength * scale, scale };
   }
   const api = { timeline, frameAt, mechanism };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.PneumaticPlayback = api;

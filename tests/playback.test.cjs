@@ -68,3 +68,11 @@ test('drawing pin entry and full insertion agree with physical stroke/head geome
     close(end.rigidHead-end.head,p.bumperThickness*end.scale);
   }
 });
+test('installed silencer keeps inner-barrel crown distinct from the final outlet',()=>{
+  const plain=P.normalize(), silenced=P.normalize({silencerEnabled:1,silencerLength:180});
+  const a=B.mechanism(plain,0), b=B.mechanism(silenced,0);
+  close(a.end,a.silencerEnd);assert.ok(b.end<b.silencerEnd);
+  close((b.end-b.barrelStart)/b.barrelScale,silenced.barrelLength);
+  close((b.silencerEnd-b.end)/b.barrelScale,silenced.silencerLength);
+  assert.ok(b.barrelScale<a.barrelScale);
+});

@@ -19,7 +19,7 @@ function context() {
 const format = (v, digits = 2) => Number.isFinite(v) ? v.toFixed(digits) : "—";
 
 test("rich cutaway uses finite canvas geometry at every sampled default and airbrake frame", () => {
-  for (const setup of [{}, { airbrakeLength: 20, airbrakeTaper: 2 }, { strokeLength: 60, barrelLength: 200 }, { bumperThickness: 4, restitution: 0 }]) {
+  for (const setup of [{}, { airbrakeLength: 20, airbrakeTaper: 2 }, { strokeLength: 60, barrelLength: 200 }, { bumperThickness: 4, restitution: 0 }, { silencerEnabled: 1, silencerLength: 180, silencerBaffleCount: 7, silencerPackingFraction: .2, maxTime: 100 }]) {
     const p = P.normalize(setup), shot = P.simulate(p); assert.ok(shot.valid);
     const before = JSON.stringify(shot);
     for (const [w, h] of [[950, 330], [310, 265]]) {

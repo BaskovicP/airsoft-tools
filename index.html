@@ -1481,6 +1481,10 @@
       .parts-svg .parts-contact-plane { stroke:var(--green); stroke-width:2; }
       .parts-svg .parts-rigid-plane { stroke:var(--amber); stroke-width:2; stroke-dasharray:5 4; }
       .parts-svg .parts-motion { fill:none; stroke:var(--cyan); stroke-width:2; }
+      .parts-svg .parts-silencer-shell { fill:var(--line-bright); stroke:var(--muted); stroke-width:1.8; }
+      .parts-svg .parts-silencer-chamber { fill:#06130f; stroke:color-mix(in srgb,var(--green) 45%,var(--line-bright)); stroke-width:1.2; }
+      .parts-svg .parts-silencer-baffle,.parts-svg .parts-silencer-endcap { fill:#60757e; stroke:#aabdc2; stroke-width:1; }
+      .parts-svg .parts-silencer-packing { fill:none; stroke:var(--green); stroke-width:1.2; opacity:.45; }
       .parts-svg .parts-spring-seat { stroke:var(--line-bright); stroke-width:8; }
       .parts-svg .parts-spring { fill:none; stroke:var(--amber); stroke-width:8; stroke-linecap:round; filter:drop-shadow(0 0 7px rgba(255,191,105,.18)); }
       .parts-svg .parts-cut line { stroke:var(--red); stroke-width:2; stroke-dasharray:5 4; }
@@ -1524,7 +1528,7 @@
   <script>/* Pure, dependency-free conservative lumped model. See docs/MODEL.md. */
 (function (root) {
   "use strict";
-  const VERSION = "4.0.0";
+  const VERSION = "4.1.0";
   const R = 287.05, GAMMA = 1.4, CV = R / (GAMMA - 1), CP = CV + R;
   const STICK_SPEED = 1e-5;
   const area = d => Math.PI * (d / 2000) ** 2;
@@ -1542,6 +1546,12 @@
     bumperStiffness: 250, bumperDamping: 160, bumperMaxCompression: 1,
     bumperCurve: [],
     deadVolume: .55, breechVolume: .45, frontDeadVolume: .05, dischargeCoefficient: .75, muzzleDischargeCoefficient: .85,
+    // Optional muzzle suppressor/silencer. Geometry defines a fourth conservative
+    // gas volume; outlet Cd, packing fraction and heat transfer remain conditional
+    // effective inputs rather than an acoustic/dB model.
+    silencerEnabled: 0, silencerLength: 150, silencerInnerDiameter: 28,
+    silencerBaffleCount: 5, silencerBaffleThickness: 2, silencerBaffleBore: 8, silencerEndCapBore: 8,
+    silencerPackingFraction: 0, silencerDischargeCoefficient: .65, silencerHeatTransfer: .02,
     pistonLeak: .005, nozzleLeak: .005, bbLeakCoefficient: .15,
     springStiffness: 550, springPreload: 50, springMass: 0, springCurve: [],
     springLengthMode: 0, springFreeLength: 0, springInstalledLength: 0, springCutLength: 0,
@@ -1579,10 +1589,10 @@
   }
   function validate(raw) {
     const p = normalize(raw), errors = [];
-    const positive = ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "bumperBore", "headBore", "headLength", "nozzleBore", "nozzleLength", "deadVolume", "breechVolume", "frontDeadVolume", "ambientPressure", "maxTime"];
+    const positive = ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "bumperBore", "headBore", "headLength", "nozzleBore", "nozzleLength", "deadVolume", "breechVolume", "frontDeadVolume", "silencerLength", "silencerInnerDiameter", "silencerBaffleThickness", "silencerBaffleBore", "silencerEndCapBore", "ambientPressure", "maxTime"];
     for (const key of Object.keys(DEFAULTS)) if (!["springCurve", "bumperCurve"].includes(key) && !Number.isFinite(p[key])) errors.push(`${key}:finite`);
     for (const key of positive) if (!(p[key] > 0)) errors.push(`${key}:positive`);
-    for (const key of ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "bumperThickness", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "springStiffness", "springPreload", "springMass", "pistonLeak", "nozzleLeak", "pistonFriction", "sealFriction", "rearDamping", "bbBreakaway", "barrelDrag", "heatTransfer", "decelThreshold"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
+    for (const key of ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "bumperThickness", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "silencerBaffleCount", "silencerPackingFraction", "silencerHeatTransfer", "springStiffness", "springPreload", "springMass", "pistonLeak", "nozzleLeak", "pistonFriction", "sealFriction", "rearDamping", "bbBreakaway", "barrelDrag", "heatTransfer", "decelThreshold"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
     if (p.bbDiameter >= p.barrelDiameter) errors.push("bb:clearance");
     if ((p.bumperThickness > 0 && p.cylinderBore <= p.bumperBore) || p.cylinderBore <= p.headBore || p.cylinderBore <= p.airbrakeDiameter) errors.push("cylinder:clearance");
     const maximumPinReach = p.airbrakeLength + Math.min(p.bumperThickness, p.bumperMaxCompression);
@@ -1599,8 +1609,18 @@
     const travel = p.strokeLength - p.bumperThickness;
     if (p.airbrakeLength > travel || maximumPinReach > p.bumperThickness + p.headLength + p.nozzleLength) errors.push("pin:length");
     if (p.airbrakeTipDiameter > p.airbrakeDiameter || p.airbrakeTaper > p.airbrakeLength && p.airbrakeLength > 0) errors.push("pin:profile");
-    if (!(p.dischargeCoefficient > 0 && p.dischargeCoefficient <= 1) || !(p.muzzleDischargeCoefficient > 0 && p.muzzleDischargeCoefficient <= 1) || !(p.bbLeakCoefficient >= 0 && p.bbLeakCoefficient <= 1) || !(p.restitution >= 0 && p.restitution <= 1)) errors.push("coefficient:range");
+    if (!(p.dischargeCoefficient > 0 && p.dischargeCoefficient <= 1) || !(p.muzzleDischargeCoefficient > 0 && p.muzzleDischargeCoefficient <= 1) || !(p.silencerDischargeCoefficient > 0 && p.silencerDischargeCoefficient <= 1) || !(p.bbLeakCoefficient >= 0 && p.bbLeakCoefficient <= 1) || !(p.restitution >= 0 && p.restitution <= 1)) errors.push("coefficient:range");
     if (!(p.usefulFraction > 0 && p.usefulFraction <= 1) || p.airTemperature <= -273.15 || p.maxTime > 250) errors.push("range:invalid");
+    if (![0, 1].includes(p.silencerEnabled)) errors.push("silencer:enabled");
+    if (!Number.isInteger(p.silencerBaffleCount) || p.silencerBaffleCount > 50) errors.push("silencer:baffles");
+    if (!(p.silencerPackingFraction >= 0 && p.silencerPackingFraction < .9)) errors.push("silencer:packing");
+    if (p.silencerBaffleBore >= p.silencerInnerDiameter || p.silencerEndCapBore >= p.silencerInnerDiameter) errors.push("silencer:clearance");
+    if (p.silencerEnabled === 1 && (p.silencerBaffleBore <= p.bbDiameter || p.silencerEndCapBore <= p.bbDiameter)) errors.push("silencer:bb-clearance");
+    if (p.silencerBaffleCount * p.silencerBaffleThickness >= p.silencerLength) errors.push("silencer:length");
+    if (p.silencerEnabled === 1) {
+      const silencer = silencerGeometry(p);
+      if (!(silencer.freeVolume > 0 && silencer.effectiveOutletArea > 0)) errors.push("silencer:volume");
+    }
     if (![0, 1].includes(p.springLengthMode)) errors.push("spring:mode");
     for (const key of ["springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
     const spring = springState(p);
@@ -1665,6 +1685,26 @@
       gap: (p.headBore - p.airbrakeDiameter) / 2,
       annulus: Math.PI / 4 * ((p.headBore / 1000) ** 2 - (p.airbrakeDiameter / 1000) ** 2)
     };
+  }
+  function silencerGeometry(raw) {
+    const p = normalize(raw), enabled = p.silencerEnabled === 1;
+    const length = p.silencerLength / 1000, chamberArea = area(p.silencerInnerDiameter);
+    const baffleArea = Math.max(0, chamberArea - area(p.silencerBaffleBore));
+    const baffleSolidVolume = p.silencerBaffleCount * baffleArea * p.silencerBaffleThickness / 1000;
+    const grossVolume = chamberArea * length;
+    const openBeforePacking = Math.max(0, grossVolume - baffleSolidVolume);
+    const packingSolidVolume = openBeforePacking * p.silencerPackingFraction;
+    const freeVolume = openBeforePacking - packingSolidVolume;
+    const apertureArea = Math.min(area(p.silencerBaffleBore), area(p.silencerEndCapBore));
+    const openRatio = Math.max(1e-6, area(p.silencerBaffleBore) / chamberArea);
+    // A transparent lumped minor-loss proxy: each abrupt baffle contraction,
+    // finite plate thickness and porous fill reduce the equivalent outlet area.
+    // It is deliberately not presented as CFD or an acoustic transfer function.
+    const plateFraction = p.silencerBaffleCount * p.silencerBaffleThickness / p.silencerLength;
+    const lossFactor = 1 + p.silencerBaffleCount * (1 - openRatio) ** 2
+      + 2 * plateFraction / openRatio + 3 * p.silencerPackingFraction / Math.max(.1, 1 - p.silencerPackingFraction);
+    return { enabled, length, chamberArea, grossVolume, baffleSolidVolume, packingSolidVolume, freeVolume,
+      apertureArea, openRatio, lossFactor, effectiveOutletArea: enabled ? apertureArea * p.silencerDischargeCoefficient / Math.sqrt(lossFactor) : 0 };
   }
   function springForce(p, x) {
     const spring = springState(p), c = spring.preload + spring.contactTravel - x * 1000;
@@ -1786,14 +1826,16 @@
   function simulate(raw = {}, options = {}) {
     const p = normalize(raw), errors = validate(p);
     if (errors.length) return { version: VERSION, valid: false, errors, frames: [], exitTime: null, pistonHitTime: null };
-    const g0 = geometry(p, 0, 0), pa = p.ambientPressure * 1000, ta = p.airTemperature + 273.15;
+    const g0 = geometry(p, 0, 0), sg = silencerGeometry(p), pa = p.ambientPressure * 1000, ta = p.airTemperature + 273.15;
     const mp = (p.pistonMass + p.springMass / 3) / 1000, mbb = p.bbMass / 1000, L = p.barrelLength / 1000;
     // x,v,y,w,mc,Uc,mb,Ub, friction dissipation, external enthalpy,
     // wall heat, ambient boundary work, external mass, BB positive/negative net
-    // work, and energy dissipated by the compliant bumper.
+    // work, energy dissipated by the compliant bumper, silencer gas mass and
+    // silencer gas internal energy. Disabled silencers retain zero state.
     let s = [0, 0, 0, 0, pa * g0.vc / (R * ta), pa * g0.vc / (GAMMA - 1), pa * g0.vb / (R * ta), pa * g0.vb / (GAMMA - 1), 0, 0, 0, 0, 0, 0, 0, 0,
-      pa * g0.vf / (R * ta), pa * g0.vf / (GAMMA - 1)];
-    let t = 0, exited = false, hit = false, contactLoss = 0, rigidContactLoss = 0, muzzleMass = 0, peakOutflow = 0, peakPressure = pa, peakFrontPressure = pa;
+      pa * g0.vf / (R * ta), pa * g0.vf / (GAMMA - 1),
+      sg.enabled ? pa * sg.freeVolume / (R * ta) : 0, sg.enabled ? pa * sg.freeVolume / (GAMMA - 1) : 0];
+    let t = 0, exited = false, hit = false, contactLoss = 0, rigidContactLoss = 0, muzzleMass = 0, peakOutflow = 0, peakMuzzleTransfer = 0, peakPressure = pa, peakFrontPressure = pa, peakSilencerPressure = pa;
     let exitTime = null, exitVelocity = null, exitPressure = null, exitFrontPressure = null, exitGasMass = null, pistonHitTime = null, impactVelocity = null;
     let engageTime = null, decelTime = null, strongBrakeTime = null, momentumAtEngage = null, brakeEnergy = null, reboundTime = null;
     let preContactReversalTime = null, contactReboundTime = null, peakPistonX = 0, maxPistonRetreat = 0, maxPreContactRetreat = 0;
@@ -1803,23 +1845,28 @@
     const frames = [], history = [], maxTime = (options.maxTime ?? p.maxTime) / 1000;
     const maxDt = options.dt ?? 1e-5, tolerance = options.tolerance ?? 2e-5;
     let dt = maxDt;
-    const initialEnergy = s[5] + s[7] + s[17] + springEnergy(p, 0), initialMass = s[4] + s[6] + s[16];
+    const initialEnergy = s[5] + s[7] + s[17] + s[19] + springEnergy(p, 0), initialMass = s[4] + s[6] + s[16] + s[18];
     function evaluate(v) {
       const g = geometry(p, v[0], exited ? L : v[2]);
       const pc = (GAMMA - 1) * v[5] / g.vc, pb = (GAMMA - 1) * v[7] / g.vb, pf = (GAMMA - 1) * v[17] / g.vf;
       const tc = v[5] / (v[4] * CV), tb = v[7] / (v[6] * CV), tf = v[17] / (v[16] * CV);
+      const ps = sg.enabled ? (GAMMA - 1) * v[19] / sg.freeVolume : pa;
+      const ts = sg.enabled ? v[19] / (v[18] * CV) : ta;
       const pass = passage(p, g.insertion, pc, tc, pb, tb);
       const lc = massFlow(pc, tc, pa, ta, p.pistonLeak * 1e-6);
       const gap = Math.max(0, g.ab - area(p.bbDiameter));
       const nozzleLeak = massFlow(pb, tb, pa, ta, p.nozzleLeak * 1e-6);
       const bbBypass = exited ? 0 : massFlow(pb, tb, pf, tf, gap * p.bbLeakCoefficient);
-      const behindMuzzle = exited ? massFlow(pb, tb, pa, ta, g.ab * p.muzzleDischargeCoefficient) : 0;
-      const frontMuzzle = exited ? 0 : massFlow(pf, tf, pa, ta, g.ab * p.muzzleDischargeCoefficient);
+      const downstreamPressure = sg.enabled ? ps : pa, downstreamTemperature = sg.enabled ? ts : ta;
+      const behindMuzzle = exited ? massFlow(pb, tb, downstreamPressure, downstreamTemperature, g.ab * p.muzzleDischargeCoefficient) : 0;
+      const frontMuzzle = exited ? 0 : massFlow(pf, tf, downstreamPressure, downstreamTemperature, g.ab * p.muzzleDischargeCoefficient);
+      const silencerOutflow = sg.enabled ? massFlow(ps, ts, pa, ta, sg.effectiveOutletArea) : 0;
       const hc = lc * CP * (lc >= 0 ? tc : ta);
       const hn = nozzleLeak * CP * (nozzleLeak >= 0 ? tb : ta);
       const hbb = bbBypass * CP * (bbBypass >= 0 ? tb : tf);
-      const hbm = behindMuzzle * CP * (behindMuzzle >= 0 ? tb : ta);
-      const hfm = frontMuzzle * CP * (frontMuzzle >= 0 ? tf : ta);
+      const hbm = behindMuzzle * CP * (behindMuzzle >= 0 ? tb : downstreamTemperature);
+      const hfm = frontMuzzle * CP * (frontMuzzle >= 0 ? tf : downstreamTemperature);
+      const hso = silencerOutflow * CP * (silencerOutflow >= 0 ? ts : ta);
       const h = pass.mdot * CP * (pass.mdot >= 0 ? tc : tb);
       const fs = springForce(p, v[0]), gasForce = pa * g.ac + pc * g.dvc + pb * g.dvb;
       const rear = p.rearDamping * v[1];
@@ -1841,16 +1888,20 @@
       if (v[2] <= 0 && v[3] <= 0 && ab < 0) ab = 0;
       const vx = v[1], vy = exited ? 0 : v[3];
       const qc = p.heatTransfer * (ta - tc), qb = p.heatTransfer * (ta - tb), qf = p.heatTransfer * (ta - tf);
+      const qs = sg.enabled ? p.silencerHeatTransfer * (ta - ts) : 0;
       const power = exited ? 0 : (thrust - fb) * vy;
       return {
         d: [vx, ap, vy, ab, -pass.mdot - lc, -pc * g.dvc * vx - h - hc + qc,
           pass.mdot - nozzleLeak - bbBypass - behindMuzzle, -pb * (g.dvb * vx + g.ab * vy) + h - hn - hbb - hbm + qb,
-          fp * vx + rear * vx + fb * vy, -hc - hn - hbm - hfm, qc + qb + qf, pa * g.ac * vx, -lc - nozzleLeak - behindMuzzle - frontMuzzle, Math.max(0, power), Math.max(0, -power),
+          fp * vx + rear * vx + fb * vy, -hc - hn - (sg.enabled ? hso : hbm + hfm), qc + qb + qf + qs, pa * g.ac * vx, -lc - nozzleLeak - (sg.enabled ? silencerOutflow : behindMuzzle + frontMuzzle), Math.max(0, power), Math.max(0, -power),
           bumperEffectiveDamping * vx ** 2,
-          bbBypass - frontMuzzle, -pf * g.dvf * vy + hbb - hfm + qf],
-        pc, pb, pf, tc, tb, tf, g, fs, ap, ab, bumperCompression, bumperForce,
-        flow: pass.mdot, bbBypass, hbb, hfm, qf, frontOutflow: frontMuzzle,
-        outflow: exited ? behindMuzzle + frontMuzzle : 0, minArea: pass.minArea
+          bbBypass - frontMuzzle, -pf * g.dvf * vy + hbb - hfm + qf,
+          sg.enabled ? behindMuzzle + frontMuzzle - silencerOutflow : 0,
+          sg.enabled ? hbm + hfm - hso + qs : 0],
+        pc, pb, pf, ps, tc, tb, tf, ts, g, fs, ap, ab, bumperCompression, bumperForce,
+        flow: pass.mdot, bbBypass, hbb, hfm, qf, qs, frontOutflow: frontMuzzle,
+        muzzleTransfer: behindMuzzle + frontMuzzle, silencerOutflow,
+        outflow: exited ? (sg.enabled ? silencerOutflow : behindMuzzle + frontMuzzle) : 0, minArea: pass.minArea
       };
     }
     // The small gas pocket in front of the BB becomes numerically stiff near
@@ -1861,15 +1912,17 @@
       const gStart = geometry(p, start[0], exited ? L : start[2]);
       const gEnd = geometry(p, target[0], exited ? L : target[2]);
       const pb = (GAMMA - 1) * target[7] / gEnd.vb, tb = target[7] / (target[6] * CV);
+      const ps = sg.enabled ? (GAMMA - 1) * target[19] / sg.freeVolume : pa;
+      const ts = sg.enabled ? target[19] / (target[18] * CV) : ta;
       const gap = Math.max(0, gEnd.ab - area(p.bbDiameter));
       const dVolume = gEnd.vf - gStart.vf;
       const m0 = start[16], u0 = start[17];
       const transport = (m, u) => {
         const pf = (GAMMA - 1) * u / gEnd.vf, tf = u / (m * CV);
         const bypass = exited ? 0 : massFlow(pb, tb, pf, tf, gap * p.bbLeakCoefficient);
-        const muzzle = massFlow(pf, tf, pa, ta, gEnd.ab * p.muzzleDischargeCoefficient);
+        const muzzle = massFlow(pf, tf, ps, ts, gEnd.ab * p.muzzleDischargeCoefficient);
         const hb = bypass * CP * (bypass >= 0 ? tb : tf);
-        const hm = muzzle * CP * (muzzle >= 0 ? tf : ta);
+        const hm = muzzle * CP * (muzzle >= 0 ? tf : ts);
         const q = p.heatTransfer * (ta - tf);
         return { pf, bypass, muzzle, hb, hm, q };
       };
@@ -1902,12 +1955,12 @@
       return { mass: m, energy: u, bypassMass: h * transfer.bypass, muzzleMass: h * transfer.muzzle,
         bypassEnergy: h * transfer.hb, muzzleEnergy: h * transfer.hm, heatEnergy: h * transfer.q };
     }
-    const validState = v => v.every(Number.isFinite) && v[4] > 0 && v[5] > 0 && v[6] > 0 && v[7] > 0 && v[16] > 0 && v[17] > 0 && geometry(p, v[0], exited ? L : v[2]).vc > 0 && geometry(p, v[0], exited ? L : v[2]).vb > 0 && geometry(p, v[0], exited ? L : v[2]).vf > 0;
+    const validState = v => v.every(Number.isFinite) && v[4] > 0 && v[5] > 0 && v[6] > 0 && v[7] > 0 && v[16] > 0 && v[17] > 0 && (!sg.enabled || v[18] > 0 && v[19] > 0) && geometry(p, v[0], exited ? L : v[2]).vc > 0 && geometry(p, v[0], exited ? L : v[2]).vb > 0 && geometry(p, v[0], exited ? L : v[2]).vf > 0;
     const bumperEnergy = v => bumperPotential(p, Math.max(0, v[0] - g0.stroke));
-    const totalEnergy = v => v[5] + v[7] + v[17] + springEnergy(p, v[0]) + .5 * mp * v[1] ** 2 + .5 * mbb * v[3] ** 2 + bumperEnergy(v);
+    const totalEnergy = v => v[5] + v[7] + v[17] + v[19] + springEnergy(p, v[0]) + .5 * mp * v[1] ** 2 + .5 * mbb * v[3] ** 2 + bumperEnergy(v);
     function frame(e) {
-      return { t, pistonX: s[0], pistonV: s[1], pistonA: e.ap, bbX: s[2], bbV: s[3], bbA: e.ab, pressure: e.pb, frontPressure: e.pf, cylinderPressure: e.pc, cylinderTemperature: e.tc, bbTemperature: e.tb, frontTemperature: e.tf,
-        insertion: e.g.insertion, flow: e.flow, frontOutflow: e.frontOutflow, outflow: e.outflow, openArea: e.minArea,
+      return { t, pistonX: s[0], pistonV: s[1], pistonA: e.ap, bbX: s[2], bbV: s[3], bbA: e.ab, pressure: e.pb, frontPressure: e.pf, silencerPressure: e.ps, cylinderPressure: e.pc, cylinderTemperature: e.tc, bbTemperature: e.tb, frontTemperature: e.tf, silencerTemperature: e.ts,
+        insertion: e.g.insertion, flow: e.flow, frontOutflow: e.frontOutflow, muzzleTransfer: e.muzzleTransfer, silencerOutflow: e.silencerOutflow, outflow: e.outflow, openArea: e.minArea,
         bumperCompression: e.bumperCompression, bumperForce: e.bumperForce, pistonHit: hit, bbExited: exited,
         energyResidual: totalEnergy(s) + s[8] + contactLoss + s[15] - initialEnergy - s[9] - s[10] - s[11] };
     }
@@ -1964,12 +2017,17 @@
         // arbitrary external source.
         next[6] -= frontFull.bypassMass - h * em.bbBypass;
         next[7] -= frontFull.bypassEnergy - h * em.hbb;
-        next[12] -= frontFull.muzzleMass - h * em.frontOutflow;
-        next[9] -= frontFull.muzzleEnergy - h * em.hfm;
+        if (sg.enabled) {
+          next[18] += frontFull.muzzleMass - h * em.frontOutflow;
+          next[19] += frontFull.muzzleEnergy - h * em.hfm;
+        } else {
+          next[12] -= frontFull.muzzleMass - h * em.frontOutflow;
+          next[9] -= frontFull.muzzleEnergy - h * em.hfm;
+        }
         next[10] += frontFull.heatEnergy - h * em.qf;
         next[16] = frontFull.mass; next[17] = frontFull.energy;
       }
-      const scales = [g0.hardStop, 10, L, 100, initialMass, initialEnergy, initialMass, initialEnergy, 1, 1, 1, 1, initialMass, 1, 1, 1, initialMass, initialEnergy];
+      const scales = [g0.hardStop, 10, L, 100, initialMass, initialEnergy, initialMass, initialEnergy, 1, 1, 1, 1, initialMass, 1, 1, 1, initialMass, initialEnergy, initialMass, initialEnergy];
       let error = 0;
       for (let i = 0; i < 8; i++) error = Math.max(error, Math.abs((em.d[i] - e.d[i]) * h) / Math.max(scales[i] * .01, Math.abs(s[i]), Math.abs(next[i])));
       if (!frontFull || !validState(next) || error > tolerance && h > 1e-9) { dt = h * Math.max(.15, .8 * Math.sqrt(tolerance / Math.max(error, tolerance))); rejectedSteps++; if (dt < 1e-10) { convergenceFailure = true; terminationReason = "minimum-step"; break; } continue; }
@@ -2026,7 +2084,11 @@
         // exact mass/energy exchange before continuing the post-exit solution.
         const exitGeometry = geometry(p, s[0], L);
         const ambientFrontMass = pa * exitGeometry.vf / (R * ta), ambientFrontEnergy = pa * exitGeometry.vf / (GAMMA - 1);
-        s[12] += ambientFrontMass - s[16]; s[9] += ambientFrontEnergy - s[17];
+        if (sg.enabled) {
+          s[18] += s[16] - ambientFrontMass; s[19] += s[17] - ambientFrontEnergy;
+        } else {
+          s[12] += ambientFrontMass - s[16]; s[9] += ambientFrontEnergy - s[17];
+        }
         s[16] = ambientFrontMass; s[17] = ambientFrontEnergy;
         e = evaluate(s);
       }
@@ -2041,9 +2103,10 @@
       if (!hit) maxPreContactRetreat = Math.max(maxPreContactRetreat, peakPistonX - s[0]);
       const ke = .5 * mbb * s[3] ** 2;
       if (!exited || exitTime === t) { history.push([t, ke]); if (ke > maxBbEnergy) { maxBbEnergy = ke; maxBbTime = t; } }
-      peakPressure = Math.max(peakPressure, e.pb); peakFrontPressure = Math.max(peakFrontPressure, e.pf); peakCylinderPressure = Math.max(peakCylinderPressure, e.pc); peakPistonV = Math.max(peakPistonV, s[1]);
+      peakPressure = Math.max(peakPressure, e.pb); peakFrontPressure = Math.max(peakFrontPressure, e.pf); peakSilencerPressure = Math.max(peakSilencerPressure, e.ps); peakCylinderPressure = Math.max(peakCylinderPressure, e.pc); peakPistonV = Math.max(peakPistonV, s[1]);
+      peakMuzzleTransfer = Math.max(peakMuzzleTransfer, e.muzzleTransfer);
       peakOutflow = Math.max(peakOutflow, e.outflow); muzzleMass += Math.max(0, em.outflow) * h;
-      const quietGas = exited && hit && t > Math.max(exitTime, pistonHitTime) + .004 && Math.abs(e.pc - pa) < .002 * pa && Math.abs(e.pb - pa) < .002 * pa;
+      const quietGas = exited && hit && t > Math.max(exitTime, pistonHitTime) + .004 && Math.abs(e.pc - pa) < .002 * pa && Math.abs(e.pb - pa) < .002 * pa && (!sg.enabled || Math.abs(e.ps - pa) < .002 * pa);
       const stablePiston = Math.abs(s[1]) < .005 && Math.abs(e.ap) < 1;
       if (quietGas && stablePiston) {
         if (settledSince === null) settledSince = t;
@@ -2063,7 +2126,9 @@
       }
     }
     const exitEnergy = exitVelocity === null ? null : .5 * mbb * exitVelocity ** 2;
-    const massResidual = s[4] + s[6] + s[16] - initialMass - s[12];
+    const massResidual = s[4] + s[6] + s[16] + s[18] - initialMass - s[12];
+    const pulseFrames = exited && peakOutflow > 0 ? frames.filter(value => value.t >= exitTime && value.outflow >= peakOutflow * .1) : [];
+    const outflowPulseDuration = pulseFrames.length > 1 ? pulseFrames.at(-1).t - pulseFrames[0].t : null;
     for (const value of frames) { value.waveTransit = 0; value.wavePressureEstimate = value.pressure; }
     const waveFrames = frames.filter(value => exitTime === null || value.t <= exitTime + 1e-12);
     const interpolatePressure = time => {
@@ -2105,6 +2170,7 @@
     return { version: VERSION, params: p, valid: !numericalFailure, errors: numericalFailure ? ["solver:convergence"] : [], frames,
       duration: t, stroke: g0.stroke, hardStop: g0.hardStop, nominalStroke: p.strokeLength / 1000, bumperThickness: p.bumperThickness / 1000,
       barrelLength: L, barrelVolume: g0.barrelVolume, cylinderVolume: g0.sweptVolume, ratio: g0.sweptVolume / g0.barrelVolume,
+      silencerEnabled: sg.enabled, silencerVolume: sg.freeVolume, silencerExpansionRatio: sg.enabled ? sg.freeVolume / g0.barrelVolume : null,
       ambientPressure: pa, engageTime, decelTime, strongBrakeTime, reboundTime, usefulTime, exitTime, pistonHitTime,
       preContactReversalTime, contactReboundTime, maxPistonRetreat, maxPreContactRetreat,
       pistonImpacts, maxBumperCompression, peakBumperForce, bumperDissipatedEnergy: s[15],
@@ -2112,15 +2178,15 @@
       impactEnergy: impactVelocity === null ? null : .5 * p.pistonMass / 1000 * impactVelocity ** 2,
       momentumAtEngage, preBrakeShare: brakeEnergy === null || !exitEnergy ? null : brakeEnergy / exitEnergy,
       maxBbEnergy, maxBbTime, bbEnergyLoss: exitEnergy === null ? null : Math.max(0, maxBbEnergy - exitEnergy),
-      positiveBbWork: s[13], negativeBbWork: s[14], peakPressure, peakFrontPressure, peakCylinderPressure, peakPistonV, peakOutflow, muzzleMass,
+      positiveBbWork: s[13], negativeBbWork: s[14], peakPressure, peakFrontPressure, peakSilencerPressure, peakCylinderPressure, peakPistonV, peakOutflow, peakMuzzleTransfer, outflowPulseDuration, muzzleMass,
       energyResidual: frame(final).energyResidual, massResidual, releasedSpringEnergy: springEnergy(p, 0) - springEnergy(p, s[0]),
       energyScale: Math.max(.01, springEnergy(p, 0)), steps, rejectedSteps,
       soundCrossingTime: L / Math.sqrt(GAMMA * R * ta), complete: exited && hit,
       terminationReason, pistonSettled, waveDiagnostics,
-      dischargeComplete: exited && Math.abs(final.pc - pa) < .01 * pa && Math.abs(final.pb - pa) < .01 * pa
+      dischargeComplete: exited && Math.abs(final.pc - pa) < .01 * pa && Math.abs(final.pb - pa) < .01 * pa && (!sg.enabled || Math.abs(final.ps - pa) < .01 * pa)
     };
   }
-  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, contactStroke, bumperLimit, geometry, pinVolume, pinDiameter, springState, springForce, springEnergy, bumperElasticForce, bumperPotential, massFlow, passage, simulate };
+  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, contactStroke, bumperLimit, geometry, silencerGeometry, pinVolume, pinDiameter, springState, springForce, springEnergy, bumperElasticForce, bumperPotential, massFlow, passage, simulate };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PneumaticPhysics = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
@@ -2134,8 +2200,10 @@
   const BUMPER_FIELDS = ["bumperThickness", "bumperBore"];
   const MODEL_34_FIELDS = ["bumperStiffness", "bumperDamping", "bumperMaxCompression", "muzzleDischargeCoefficient"];
   const MODEL_40_FIELDS = ["frontDeadVolume", "bumperCurve"];
+  const MODEL_41_FIELDS = ["silencerEnabled", "silencerLength", "silencerInnerDiameter", "silencerBaffleCount", "silencerBaffleThickness", "silencerBaffleBore", "silencerEndCapBore", "silencerPackingFraction", "silencerDischargeCoefficient", "silencerHeatTransfer"];
   const PARAMETER_SPECS = Object.freeze({
     dischargeCoefficient: { min: .1, max: 1 }, muzzleDischargeCoefficient: { min: .1, max: 1 },
+    silencerDischargeCoefficient: { min: .1, max: 1 },
     bbLeakCoefficient: { min: 0, max: 1 }, barrelDrag: { min: 0, max: 2 },
     pistonFriction: { min: 0, max: 20 }, sealFriction: { min: 0, max: .2 },
     bumperStiffness: { min: 10, max: 5000 }, bumperDamping: { min: 0, max: 1000 },
@@ -2155,11 +2223,12 @@
     // snapshot. v3.2 used headBore as the implicit bumper opening, so preserve
     // that geometry explicitly instead of inventing the new default.
     const missingByVersion = {
-      "3.4.0": MODEL_40_FIELDS,
-      "3.0.0": [...LENGTH_FIELDS, ...BUMPER_FIELDS, ...MODEL_34_FIELDS, ...MODEL_40_FIELDS],
-      "3.1.1": [...BUMPER_FIELDS, ...MODEL_34_FIELDS, ...MODEL_40_FIELDS],
-      "3.2.0": ["bumperBore", ...MODEL_34_FIELDS, ...MODEL_40_FIELDS],
-      "3.3.0": [...MODEL_34_FIELDS, ...MODEL_40_FIELDS]
+      "4.0.0": MODEL_41_FIELDS,
+      "3.4.0": [...MODEL_40_FIELDS, ...MODEL_41_FIELDS],
+      "3.0.0": [...LENGTH_FIELDS, ...BUMPER_FIELDS, ...MODEL_34_FIELDS, ...MODEL_40_FIELDS, ...MODEL_41_FIELDS],
+      "3.1.1": [...BUMPER_FIELDS, ...MODEL_34_FIELDS, ...MODEL_40_FIELDS, ...MODEL_41_FIELDS],
+      "3.2.0": ["bumperBore", ...MODEL_34_FIELDS, ...MODEL_40_FIELDS, ...MODEL_41_FIELDS],
+      "3.3.0": [...MODEL_34_FIELDS, ...MODEL_40_FIELDS, ...MODEL_41_FIELDS]
     };
     const expectedMissing = missingByVersion[row.solverVersion];
     const previousComplete = row.setup && expectedMissing && expectedMissing.every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => !expectedMissing.includes(k)).every(k => Object.hasOwn(row.setup, k));
@@ -2167,7 +2236,7 @@
     const migratedSetup = previousComplete ? { ...row.setup,
       ...(!Object.hasOwn(row.setup, "bumperThickness") ? { bumperThickness: 0 } : {}),
       ...(!Object.hasOwn(row.setup, "bumperBore") ? { bumperBore: row.setup.headBore } : {}),
-      ...Object.fromEntries([...MODEL_34_FIELDS, ...MODEL_40_FIELDS].filter(key => !Object.hasOwn(row.setup, key)).map(key => [key, P.DEFAULTS[key]]))
+      ...Object.fromEntries([...MODEL_34_FIELDS, ...MODEL_40_FIELDS, ...MODEL_41_FIELDS].filter(key => !Object.hasOwn(row.setup, key)).map(key => [key, P.DEFAULTS[key]]))
     } : row.setup;
     const setup = !legacy && setupComplete && P.validate(migratedSetup).length === 0 ? P.normalize(migratedSetup) : null;
     const provenance = Object.fromEntries(Object.entries(row.provenance || {}).filter(([k, v]) => ["geometry", "spring"].includes(k) && ["assumed", "measured"].includes(v)));
@@ -2177,6 +2246,7 @@
     return { id: String(row.id || `measurement-${Math.random().toString(36).slice(2)}`).slice(0, 100), bbMass: mass, fps: speed, sigma: sigma > 0 && sigma <= 100 ? sigma : 1,
       pistonHitMs: optional(row.pistonHitMs, 0, 1000), pistonHitSigmaMs: optional(row.pistonHitSigmaMs, .001, 100) || .1,
       peakCylinderBarG: optional(row.peakCylinderBarG, 0, 100), peakCylinderSigmaBar: optional(row.peakCylinderSigmaBar, .001, 20) || .05,
+      peakSilencerBarG: optional(row.peakSilencerBarG, 0, 100), peakSilencerSigmaBar: optional(row.peakSilencerSigmaBar, .001, 20) || .05,
       peakBumperForceN: optional(row.peakBumperForceN, 0, 100000), peakBumperForceSigmaN: optional(row.peakBumperForceSigmaN, .01, 10000) || 5,
       role, setup, confirmed, provenance, notes: String(row.notes || "").slice(0, 2000), solverVersion: legacy ? null : String(row.solverVersion || ""),
       legacySetup: legacy || !setup || previousComplete ? row.setup || row.legacySetup || null : row.legacySetup || null };
@@ -2217,6 +2287,7 @@
       terms.push({ kind: "pistonHitMs", raw: shot.pistonHitTime * 1000 - row.pistonHitMs, sigma: row.pistonHitSigmaMs });
     }
     if (Number.isFinite(row.peakCylinderBarG)) terms.push({ kind: "peakCylinderBarG", raw: (shot.peakCylinderPressure - shot.ambientPressure) / 1e5 - row.peakCylinderBarG, sigma: row.peakCylinderSigmaBar });
+    if (Number.isFinite(row.peakSilencerBarG)) terms.push({ kind: "peakSilencerBarG", raw: (shot.peakSilencerPressure - shot.ambientPressure) / 1e5 - row.peakSilencerBarG, sigma: row.peakSilencerSigmaBar });
     if (Number.isFinite(row.peakBumperForceN)) {
       if (!Number.isFinite(shot.peakBumperForce)) return null;
       terms.push({ kind: "peakBumperForceN", raw: shot.peakBumperForce - row.peakBumperForceN, sigma: row.peakBumperForceSigmaN });
@@ -2233,6 +2304,7 @@
     if (training.length < parameters.length) throw new Error("fit:not-identifiable");
     if (parameters.includes("springStiffness") && training.some(group => group.setup.springCurve.length)) throw new Error("fit:measured-spring");
     if (parameters.includes("bumperStiffness") && training.some(group => group.setup.bumperCurve.length)) throw new Error("fit:measured-bumper");
+    if (parameters.includes("silencerDischargeCoefficient") && training.every(group => group.setup.silencerEnabled !== 1)) throw new Error("fit:silencer-disabled");
     const profile = [];
     async function loss(values) {
       let weighted = 0, n = 0;
@@ -2297,22 +2369,24 @@
 /* Bounded hardware-only search. Rankings are engineering preferences, not acoustics. */
 (function (root) {
   "use strict";
-  const VERSION = "2.0.0";
+  const VERSION = "2.1.0";
   const P = typeof module !== "undefined" && module.exports ? require("./physics.js") : root.PneumaticPhysics;
   const GROUPS = Object.freeze({
     cylinder: ["cylinderBore", "strokeLength", "deadVolume"],
     barrel: ["barrelLength", "barrelDiameter", "frontDeadVolume"],
+    silencer: ["silencerLength", "silencerInnerDiameter", "silencerBaffleCount", "silencerBaffleThickness", "silencerBaffleBore", "silencerEndCapBore", "silencerPackingFraction"],
     head: ["headBore", "headLength", "nozzleBore", "nozzleLength", "bumperThickness", "bumperBore", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "breechVolume"],
     piston: ["pistonMass"],
     airbrake: ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper"],
     spring: ["springStiffness", "springPreload", "springMass", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils"],
     bb: ["bbMass", "bbDiameter"]
   });
-  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], frontDeadVolume: [.001,2], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], bumperThickness: [0,20], bumperBore: [.5,30], bumperStiffness: [0,5000], bumperDamping: [0,1000], bumperMaxCompression: [0,10], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], springFreeLength: [0,500], springInstalledLength: [0,500], springCutLength: [0,400], springActiveCoils: [0,200], springRemovedCoils: [0,200], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
+  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], frontDeadVolume: [.001,2], silencerLength: [20,500], silencerInnerDiameter: [7,80], silencerBaffleCount: [0,50], silencerBaffleThickness: [.1,15], silencerBaffleBore: [5.5,30], silencerEndCapBore: [5.5,30], silencerPackingFraction: [0,.89], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], bumperThickness: [0,20], bumperBore: [.5,30], bumperStiffness: [0,5000], bumperDamping: [0,1000], bumperMaxCompression: [0,10], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], springFreeLength: [0,500], springInstalledLength: [0,500], springCutLength: [0,400], springActiveCoils: [0,200], springRemovedCoils: [0,200], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
   const WEIGHTS = Object.freeze({ balanced: [.30,.17,.13,.25,.15], quiet: [.38,.20,.17,.10,.15], efficient: [.12,.08,.05,.60,.15] });
   const HORIZON_MS = 250;
   const clone = v => JSON.parse(JSON.stringify(v));
   function fixedReason(p, key) {
+    if (GROUPS.silencer.includes(key) && p.silencerEnabled !== 1) return "silencer-disabled";
     if (p.springCurve.length && ["springStiffness", "springMass", "springFreeLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"].includes(key)) return "measured-spring";
     if (p.bumperCurve.length && key === "bumperStiffness") return "measured-bumper";
     if (p.springLengthMode === 1 && key === "springPreload" || p.springLengthMode !== 1 && ["springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"].includes(key)) return "spring-mode";
@@ -2495,8 +2569,15 @@
     const contact = face0 + (p.strokeLength - p.bumperThickness) * scale;
     const rigidHead = face0 + p.strokeLength * scale, step = rigidHead + p.headLength * scale;
     const head = contact, passageEnd = step + p.nozzleLength * scale, face = face0 + pistonX * 1000 * scale;
-    return { wall: 40, face0, face, contact, rigidHead, bumperWidth: rigidHead - contact, head, step, passageEnd, barrelStart: passageEnd + 20, end: 1040,
-      pinLength: p.airbrakeLength * scale, pinTip: face + p.airbrakeLength * scale, scale };
+    const barrelStart = passageEnd + 20, outlet = 1040;
+    // Preserve one physical axial scale from the BB start plane to the final
+    // outlet. With a silencer installed, `end` remains the inner-barrel crown
+    // and `silencerEnd` becomes the end-cap outlet.
+    const downstreamLength = p.barrelLength + (p.silencerEnabled ? p.silencerLength : 0);
+    const barrelScale = (outlet - barrelStart) / Math.max(1, downstreamLength);
+    const end = barrelStart + p.barrelLength * barrelScale;
+    return { wall: 40, face0, face, contact, rigidHead, bumperWidth: rigidHead - contact, head, step, passageEnd, barrelStart, end,
+      silencerEnd: p.silencerEnabled ? outlet : end, barrelScale, pinLength: p.airbrakeLength * scale, pinTip: face + p.airbrakeLength * scale, scale };
   }
   const api = { timeline, frameAt, mechanism };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.PneumaticPlayback = api;
@@ -2554,7 +2635,7 @@
 (function (root) {
   "use strict";
   const CATEGORIES = [
-    ["geometry", "Cylinder & barrel", "Cilindar i cijev"], ["masses", "Piston & BB", "Piston i BB"],
+    ["geometry", "Cylinder & barrel", "Cilindar i cijev"], ["silencer", "Silencer", "Prigušivač"], ["masses", "Piston & BB", "Piston i BB"],
     ["airbrake", "Airbrake, bumper & head", "Zračna kočnica, gumica i glava"], ["spring", "Spring", "Opruga"],
     ["losses", "Losses & environment", "Gubici i okoliš"], ["rifle", "Rifle presets", "Predlošci replika"],
     ["solver", "Timing & solver", "Vrijeme i rješavač"]
@@ -2565,7 +2646,7 @@
     const aside = doc.querySelector(".controls-panel"), main = doc.querySelector(".main");
     aside.id = "settingsPanel"; main.id = "previewPanel";
     const members = {
-      rifle: [$("platformPreset").closest("section")], geometry: [$("cylinderBore").closest("section"), $("shortStrokeDynamic")],
+      rifle: [$("platformPreset").closest("section")], geometry: [$("cylinderBore").closest("section"), $("shortStrokeDynamic")], silencer: [$("silencerDetails")].filter(Boolean),
       masses: [$("pistonMass").closest("section"), aside.querySelector(".preset-row")], airbrake: [$("pinLabel").closest("details")],
       spring: [$("springDetails")], losses: [$("dischargeCoefficient").closest("details")], solver: [$("usefulFraction").closest("details")]
     };
@@ -2741,12 +2822,14 @@
     if (!finite(percent)) return { status: "no-reference", percent: null, width: 0 };
     return { status: percent < 100 ? "lower" : percent > 100 ? "higher" : "same", percent, width: Math.min(percent, 200) / 2 };
   }
-  function soundQuantities(s, baseline) {
+  function soundQuantities(s, baseline, unsilencedReference = null) {
     const impact = s.valid && eventTime(s, "pistonHitTime") !== null ? s.impactEnergy : null;
     const flow = s.valid && eventTime(s, "exitTime") !== null ? s.peakOutflow : null;
     const referenceImpact = baseline?.valid && eventTime(baseline, "pistonHitTime") !== null ? baseline.impactEnergy : null;
-    const referenceFlow = baseline?.valid && eventTime(baseline, "exitTime") !== null ? baseline.peakOutflow : null;
-    return { impact, flow, referenceImpact, referenceFlow, impactComparison: compare(impact, referenceImpact), flowComparison: compare(flow, referenceFlow) };
+    const flowReference = s?.params?.silencerEnabled ? unsilencedReference : baseline;
+    const referenceFlow = flowReference?.valid && eventTime(flowReference, "exitTime") !== null ? flowReference.peakOutflow : null;
+    return { impact, flow, referenceImpact, referenceFlow, flowReferenceKind: s?.params?.silencerEnabled ? "unsilenced" : "no-airbrake",
+      impactComparison: compare(impact, referenceImpact), flowComparison: compare(flow, referenceFlow) };
   }
   function impactSummary(s) {
     let impacts = Array.isArray(s?.pistonImpacts) ? s.pistonImpacts.filter(event => finite(event?.time) && finite(event?.incomingVelocity) && finite(event?.pistonEnergy) && event.time >= 0 && event.time <= s.duration && event.incomingVelocity > 0 && event.pistonEnergy >= 0) : [];
@@ -2775,7 +2858,7 @@
     }).join("");
     return `<section class="${outerClass}" aria-labelledby="${titleId}"><div class="impact-analysis-heading"><div><h2 id="${titleId}">${t("Piston contact sequence", "Slijed kontakata pistona")}</h2><p>${t("Every stem is a separate modeled contact episode with the bumper/head. A pressure-driven reversal before contact is not counted as an impact.", "Svaka oznaka predstavlja zasebnu modeliranu epizodu kontakta s gumicom/glavom. Povrat zbog tlaka prije kontakta ne broji se kao udar.")}</p></div><span class="tag heuristic">${summary.count} ${contactWord}</span></div><div class="impact-summary">${cards.map(([name, value, note]) => `<div><span>${name}</span><strong>${value}</strong><small>${note}</small></div>`).join("")}</div><div class="impact-chart-labels"><span>${t("Piston kinetic energy immediately before contact (mJ)", "Kinetička energija pistona neposredno prije kontakta (mJ)")}</span><span>${t("Expanded contact-time window", "Prošireni vremenski prozor kontakata")}</span></div><canvas id="${canvasId}" class="impact-chart" role="img" aria-label="${t("Piston contact energy versus model time; exact events listed below", "Energija kontakta pistona prema modeliranom vremenu; točni događaji navedeni su ispod")}"></canvas><div class="impact-event-list">${list || `<p>${t("No piston contact occurred during the modeled interval.", "Tijekom modeliranog intervala nije došlo do kontakta pistona.")}</p>`}</div>${hidden ? `<p class="impact-overflow">+${hidden} ${t("additional settling contacts are plotted; inspect the exported run for every value.", "dodatnih kontakata smirivanja prikazano je na grafu; sve vrijednosti dostupne su u izvozu simulacije.")}</p>` : ""}<p class="impact-caveat">${t("Energy is ½ × entered piston mass × incoming speed². With a bumper, peak force, compression and duration come from the entered lumped stiffness/damping model; bottom-out uses the separate rigid restitution. These are conditional mechanics—not measured loudness, rubber stress, durability or dB.", "Energija je ½ × unesena masa pistona × ulazna brzina². Uz gumicu, vršna sila, stlačenje i trajanje proizlaze iz unesenog koncentriranog modela krutosti/prigušenja; udar u graničnik koristi zaseban koeficijent krutog odskoka. To je uvjetna mehanika — ne izmjerena glasnoća, naprezanje gume, trajnost ni dB.")}</p></section>`;
   }
-  function comparisonMarkup(comparison, reference, unit, kind, t, fmt) {
+  function comparisonMarkup(comparison, reference, unit, kind, t, fmt, referenceLabel = null) {
     const { status, percent, width } = comparison;
     const names = kind === "impact" ? {
       lower: ["Less contact energy than reference", "Manje energije kontakta od reference"],
@@ -2787,18 +2870,24 @@
       same: ["Same observed outflow as reference", "Jednak opaženi protok kao referenca"]
     };
     const unknown = status === "unknown" ? t("Event missing · quantity unknown, not zero", "Događaj nedostaje · veličina nepoznata, nije nula") : status === "zero-reference" ? t("Zero reference · percentage undefined", "Nulta referenca · postotak nije definiran") : t("Reference unavailable · no relative comparison", "Referenca nije dostupna · nema relativne usporedbe");
-    return `<div class="sound-comparison" data-comparison="${status}"><div class="comparison-heading"><span>${t("Against the no-airbrake reference", "Usporedba s referencom bez kočnice")}</span><strong>${percent === null ? "—" : fmt(percent, 1, "%")}</strong></div>
+    return `<div class="sound-comparison" data-comparison="${status}"><div class="comparison-heading"><span>${referenceLabel || t("Against the no-airbrake reference", "Usporedba s referencom bez kočnice")}</span><strong>${percent === null ? "—" : fmt(percent, 1, "%")}</strong></div>
       <div class="comparison-track" aria-hidden="true">${percent === null ? "" : `<div class="comparison-fill" style="width:${width.toFixed(5)}%"></div><i class="comparison-reference"></i>`}</div>
       <div class="comparison-scale" aria-hidden="true"><span>0%</span><span>100%</span><span>200%</span></div>
       <span class="comparison-meaning">${names[status] ? t(...names[status]) : unknown}</span>
       <p class="comparison-note">${t("Reference", "Referenca")}: ${fmt(reference, 3, unit)}. ${percent > 200 ? t("Bar capped at 200%; the number above is uncapped. ", "Traka je ograničena na 200%; broj iznad nije. ") : ""}${t("This compares the modeled quantity—not sound reduction.", "Uspoređuje se modelirana veličina — ne smanjenje zvuka.")}</p></div>`;
   }
-  function soundMarkup(s, baseline, t, fmt) {
-    const q = soundQuantities(s, baseline);
+  function soundMarkup(s, baseline, unsilencedReference, t, fmt) {
+    // Keep direct module consumers compatible with the previous four-argument
+    // form while the app supplies a separate same-setup/no-silencer reference.
+    if (typeof unsilencedReference === "function") { fmt = t; t = unsilencedReference; unsilencedReference = null; }
+    const q = soundQuantities(s, baseline, unsilencedReference);
     const impact = finite(q.impact) ? q.impact * 1000 : null, referenceImpact = finite(q.referenceImpact) ? q.referenceImpact * 1000 : null;
     const flow = finite(q.flow) ? q.flow * 1000 : null, referenceFlow = finite(q.referenceFlow) ? q.referenceFlow * 1000 : null;
+    const silenced = s?.params?.silencerEnabled === 1;
+    const flowReferenceLabel = silenced ? t("Against this setup without the silencer", "Usporedba s ovom konfiguracijom bez prigušivača") : t("Against the no-airbrake reference", "Usporedba s referencom bez kočnice");
+    const dischargeName = silenced ? t("Silencer outlet pulse — escaping air", "Izlazni impuls prigušivača — izlazak zraka") : t("Muzzle blast — escaping air", "Prasak na ustima — izlazak zraka");
     return `<section id="soundExplanations" class="sound-explanations" tabindex="-1" aria-label="${t("Piston impact and muzzle blast explained", "Objašnjenje udara pistona i praska na ustima")}">
-      <div class="sound-heading"><div><strong>${t("Two different sound contributors", "Dva različita doprinosa zvuku")}</strong><p>${t("The piston makes a mechanical strike; escaping air makes a muzzle blast. These bars compare modeled quantities, not measured loudness. 100% = the same inputs and piston mass, with zero airbrake projection.", "Piston stvara mehanički udarac, a izlazak zraka prasak na ustima. Trake uspoređuju modelirane veličine, ne izmjerenu glasnoću. 100% = isti ulazi i masa pistona, uz nulto izbočenje zračne kočnice.")}</p></div><span class="tag unknown">${t("not dB", "nisu dB")}</span></div>
+      <div class="sound-heading"><div><strong>${t("Two different sound contributors", "Dva različita doprinosa zvuku")}</strong><p>${t("The piston makes a mechanical strike; escaping air makes a discharge pulse. Impact is compared with zero airbrake projection. When a silencer is installed, outlet flow is compared with the identical setup without it. These are modeled mechanics and gas flow—not measured loudness.", "Piston stvara mehanički udarac, a izlazak zraka impuls pražnjenja. Udar se uspoređuje s nultim izbočenjem zračne kočnice. Kada je ugrađen prigušivač, izlazni protok uspoređuje se s identičnom konfiguracijom bez njega. To su modelirana mehanika i protok plina — ne izmjerena glasnoća.")}</p></div><span class="tag unknown">${t("not dB", "nisu dB")}</span></div>
       <div class="intensity-grid">
       <article class="intensity sound-explainer impact-primary" data-comparison="${q.impactComparison.status}"><div class="intensity-head"><strong>${t("Piston impact — mechanical strike", "Udar pistona — mehanički udarac")}</strong><output>${fmt(impact, 2, "mJ")}</output></div>
       <p class="sound-quantity">${t("Modeled energy at first contact · ½mv²", "Modelirana energija pri prvom kontaktu · ½mv²")}</p>
@@ -2806,13 +2895,13 @@
       <p><strong>${t("What it means:", "Što to znači:")}</strong> ${t("This is the piston energy that reaches the cylinder head—the source of the mechanical thump. More energy can feed a stronger strike, but the bumper determines how quickly it is absorbed. Energy alone does not give peak force or loudness.", "To je energija kojom piston dolazi do glave cilindra — izvor mehaničkog udarca. Više energije može doprinijeti jačem udaru, ali odbojnik određuje koliko se brzo apsorbira. Sama energija ne određuje vršnu silu ni glasnoću.")}</p>
       <p>${t("The model now resolves a lumped elastic/damped contact, but actual sound still depends on rubber geometry, frequency-dependent material behavior, spring vibration and receiver/stock resonance. Entered peak force is not dB or a durability rating.", "Model sada razrješava koncentrirani elastično-prigušeni kontakt, ali stvarni zvuk i dalje ovisi o geometriji gume, ponašanju materijala ovisnom o frekvenciji, vibraciji opruge te rezonanciji kućišta i kundaka. Unesena vršna sila nije dB ni ocjena trajnosti.")}</p>
       <p class="sound-measured">${t("First-contact speed", "Brzina pri prvom kontaktu")}: <strong>${fmt(q.impact === null ? null : s.pistonImpactVelocity, 2, "m/s")}</strong> · ${t("Peak force / compression", "Vršna sila / stlačenje")}: <strong>${fmt(s.params?.bumperThickness > 0 ? s.peakBumperForce : null, 1, "N")} / ${fmt(s.params?.bumperThickness > 0 ? s.maxBumperCompression * 1000 : null, 3, "mm")}</strong> · ${t("bumper k / c", "gumica k / c")}: <strong>${fmt(s.params?.bumperThickness > 0 ? s.params.bumperStiffness : null, 0, "N/mm")} / ${fmt(s.params?.bumperThickness > 0 ? s.params.bumperDamping : null, 0, "N·s/m")}</strong></p></article>
-      <article class="intensity sound-explainer muzzle-primary" data-comparison="${q.flowComparison.status}"><div class="intensity-head"><strong>${t("Muzzle blast — escaping air", "Prasak na ustima — izlazak zraka")}</strong><output>${fmt(flow, 2, "g/s")}</output></div>
-      <p class="sound-quantity">${t("Peak modeled muzzle outflow observed during this run", "Najveći modelirani protok na ustima opažen tijekom simulacije")}</p>
-      ${comparisonMarkup(q.flowComparison, referenceFlow, "g/s", "flow", t, fmt)}
-      <p><strong>${t("What it means:", "Što to znači:")}</strong> ${t("After the BB exits, compressed air escapes from the barrel and contributes a separate air blast. Pressure, gas inventory and discharge rate describe that release. A higher outflow is not the same as a measured increase in sound.", "Nakon izlaska BB-a stlačeni zrak izlazi iz cijevi i doprinosi zasebnom zračnom prasku. Tlak, masa plina i brzina istjecanja opisuju to pražnjenje. Veći protok nije isto što i izmjeren porast glasnoće.")}</p>
-      <p>${t("This is separate from the piston strike—not dB and not a suppressor prediction. The muzzle Cd is an independent unknown: before BB exit it controls venting of the air ahead of the BB; after exit it controls discharge from the barrel.", "To je odvojeno od udara pistona — nisu dB niti predviđanje učinka prigušivača. Cd usta cijevi zasebna je nepoznanica: prije izlaska BB-a određuje odzračivanje zraka ispred BB-a, a nakon izlaska pražnjenje cijevi.")}</p>
-      <p class="sound-measured">${t("Pressure at BB exit", "Tlak pri izlasku BB-a")}: <strong>${fmt(s.exitTime === null ? null : (s.exitPressure - s.ambientPressure) / 1e5, 2, "bar(g)")}</strong> · ${t("Gas at exit", "Plin pri izlasku")}: <strong>${fmt(s.exitGasMass === null ? null : s.exitGasMass * 1e6, 1, "mg")}</strong> · ${t("Discharged in run", "Ispušteno tijekom simulacije")}: <strong>${fmt(s.exitTime === null ? null : s.muzzleMass * 1e6, 1, "mg")}</strong>.</p>
-      <p>${s.dischargeComplete && baseline?.dischargeComplete ? t("Both runs relaxed to within 1% of atmospheric pressure.", "Obje simulacije približile su se atmosferskom tlaku unutar 1%.") : t("Discharge remains unresolved in one or both runs. Later outflow may change the observed comparison; unfinished discharge is not silence.", "Pražnjenje nije završeno u jednoj ili obje simulacije. Kasniji protok može promijeniti opaženu usporedbu; nezavršeno pražnjenje ne znači tišinu.")}</p></article>
+      <article class="intensity sound-explainer muzzle-primary" data-comparison="${q.flowComparison.status}"><div class="intensity-head"><strong>${dischargeName}</strong><output>${fmt(flow, 2, "g/s")}</output></div>
+      <p class="sound-quantity">${silenced ? t("Peak modeled flow to atmosphere through the end cap", "Vršni modelirani protok u atmosferu kroz završnu kapu") : t("Peak modeled flow to atmosphere through the muzzle", "Vršni modelirani protok u atmosferu kroz usta cijevi")}</p>
+      ${comparisonMarkup(q.flowComparison, referenceFlow, "g/s", "flow", t, fmt, flowReferenceLabel)}
+      <p><strong>${t("What it means:", "Što to znači:")}</strong> ${silenced ? t("Gas ahead of the BB vents into the silencer before inner-barrel exit. At exit, the remaining barrel charge expands into the entered free silencer volume, then leaves through the modeled baffle/end-cap restriction. The chamber can reduce and spread peak outlet flow while raising its own transient pressure.", "Zrak ispred BB-a odzračuje se u prigušivač prije izlaska iz unutarnje cijevi. Pri izlasku se preostali naboj iz cijevi širi u uneseni slobodni volumen prigušivača, zatim izlazi kroz modelirano ograničenje pregrada i završne kape. Komora može smanjiti i vremenski rastegnuti vršni izlazni protok uz porast vlastitog prijelaznog tlaka.") : t("After the BB exits, compressed air escapes from the barrel and contributes a separate air blast. Pressure, gas inventory and discharge rate describe that release. A higher outflow is not the same as a measured increase in sound.", "Nakon izlaska BB-a stlačeni zrak izlazi iz cijevi i doprinosi zasebnom zračnom prasku. Tlak, masa plina i brzina istjecanja opisuju to pražnjenje. Veći protok nije isto što i izmjeren porast glasnoće.")}</p>
+      <p>${silenced ? t("What is calculated: free chamber volume, its transient pressure, barrel-to-silencer transfer and final outlet flow. What is heuristic or unknown: the lumped baffle/fill loss factor, outlet Cd and heat transfer. The solver does not resolve individual jets, acoustic frequency response, foam absorption, structural vibration or dB attenuation.", "Što se računa: slobodni volumen komore, njezin prijelazni tlak, prijenos iz cijevi u prigušivač i konačni izlazni protok. Što je heurističko ili nepoznato: koncentrirani faktor gubitaka pregrada/ispune, izlazni Cd i izmjena topline. Solver ne razrješava pojedinačne mlazove, frekvencijski akustički odziv, apsorpciju pjene, strukturne vibracije ni prigušenje u dB.") : t("This is separate from the piston strike—not dB. The muzzle Cd is an independent unknown: before BB exit it controls venting of the air ahead of the BB; after exit it controls discharge from the barrel.", "To je odvojeno od udara pistona — nisu dB. Cd usta cijevi zasebna je nepoznanica: prije izlaska BB-a određuje odzračivanje zraka ispred BB-a, a nakon izlaska pražnjenje cijevi.")}</p>
+      <p class="sound-measured">${t("Pressure at inner-barrel exit", "Tlak pri izlasku iz unutarnje cijevi")}: <strong>${fmt(s.exitTime === null ? null : (s.exitPressure - s.ambientPressure) / 1e5, 2, "bar(g)")}</strong> · ${silenced ? `${t("Silencer free volume / peak pressure", "Slobodni volumen / vršni tlak prigušivača")}: <strong>${fmt(s.silencerVolume * 1e6, 2, "cm³")} / ${fmt((s.peakSilencerPressure - s.ambientPressure) / 1e5, 2, "bar(g)")}</strong> · ${t("barrel transfer / outlet peak", "vršni prijenos iz cijevi / izlaz")}: <strong>${fmt(s.peakMuzzleTransfer * 1000, 2, "g/s")} / ${fmt(s.peakOutflow * 1000, 2, "g/s")}</strong> · ${t("outlet pulse >10% peak", "izlazni impuls >10% vrha")}: <strong>${fmt(s.outflowPulseDuration * 1000, 2, "ms")}</strong> · ` : ""}${t("Gas at BB exit", "Plin pri izlasku BB-a")}: <strong>${fmt(s.exitGasMass === null ? null : s.exitGasMass * 1e6, 1, "mg")}</strong> · ${t("Discharged in run", "Ispušteno tijekom simulacije")}: <strong>${fmt(s.exitTime === null ? null : s.muzzleMass * 1e6, 1, "mg")}</strong>.</p>
+      <p>${s.dischargeComplete && (silenced ? unsilencedReference?.dischargeComplete : baseline?.dischargeComplete) ? t("Both compared runs relaxed to within 1% of atmospheric pressure.", "Obje uspoređene simulacije približile su se atmosferskom tlaku unutar 1%.") : t("Discharge remains unresolved in one or both compared runs. Later outflow may change the observed comparison; unfinished discharge is not silence.", "Pražnjenje nije završeno u jednoj ili obje uspoređene simulacije. Kasniji protok može promijeniti opaženu usporedbu; nezavršeno pražnjenje ne znači tišinu.")}</p></article>
       </div></section>`;
   }
   function parameterChanges(before = {}, after = {}) {
@@ -2927,6 +3016,9 @@
     bumperThickness: "mm", bumperBore: "mm", airbrakeLength: "mm", airbrakeDiameter: "mm",
     airbrakeTipDiameter: "mm", airbrakeTaper: "mm", headBore: "mm", headLength: "mm",
     nozzleBore: "mm", nozzleLength: "mm", breechVolume: "cm³", frontDeadVolume: "cm³", barrelLength: "mm",
+    silencerEnabled: "", silencerLength: "mm", silencerInnerDiameter: "mm", silencerBaffleCount: "",
+    silencerBaffleThickness: "mm", silencerBaffleBore: "mm", silencerEndCapBore: "mm", silencerPackingFraction: "",
+    silencerDischargeCoefficient: "", silencerHeatTransfer: "W/K",
     barrelDiameter: "mm", bbDiameter: "mm", bbMass: "g", springFreeLength: "mm",
     springInstalledLength: "mm", springCutLength: "mm", springActiveCoils: "turns",
     springRemovedCoils: "turns", springSolidLength: "mm", springStiffness: "N/m",
@@ -2942,7 +3034,8 @@
     airbrakeDiameter: 2, airbrakeTipDiameter: 2, headBore: 2, nozzleBore: 2,
     deadVolume: 2, breechVolume: 2, frontDeadVolume: 3, pistonLeak: 3, nozzleLeak: 3,
     sealFriction: 3, bbLeakCoefficient: 2, restitution: 2, dischargeCoefficient: 2, muzzleDischargeCoefficient: 2,
-    heatTransfer: 3, usefulFraction: 3
+    heatTransfer: 3, silencerInnerDiameter: 2, silencerBaffleThickness: 2, silencerBaffleBore: 2, silencerEndCapBore: 2,
+    silencerPackingFraction: 2, silencerDischargeCoefficient: 2, silencerHeatTransfer: 3, usefulFraction: 3
   };
   const UNKNOWN_ZERO = new Set(["springFreeLength", "springInstalledLength", "springActiveCoils", "springSolidLength", "springMass"]);
 
@@ -2986,6 +3079,20 @@
       ]
     },
     {
+      title: ["Silencer / suppressor", "Prigušivač"],
+      note: ["Measure the internal gas space and every minimum bore along the BB path. Exterior length or diameter alone does not define the expansion volume.", "Izmjerite unutarnji prostor plina i svaki najmanji provrt na putu BB-a. Sama vanjska duljina ili promjer ne određuju ekspanzijski volumen."],
+      rows: [
+        ["silencerEnabled", ["Installed for this shot", "Ugrađen za ovaj hitac"], ["Assembly record", "Zapis sklopa"], ["Enable only when this exact silencer was mounted. Disabled geometry is retained for later comparison but does not enter the shot model.", "Uključite samo kada je ovaj prigušivač stvarno ugrađen. Isključena geometrija ostaje za kasniju usporedbu, ali ne ulazi u model hica."]],
+        ["silencerLength", ["Internal expansion length", "Unutarnja ekspanzijska duljina"], ["Depth rod", "Dubinomjer"], ["Usable axial chamber length from the inner-barrel crown/entrance plane to the inside of the end cap—not the complete exterior length including threads.", "Uporabljiva uzdužna duljina komore od krune unutarnje cijevi/ulazne ravnine do unutarnje strane završne kape — ne ukupna vanjska duljina s navojem."]],
+        ["silencerInnerDiameter", ["Internal chamber diameter", "Unutarnji promjer komore"], ["Bore gauge / derived", "Mjerač provrta / izvedeno"], ["Diameter of the main expansion cavity. Together with internal length it sets gross volume and pressure rise.", "Promjer glavne ekspanzijske šupljine. Zajedno s unutarnjom duljinom određuje bruto volumen i porast tlaka."]],
+        ["silencerBaffleCount", ["Baffle count", "Broj pregrada"], ["Count", "Brojanje"], ["Count plates/cones that materially interrupt the axial flow. More entered baffles displace gas volume and increase the conditional lumped flow-loss factor.", "Brojite ploče/konuse koji bitno prekidaju uzdužni protok. Više unesenih pregrada oduzima volumen plina i povećava uvjetni koncentrirani faktor gubitka protoka."]],
+        ["silencerBaffleThickness", ["Average baffle thickness", "Prosječna debljina pregrade"], ["Caliper", "Pomično mjerilo"], ["Representative axial solid thickness per baffle. The model subtracts its annular solid volume and adds a finite-thickness loss term.", "Reprezentativna uzdužna debljina pune pregrade. Model oduzima njezin puni prstenasti volumen i dodaje član gubitka zbog konačne debljine."]],
+        ["silencerBaffleBore", ["Smallest baffle/core bore", "Najmanji provrt pregrade/jezgre"], ["Pin gauges", "Mjerni trnovi"], ["Smallest clear diameter repeated through the baffle stack. It must exceed the actual BB diameter with real alignment clearance; the model does not certify strike safety.", "Najmanji slobodni promjer koji se ponavlja kroz sklop pregrada. Mora biti veći od stvarnog BB-a uz stvarni zazor poravnanja; model ne potvrđuje sigurnost od udara BB-a."]],
+        ["silencerEndCapBore", ["Exit end-cap bore", "Provrt izlazne završne kape"], ["Pin gauges", "Mjerni trnovi"], ["Smallest clear exit diameter. Along with the baffle bore and conditional Cd, it controls the modeled final atmospheric outflow.", "Najmanji slobodni izlazni promjer. Zajedno s provrtom pregrada i uvjetnim Cd-om određuje modelirani konačni protok u atmosferu."]],
+        ["silencerPackingFraction", ["Solid fill fraction", "Udio punog volumena ispune"], ["Volume / mass estimate", "Procjena volumena / mase"], ["Estimated fraction of otherwise open chamber volume occupied by foam, mesh or other solid fill. It reduces free gas volume and increases the heuristic flow loss; it is not porosity measured by this app.", "Procijenjeni udio inače otvorenog volumena komore koji zauzima pjena, mrežica ili druga čvrsta ispuna. Smanjuje slobodni volumen plina i povećava heuristički gubitak protoka; aplikacija ne mjeri poroznost."]]
+      ]
+    },
+    {
       title: ["Spring & seats", "Opruga i oslonci"],
       note: ["Length mode and direct-compression mode describe the same installed spring in different ways; do not mix their reference planes.", "Način s duljinama i način s izravnim stlačenjem opisuju istu ugrađenu oprugu na različite načine; nemojte miješati njihove referentne ravnine."],
       rows: [
@@ -3013,6 +3120,8 @@
     ["restitution", ["Rigid / bottom-out restitution", "Odskok krutog graničnika"], ["High-speed contact measurement", "Brzo mjerenje kontakta"], ["Fraction controlling velocity reversal only when a rigid head is struck or the bumper reaches its compression cap. Zero means no idealized rigid rebound; it does not control the pneumatic cushion.", "Faktor koji određuje promjenu smjera brzine samo pri udaru u krutu glavu ili dosezanju granice stlačenja gumice. Nula znači bez idealiziranog krutog odskoka; ne upravlja pneumatskim jastukom."]],
     ["dischargeCoefficient", ["Head discharge coefficient Cd", "Koeficijent protoka glave Cd"], ["Flow bench or chrono fit", "Protočna klupa ili chrono prilagodba"], ["Effective loss coefficient for mass flow through the bumper opening, receiving bore and downstream nozzle. It combines contraction and turbulence losses; it is not an efficiency percentage.", "Efektivni koeficijent gubitaka masenog protoka kroz otvor gumice, ulazni provrt i izlazni kanal mlaznice. Vrijednost 1 i dalje nije postotak učinkovitosti; koeficijent sažima suženje i turbulentne gubitke."]],
     ["muzzleDischargeCoefficient", ["Muzzle discharge coefficient Cd", "Koeficijent protoka na ustima Cd"], ["Transient muzzle-flow test", "Mjerenje prijelaznog protoka na ustima"], ["Effective coefficient for front-gas venting before BB exit and compressed-gas discharge after exit. It can influence both exit speed and the modeled muzzle-flow contributor.", "Efektivni koeficijent odzračivanja zraka ispred BB-a prije izlaska i pražnjenja stlačenog plina nakon izlaska. Može utjecati i na izlaznu brzinu i na modelirani doprinos protoka na ustima."]],
+    ["silencerDischargeCoefficient", ["Silencer outlet discharge Cd", "Koeficijent protoka izlaza prigušivača Cd"], ["Pressure/flow transient fit", "Prilagodba prijelaza tlaka/protoka"], ["Effective contraction/turbulence coefficient applied after the measured baffle/end-cap geometry. It strongly affects peak outlet flow and decay time but is not an acoustic attenuation rating.", "Efektivni koeficijent suženja/turbulencije nakon izmjerene geometrije pregrada i završne kape. Snažno utječe na vršni izlazni protok i vrijeme pada, ali nije ocjena akustičkog prigušenja."]],
+    ["silencerHeatTransfer", ["Silencer heat conductance", "Toplinska vodljivost prigušivača"], ["Instrumented transient fit", "Instrumentirana prilagodba prijelaza"], ["Lumped heat exchange between silencer gas and its internals/wall. More conductance removes gas energy faster in the model; material, surface area and shot cadence are not separately resolved.", "Koncentrirana izmjena topline između plina te unutrašnjosti/stijenke prigušivača. Veća vodljivost brže oduzima energiju plinu u modelu; materijal, površina i ritam pucanja nisu zasebno razriješeni."]],
     ["pistonLeak", ["Piston-seal leak area", "Površina curenja brtve pistona"], ["Leak-down fit", "Prilagodba pada tlaka"], ["Equivalent area for air bypassing the piston seal from the compressed cylinder side. It already represents an effective leak path and is not a visible geometric hole that must have this shape.", "Ekvivalentna površina zraka koji zaobilazi brtvu pistona sa stlačene strane cilindra. Već predstavlja efektivni put curenja i nije nužno vidljiva rupa toga oblika."]],
     ["nozzleLeak", ["Nozzle / hop leak area", "Površina curenja mlaznice / hopa"], ["Leak-down fit", "Prilagodba pada tlaka"], ["Equivalent leak area from the downstream head/nozzle/hop system to atmosphere, separate from controlled flow into the barrel. Use leak-down evidence or calibration.", "Ekvivalentna površina curenja iz izlaznog sklopa glave, mlaznice i hopa prema atmosferi, odvojena od kontroliranog protoka u cijev. Koristite mjerenje pada tlaka ili kalibraciju."]],
     ["bbLeakCoefficient", ["BB-clearance leak coefficient", "Koeficijent curenja oko BB-a"], ["Calibration parameter", "Kalibracijski parametar"], ["Multiplier for air bypass through the annular clearance between the measured BB and barrel diameters. Zero disables that modeled path; one applies the full effective-clearance estimate.", "Množitelj protoka zraka kroz prstenasti zazor između izmjerenog BB-a i promjera cijevi. Nula isključuje taj modelirani put; jedan primjenjuje puni procijenjeni efektivni zazor."]],
@@ -3037,6 +3146,8 @@
   function fieldValue(p, key, t) {
     const value = p[key];
     if (key === "bumperCurve") return Array.isArray(value) && value.length ? t(`${value.length} measured points`, `${value.length} izmjerenih točaka`) : t("Not entered", "Nije uneseno");
+    if (key === "silencerEnabled") return value === 1 ? t("Installed", "Ugrađen") : t("Not installed", "Nije ugrađen");
+    if (key === "silencerPackingFraction" && Number.isFinite(value)) return `${(value * 100).toFixed(1)}%`;
     if (!Number.isFinite(value)) return "—";
     if (UNKNOWN_ZERO.has(key) && value === 0) return t("Unknown / not entered", "Nepoznato / nije uneseno");
     const digits = DIGITS[key] ?? (Math.abs(value) < 1 && value !== 0 ? 2 : 1);
@@ -3145,6 +3256,38 @@
       </svg><p class="parts-scale-note">${t("Entered radial clearance", "Uneseni radijalni zazor")}: <strong>${radial.toFixed(3)} mm</strong> · ${t("diametral difference", "razlika promjera")}: <strong>${Math.max(0, p.barrelDiameter - p.bbDiameter).toFixed(3)} mm</strong>. ${t("This is geometry, not a measured leakage rate.", "To je geometrija, ne izmjerena stopa curenja.")}</p></div>`;
   }
 
+  function silencerSvg(p, t) {
+    const id = "silencer", center = 137, left = 46, right = 514;
+    const geometry = P.silencerGeometry(p);
+    const chamberHalf = 47;
+    const coreHalf = clamp(p.silencerBaffleBore / Math.max(p.silencerInnerDiameter, .1) * chamberHalf, 7, 30);
+    const outletHalf = clamp(p.silencerEndCapBore / Math.max(p.silencerInnerDiameter, .1) * chamberHalf, 7, 30);
+    const count = Math.min(12, Math.max(0, Math.round(p.silencerBaffleCount)));
+    const baffles = Array.from({ length: count }, (_, index) => {
+      const x = left + (index + 1) / (count + 1) * (right - left - 12);
+      const width = clamp(p.silencerBaffleThickness / Math.max(p.silencerLength, 1) * (right - left), 2, 9);
+      return `<path class="parts-silencer-baffle" d="M${x - width / 2} ${center - chamberHalf}H${x + width / 2}V${center - coreHalf}H${x - width / 2}ZM${x - width / 2} ${center + coreHalf}H${x + width / 2}V${center + chamberHalf}H${x - width / 2}Z"/>`;
+    }).join("");
+    const packing = p.silencerPackingFraction > 0 ? `<g class="parts-silencer-packing">${Array.from({ length: 28 }, (_, index) => {
+      const x = left + 8 + index * (right - left - 26) / 27;
+      return `<path d="M${x} ${center - chamberHalf + 6}l6 10M${x} ${center + chamberHalf - 6}l6 -10"/>`;
+    }).join("")}</g>` : "";
+    const state = p.silencerEnabled ? t("installed in shot model", "ugrađen u modelu hica") : t("stored geometry · inactive", "spremljena geometrija · neaktivno");
+    return `<div class="parts-figure"><div class="parts-figure-heading"><div><h3>${t("Silencer expansion chamber", "Ekspanzijska komora prigušivača")}</h3><p>${t("Sectioned schematic locates every requested internal measurement; baffle profile is representative, not manufacturing CAD.", "Presjek označuje svaku traženu unutarnju mjeru; oblik pregrada je reprezentativan, nije proizvodni CAD.")}</p></div><span class="tag ${p.silencerEnabled ? "measured" : "unknown"}">${state}</span></div>
+      <svg class="parts-svg" viewBox="0 0 560 285" role="img" aria-label="${esc(t("Silencer cutaway with internal length, chamber diameter, baffle bore, end-cap bore and packing", "Presjek prigušivača s unutarnjom duljinom, promjerom komore, provrtom pregrada, provrtom završne kape i ispunom"))}">${defs(id)}
+        <line class="parts-centerline" x1="28" y1="${center}" x2="535" y2="${center}"/>
+        <path class="parts-silencer-shell" d="M${left - 8} ${center - chamberHalf - 12}H${right + 7}V${center - chamberHalf}H${left}V${center + chamberHalf}H${right + 7}V${center + chamberHalf + 12}H${left - 8}Z"/>
+        <rect class="parts-silencer-chamber" x="${left}" y="${center - chamberHalf}" width="${right - left}" height="${2 * chamberHalf}"/>
+        ${packing}${baffles}
+        <path class="parts-silencer-endcap" d="M${right - 5} ${center - chamberHalf}H${right + 7}V${center - outletHalf}H${right - 5}ZM${right - 5} ${center + outletHalf}H${right + 7}V${center + chamberHalf}H${right - 5}Z"/>
+        <path class="parts-motion" d="M58 ${center}H132" marker-end="url(#arrow-${id})"/><circle class="parts-bb" cx="74" cy="${center}" r="7"/><text class="parts-part-label" x="74" y="${center + 4}" text-anchor="middle">BB</text>
+        ${dimH(id, left, right, 247, `${t("internal expansion length", "unutarnja ekspanzijska duljina")} ${fieldValue(p, "silencerLength", t)}`)}
+        ${dimV(id, 27, center - chamberHalf, center + chamberHalf, `Ø ${fieldValue(p, "silencerInnerDiameter", t)}`)}
+        <g class="parts-leader"><path d="M${left + (right - left) * .55} ${center - coreHalf}L355 48"/><text x="360" y="46">${esc(`${t("baffle bore", "provrt pregrade")} Ø ${fieldValue(p, "silencerBaffleBore", t)}`)}</text><path d="M${right} ${center + outletHalf}L455 218"/><text x="450" y="232" text-anchor="end">${esc(`${t("end cap", "završna kapa")} Ø ${fieldValue(p, "silencerEndCapBore", t)}`)}</text></g>
+        <text class="parts-caption" x="280" y="78" text-anchor="middle">${esc(`${p.silencerBaffleCount} × ${fieldValue(p, "silencerBaffleThickness", t)} · ${t("fill", "ispuna")} ${(p.silencerPackingFraction * 100).toFixed(1)}%`)}</text>
+      </svg><p class="parts-scale-note">${t("Calculated free gas volume", "Izračunati slobodni volumen plina")}: <strong>${(geometry.freeVolume * 1e6).toFixed(2)} cm³</strong> · ${t("gross / baffle solid / packing solid", "bruto / pregrade / puna ispuna")}: <strong>${(geometry.grossVolume * 1e6).toFixed(2)} / ${(geometry.baffleSolidVolume * 1e6).toFixed(2)} / ${(geometry.packingSolidVolume * 1e6).toFixed(2)} cm³</strong> · ${t("conditional equivalent outlet", "uvjetni ekvivalentni izlaz")}: <strong>${(geometry.effectiveOutletArea * 1e6).toFixed(2)} mm²</strong>. ${t("The drawing does not certify BB-strike clearance or predict dB.", "Crtež ne potvrđuje sigurnost zazora od udara BB-a niti predviđa dB.")}</p></div>`;
+  }
+
   function springPath(x1, x2, center, amplitude, turns) {
     const count = Math.max(5, Math.min(18, Math.round(turns || 11))), step = (x2 - x1) / count;
     let path = `M${x1} ${center}`;
@@ -3184,7 +3327,7 @@
     return `<section class="panel parts-atlas" aria-labelledby="partsAtlasTitle">
       <div class="parts-atlas-heading"><div><span class="parts-eyebrow">${t("Dynamic measurement atlas", "Dinamički mjerni atlas")}</span><h2 id="partsAtlasTitle">${t("Parts & measurement references", "Dijelovi i reference mjerenja")}</h2><p>${t("Every number and diagram below follows the current setup. Use the drawings to identify the intended feature, then record the real measurement—not a value estimated from the illustration.", "Svaki broj i dijagram u nastavku prati trenutačnu konfiguraciju. Crtež koristite za prepoznavanje tražene značajke, a zatim zabilježite stvarno mjerenje — ne vrijednost procijenjenu sa slike.")}</p></div><span class="tag geometry">${t("current setup", "trenutačna konfiguracija")}</span></div>
       <div class="parts-safety" role="note"><strong>${t("Before measuring", "Prije mjerenja")}</strong><span>${t("Unload and fully decock the replica. Remove spring load and disassemble according to the manufacturer before placing tools inside the cylinder or spring assembly.", "Ispraznite i potpuno otpustite repliku. Uklonite opterećenje opruge i rastavite prema uputama proizvođača prije stavljanja alata u cilindar ili sklop opruge.")}</span></div>
-      <div class="parts-diagrams">${airPathSvg(p, t)}<div class="parts-figure-grid">${cylinderSvg(p, t)}${barrelSvg(p, t)}${springSvg(p, t)}</div></div>
+      <div class="parts-diagrams">${airPathSvg(p, t)}<div class="parts-figure-grid">${cylinderSvg(p, t)}${barrelSvg(p, t)}${silencerSvg(p, t)}${springSvg(p, t)}</div></div>
       <div class="parts-measurement-intro"><h2>${t("What each setup value means", "Što znači svaka vrijednost konfiguracije")}</h2><p>${t("The method labels distinguish dimensions you can measure directly from quantities that need a fixture, calculation or calibration.", "Oznake metoda razlikuju dimenzije koje možete izravno izmjeriti od veličina koje traže prihvat, izračun ili kalibraciju.")}</p></div>
       <div class="parts-measure-groups">${GROUPS.map(group => measurementGroup(group, p, t)).join("")}</div>
       <details class="parts-model-parameters" data-preserve-open><summary>${t("Model, bench-test and environmental inputs — not ordinary part dimensions", "Ulazi modela, ispitivanja i okoliša — nisu obične dimenzije dijelova")}</summary><p>${t("These inputs still affect the simulation, but a caliper cannot establish them. Treat unmeasured values as assumptions and use the stated evidence route or chrono calibration where applicable.", "Ovi ulazi i dalje utječu na simulaciju, ali ih pomično mjerilo ne može odrediti. Neizmjerene vrijednosti tretirajte kao pretpostavke i koristite navedeni način provjere ili chrono kalibraciju gdje je primjenjivo.")}</p><div class="table-wrap"><table class="parts-parameter-table"><thead><tr><th>${t("Parameter", "Parametar")}</th><th>${t("Current input", "Trenutačni ulaz")}</th><th>${t("How to establish it", "Kako ga odrediti")}</th></tr></thead><tbody>${modelRows(p, t)}</tbody></table></div></details>
@@ -3205,15 +3348,16 @@
   const B = typeof module !== "undefined" && module.exports ? require("./playback.js") : root.PneumaticPlayback;
   const clamp = (v, low = 0, high = 1) => Math.max(low, Math.min(high, v));
   function draw(ctx, w, h, p, shot, f, t, fmt) {
-    const { wall, head, rigidHead, bumperWidth, face, step, passageEnd, barrelStart, end, pinLength, scale } = B.mechanism(p, f.pistonX);
+    const { wall, head, rigidHead, bumperWidth, face, step, passageEnd, barrelStart, end, silencerEnd, barrelScale, pinLength, scale } = B.mechanism(p, f.pistonX);
     const axis = 156, top = 100, bottom = 212;
-    const bb = f.bbExited ? end + (f.t - shot.exitTime) * shot.exitVelocity * (end - barrelStart) / shot.barrelLength : barrelStart + f.bbX / shot.barrelLength * (end - barrelStart);
+    const bb = f.bbExited ? end + (f.t - shot.exitTime) * shot.exitVelocity * 1000 * barrelScale : barrelStart + f.bbX / shot.barrelLength * (end - barrelStart);
     const radial = 26 / Math.max(p.bumperBore, p.headBore, p.nozzleBore, p.airbrakeDiameter);
-    const peak = Math.max(1, shot.peakCylinderPressure - shot.ambientPressure, shot.peakPressure - shot.ambientPressure, shot.peakFrontPressure - shot.ambientPressure);
+    const peak = Math.max(1, shot.peakCylinderPressure - shot.ambientPressure, shot.peakPressure - shot.ambientPressure, shot.peakFrontPressure - shot.ambientPressure, (shot.peakSilencerPressure || shot.ambientPressure) - shot.ambientPressure);
     const cylinderGlow = clamp((f.cylinderPressure - shot.ambientPressure) / peak);
     const barrelGlow = clamp((f.pressure - shot.ambientPressure) / peak);
     const frontGlow = clamp((f.frontPressure - shot.ambientPressure) / peak);
-    const amber = "#ffbf69", cyan = "#5de4e7", violet = "#b99cff";
+    const silencerGlow = clamp(((f.silencerPressure || shot.ambientPressure) - shot.ambientPressure) / peak);
+    const amber = "#ffbf69", cyan = "#5de4e7", violet = "#b99cff", green = "#6ee7a8";
     const gradient = (x1, y1, x2, y2, stops) => {
       const g = ctx.createLinearGradient(x1, y1, x2, y2);
       stops.forEach(([at, color]) => g.addColorStop(at, color)); return g;
@@ -3324,24 +3468,50 @@
     gas(barrelStart, axis - 12, Math.max(0, Math.min(bb, end) - barrelStart), 24, barrelGlow, cyan, 30, f.flow);
     if (!f.bbExited) gas(Math.max(barrelStart, bb), axis - 12, Math.max(0, end - Math.max(barrelStart, bb)), 24, frontGlow, violet, 24, f.frontOutflow);
     line(end, axis - 23, end, axis + 23, "#c8d9dd", 3);
+    if (p.silencerEnabled) {
+      const chamberTop = axis - 37, chamberBottom = axis + 37;
+      const boreHeight = clamp(p.silencerBaffleBore / Math.max(p.silencerInnerDiameter, .1) * 68, 9, 30);
+      const endBoreHeight = clamp(p.silencerEndCapBore / Math.max(p.silencerInnerDiameter, .1) * 68, 9, 30);
+      rect(end - 5, chamberTop - 7, silencerEnd - end + 7, chamberBottom - chamberTop + 14,
+        gradient(0, chamberTop, 0, chamberBottom, [[0, "#71848d"], [.1, "#293b44"], [.48, "#0e191e"], [.9, "#334951"], [1, "#83959c"]]), "#70868e");
+      rect(end, chamberTop, silencerEnd - end, chamberBottom - chamberTop, "#071510", "#527066");
+      gas(end, chamberTop + 1, silencerEnd - end - 2, chamberBottom - chamberTop - 2, silencerGlow, green, 28, f.silencerOutflow);
+      const visibleBaffles = Math.min(12, Math.max(0, Math.round(p.silencerBaffleCount)));
+      for (let index = 0; index < visibleBaffles; index++) {
+        const x = end + (index + 1) / (visibleBaffles + 1) * (silencerEnd - end);
+        const thickness = clamp(p.silencerBaffleThickness * barrelScale, 1.5, 5);
+        rect(x - thickness / 2, chamberTop, thickness, (chamberBottom - chamberTop - boreHeight) / 2, "#617780", "#9fb1b5");
+        rect(x - thickness / 2, axis + boreHeight / 2, thickness, (chamberBottom - chamberTop - boreHeight) / 2, "#617780", "#9fb1b5");
+      }
+      rect(silencerEnd - 4, chamberTop - 1, 5, (chamberBottom - chamberTop - endBoreHeight) / 2 + 1, "#84979d", "#bed0d3");
+      rect(silencerEnd - 4, axis + endBoreHeight / 2, 5, (chamberBottom - chamberTop - endBoreHeight) / 2 + 1, "#84979d", "#bed0d3");
+      if (p.silencerPackingFraction > 0) {
+        ctx.save(); ctx.globalAlpha = clamp(.12 + p.silencerPackingFraction * .45, .12, .5);
+        for (let x = end + 8; x < silencerEnd - 6; x += 9) {
+          line(x, chamberTop + 4, x + 5, chamberTop + 13, "#9bf4c0", 1);
+          line(x, chamberBottom - 4, x + 5, chamberBottom - 13, "#9bf4c0", 1);
+        }
+        ctx.restore();
+      }
+    }
     const plume = f.bbExited ? clamp(f.outflow / Math.max(shot.peakOutflow, 1e-10)) : 0;
     if (plume > .001) {
       ctx.save(); ctx.globalAlpha = plume;
       for (let i = 0; i < 5; i++) {
-        const radius = 9 + i * 4, x = end + 6 + i * 10;
+        const radius = 9 + i * 4, x = silencerEnd + 6 + i * 10;
         const glow = ctx.createRadialGradient(x, axis, 1, x, axis, radius);
         glow.addColorStop(0, "#5de4e73d"); glow.addColorStop(1, "#5de4e700");
         dot(x, axis, radius, glow);
       }
       for (let i = 0; i < 15; i++) {
         const progress = ((f.t - shot.exitTime) * 220 + i / 15) % 1;
-        const x = end + 4 + progress * 54, y = axis + (i % 5 - 2) * (2 + progress * 7);
+        const x = silencerEnd + 4 + progress * 54, y = axis + (i % 5 - 2) * (2 + progress * 7);
         line(x - 3, y, x, y, "#a0fbf3", 1);
       }
       ctx.restore();
     }
     if (bb >= barrelStart && bb < 1110) {
-      const direction = Math.sign(f.bbV), trail = Math.max(0, Math.min(70, Math.abs(f.bbV) * .5, direction < 0 ? end - bb : bb - barrelStart));
+      const direction = Math.sign(f.bbV), trail = Math.max(0, Math.min(70, Math.abs(f.bbV) * .5, direction < 0 ? silencerEnd - bb : bb - barrelStart));
       const tail = bb - direction * trail;
       if (trail > 0) rect(Math.min(tail, bb), axis - 3, trail, 6, gradient(tail, 0, bb, 0, [[0, "#5de4e700"], [1, "#b8ffffbb"]]));
       const sphere = ctx.createRadialGradient(bb - 2, axis - 3, 1, bb, axis, 8);
@@ -3356,13 +3526,14 @@
     if (w >= 650) {
       ctx.fillText(t("SPRING / PISTON", "OPRUGA / PISTON"), 40, 36);
       ctx.fillText(p.bumperThickness > 0 ? t("BUMPER / HEAD / NOZZLE", "ODBOJNIK / GLAVA / MLAZNICA") : t("HEAD / NOZZLE", "GLAVA / MLAZNICA"), 425, 36);
-      ctx.fillText(t("INNER BARREL", "UNUTARNJA CIJEV"), 760, 36);
+      ctx.fillText(p.silencerEnabled ? t("INNER BARREL / SILENCER", "UNUTARNJA CIJEV / PRIGUŠIVAČ") : t("INNER BARREL", "UNUTARNJA CIJEV"), 760, 36);
       ctx.fillStyle = amber; ctx.fillText(`${t("Cylinder", "Cilindar")}  ${fmt((f.cylinderPressure - shot.ambientPressure) / 1e5, 2)} bar(g)`, 40, 266);
       ctx.fillStyle = cyan; ctx.fillText(`${t("Behind / ahead BB", "Iza / ispred BB-a")}  ${fmt((f.pressure - shot.ambientPressure) / 1e5, 2)} / ${fmt((f.frontPressure - shot.ambientPressure) / 1e5, 2)} bar(g)`, 620, 266);
       rect(40, 279, 270, 3, "#2c363b"); rect(40, 279, cylinderGlow * 270, 3, amber);
       rect(620, 279, 390, 3, "#2c363b"); rect(620, 279, barrelGlow * 390, 3, cyan); rect(620, 284, frontGlow * 390, 2, violet);
       ctx.fillStyle = "#99aeb9";
-      ctx.fillText(`${t("Pin overlap", "Preklapanje pina")} ${fmt(f.insertion * 1000, 2)} mm  ·  ${t("Open area", "Otvor")} ${fmt(f.openArea * 1e6, 3)} mm²`, 40, 311);
+      const silencerReadout = p.silencerEnabled ? `  ·  ${t("Silencer", "Prigušivač")} ${fmt((f.silencerPressure - shot.ambientPressure) / 1e5, 2)} bar(g)` : "";
+      ctx.fillText(`${t("Pin overlap", "Preklapanje pina")} ${fmt(f.insertion * 1000, 2)} mm  ·  ${t("Open area", "Otvor")} ${fmt(f.openArea * 1e6, 3)} mm²${silencerReadout}`, 40, 311);
     } else {
       ctx.fillText(p.bumperThickness > 0 ? t("PISTON → BUMPER → BB", "PISTON → GUMICA → BB") : t("PISTON → HEAD → BB", "PISTON → GLAVA → BB"), 40, 36);
       ctx.fillText(`${t("Pin overlap", "Preklapanje pina")}: ${fmt(f.insertion * 1000, 2)} mm`, 40, 266);
@@ -3392,7 +3563,7 @@
   const clone = v => JSON.parse(JSON.stringify(v));
   const parseCurveText = value => value.trim() ? value.trim().split(/\n+/).map(line => line.trim().split(/[,;\s]+/).map(Number)) : [];
   let p = P.normalize(), selectedPlatform = "ssg10", component = "amp", springLabel = "unspecified", pinLabel = "plug";
-  let provenance = { geometry: "assumed", spring: "assumed" }, shot = null, baseline = null, fraction = 0, playing = false, animation = 0;
+  let provenance = { geometry: "assumed", spring: "assumed" }, shot = null, baseline = null, unsilencedReference = null, fraction = 0, playing = false, animation = 0;
   let measurements = [], fit = null, fitSelection = ["dischargeCoefficient"], status = null, diagnostic = null, busy = false, debounce = null;
   let lastValidShot = null, changeComparison = null;
   let optimizer = null;
@@ -3424,6 +3595,15 @@
     deadVolume: ["Cylinder-side residual cavity", "Preostali volumen na strani cilindra", "cm³", .05, 5, .01],
     breechVolume: ["Head / nozzle / breech storage", "Volumen glave, mlaznice i komore", "cm³", .05, 5, .01],
     frontDeadVolume: ["Muzzle/front-gas residual volume", "Preostali volumen zraka ispred BB-a", "cm³", .001, 2, .001],
+    silencerLength: ["Silencer internal expansion length", "Unutarnja ekspanzijska duljina prigušivača", "mm", 20, 500, 1],
+    silencerInnerDiameter: ["Silencer internal chamber diameter", "Unutarnji promjer komore prigušivača", "mm", 7, 80, .1],
+    silencerBaffleCount: ["Internal baffle count", "Broj unutarnjih pregrada", "", 0, 50, 1],
+    silencerBaffleThickness: ["Average baffle thickness", "Prosječna debljina pregrade", "mm", .1, 15, .1],
+    silencerBaffleBore: ["Smallest baffle / core bore", "Najmanji provrt pregrade / jezgre", "mm", 5.5, 30, .01],
+    silencerEndCapBore: ["Exit end-cap bore", "Promjer izlaznog otvora završne kape", "mm", 5.5, 30, .01],
+    silencerPackingFraction: ["Estimated solid fill fraction", "Procijenjeni udio volumena ispune", "", 0, .89, .01],
+    silencerDischargeCoefficient: ["Silencer outlet discharge coefficient Cd", "Koeficijent protoka izlaza prigušivača Cd", "", .1, 1, .01],
+    silencerHeatTransfer: ["Silencer effective heat conductance", "Efektivna toplinska vodljivost prigušivača", "W/K", 0, 2, .005],
     springStiffness: ["Spring stiffness before any simulated cut", "Krutost opruge prije simuliranog skraćivanja", "N/m", 0, 4000, 10],
     springPreload: ["Spring compression at rigid-head plane before added bumper", "Stlačenje opruge na ravnini krute glave prije dodatne gumice", "mm", 0, 150, .5],
     springMass: ["Installed spring mass (after any cut)", "Masa ugrađene opruge (nakon skraćivanja)", "g", 0, 100, .1],
@@ -3541,6 +3721,33 @@
       if (note) note.hidden = !fixed;
     }
   }
+  function silencerMarkup() {
+    return `<details id="silencerDetails" ${p.silencerEnabled ? "open" : ""}><summary>${t("Silencer / suppressor expansion chamber", "Ekspanzijska komora prigušivača")}</summary>
+      <label class="provenance"><input id="silencerEnabled" type="checkbox" ${p.silencerEnabled ? "checked" : ""}>${t("Silencer installed for this shot", "Prigušivač je ugrađen za ovaj hitac")}</label>
+      <p class="field-help">${t("The model adds a conservative gas chamber after the inner-barrel crown. It predicts pressure storage and outlet mass flow—not acoustic transmission, frequency response or real dB.", "Model dodaje konzervativnu plinsku komoru nakon krune unutarnje cijevi. Predviđa pohranu tlaka i maseni protok na izlazu — ne prijenos zvuka, frekvencijski odziv ni stvarne dB.")}</p>
+      ${group("Measured internal geometry", "Izmjerena unutarnja geometrija", ["silencerLength", "silencerInnerDiameter", "silencerBaffleCount", "silencerBaffleThickness", "silencerBaffleBore", "silencerEndCapBore", "silencerPackingFraction"])}
+      ${group("Conditional flow and thermal inputs", "Uvjetni ulazi protoka i topline", ["silencerDischargeCoefficient", "silencerHeatTransfer"], t("Cd combines contraction, turbulence and unmodeled baffle detail. Heat conductance is an effective transient fit. Neither is obtained from exterior dimensions.", "Cd objedinjuje suženje, turbulenciju i nerazriješene detalje pregrada. Toplinska vodljivost efektivna je prilagodba prijelaznog procesa. Nijedna se ne dobiva iz vanjskih dimenzija."))}
+      <div id="silencerSummary" class="small-note" role="status"></div>
+      ${provenanceControl("geometry", "I have measured the silencer's internal geometry", "Izmjerio/la sam unutarnju geometriju prigušivača")}</details>`;
+  }
+  function syncSilencerControls() {
+    if (!$("silencerEnabled")) return;
+    $("silencerEnabled").checked = p.silencerEnabled === 1;
+    for (const key of O.GROUPS.silencer) {
+      const input = $("opt-" + key);
+      if (!input) continue;
+      const inactive = p.silencerEnabled !== 1;
+      input.disabled = optimizer.locks.silencer || inactive;
+      if (inactive) input.value = String(p[key]);
+      const note = input.parentElement.querySelector("small");
+      if (note) {
+        note.hidden = !inactive;
+        if (inactive) note.textContent = t("Install the silencer in Setup before searching its physical geometry.", "Uključite prigušivač u Postavkama prije pretraživanja njegove fizičke geometrije.");
+      }
+    }
+    const sg = P.silencerGeometry(p), barrel = P.geometry(p, 0, 0).barrelVolume;
+    $("silencerSummary").innerHTML = p.silencerEnabled ? `${t("Calculated free gas volume", "Izračunati slobodni volumen plina")}: <strong>${fmt(sg.freeVolume * 1e6, 2, "cm³")}</strong> · ${t("volume / barrel", "volumen / cijev")}: <strong>${fmt(sg.freeVolume / barrel, 2, ": 1")}</strong> · ${t("equivalent outlet area", "ekvivalentna izlazna površina")}: <strong>${fmt(sg.effectiveOutletArea * 1e6, 2, "mm²")}</strong>. ${t("The equivalent area includes a disclosed lumped baffle/fill loss proxy; it is not a measured acoustic rating.", "Ekvivalentna površina uključuje navedenu koncentriranu procjenu gubitaka pregrada/ispune; nije izmjerena akustička ocjena.")}` : t("Silencer inactive: its dimensions do not affect this shot.", "Prigušivač nije aktivan: njegove dimenzije ne utječu na ovaj hitac.");
+  }
   function group(en, hr, keys, help = "") { return `<section class="control-group"><p class="group-label">${t(en, hr)}</p>${keys.map(field).join("")}${help ? `<p class="field-help">${help}</p>` : ""}</section>`; }
   function provenanceControl(key, en, hr) { return `<label class="provenance"><input type="checkbox" data-provenance="${key}" ${provenance[key] === "measured" ? "checked" : ""}>${t(en, hr)}</label>`; }
   function render() {
@@ -3555,7 +3762,7 @@
       bindLanguage(); return;
     }
     $("root").innerHTML = `<main class="app tuning-app"><header class="lab-header"><div><a href="#">${t("← All tools", "← Svi alati")}</a><h1>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h1></div>${languageSwitch()}</header>
-      <details class="model-caveat"><summary>${t("Unvalidated model · not exact joules or dB", "Nepotvrđen model · nisu točni jouli ni dB")}</summary><p>${t("Conditional physics predictions, not measured performance. Head/pin dimensions, spring data, bumper material response and muzzle Cd start as assumptions. A chrono fit does not validate internal timing, contact force or sound. No exact real-world joules or dB are claimed.", "Uvjetna predviđanja fizikalnog modela, a ne izmjerene performanse. Dimenzije glave/pina, podaci opruge, odziv materijala gumice i Cd usta početne su pretpostavke. Kalibracija kronografom ne potvrđuje unutarnji vremenski odnos, silu kontakta ni zvuk. Ne tvrdimo da su stvarni jouli ili dB točno predviđeni.")}</p></details>
+      <details class="model-caveat"><summary>${t("Unvalidated model · not exact joules or dB", "Nepotvrđen model · nisu točni jouli ni dB")}</summary><p>${t("Conditional physics predictions, not measured performance. Head/pin dimensions, spring data, bumper material response, muzzle Cd and silencer flow/thermal factors start as assumptions. A chrono fit does not validate internal timing, contact force, acoustic attenuation or sound. No exact real-world joules or dB are claimed.", "Uvjetna predviđanja fizikalnog modela, a ne izmjerene performanse. Dimenzije glave/pina, podaci opruge, odziv materijala gumice, Cd usta te faktori protoka/topline prigušivača početne su pretpostavke. Kalibracija kronografom ne potvrđuje unutarnji vremenski odnos, silu kontakta, akustičko prigušenje ni zvuk. Ne tvrdimo da su stvarni jouli ili dB točno predviđeni.")}</p></details>
       <div class="layout"><aside class="panel controls-panel" aria-label="${t("Simulation controls", "Kontrole simulacije")}"><div class="panel-heading"><h2>${t("Setup", "Postavke")}</h2><button class="secondary-button" id="toggleControls" type="button" aria-expanded="true">${t("Show / hide", "Prikaži / sakrij")}</button></div>
         <section class="control-group"><label for="platformPreset">${t("Rifle starting point", "Početna konfiguracija replike")}</label><select id="platformPreset">${Object.entries(platforms).map(([id, v]) => `<option value="${id}" ${selectedPlatform === id ? "selected" : ""}>${v.name}</option>`).join("")}<option value="custom" ${selectedPlatform === "custom" ? "selected" : ""}>${t("Custom", "Prilagođeno")}</option></select>
         <p class="evidence">${t("Preset geometry is nominal or assumed—not a measurement of your rifle. Changing platforms resets the mechanical assumptions.", "Geometrija predloška nominalna je ili pretpostavljena — nije mjerenje vaše replike. Promjena platforme vraća mehaničke pretpostavke.")}</p>
@@ -3564,6 +3771,7 @@
         <label for="springLabel">${t("Spring identity (label only)", "Oznaka opruge (samo naziv)")}</label><select id="springLabel">${["unspecified", "M110", "M120", "M130", "M140", "M150", "M160", "M170", "M180", "M190", "M220", "custom"].map(v => `<option value="${v}" ${springLabel === v ? "selected" : ""}>${v === "unspecified" ? t("Unknown / not recorded", "Nepoznato / nije zabilježeno") : v === "custom" ? t("Other measured spring", "Druga izmjerena opruga") : v}</option>`).join("")}</select><p class="field-help">${t("Use the force data below. An M-rating alone does not determine spring stiffness or preload.", "Koristite podatke o sili u nastavku. Oznaka M ne određuje krutost ni prednaprezanje opruge.")}</p></section>
         ${group("Cylinder and barrel", "Cilindar i cijev", ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter"], t("Short stroke changes the cocked position. Added bumper thickness below moves the front contact plane rearward instead; the app shows the resulting effective travel separately.", "Skraćeni hod mijenja zapeti položaj. Debljina dodatne gumice niže umjesto toga pomiče prednju ravninu kontakta unatrag; aplikacija zasebno prikazuje dobiveni efektivni hod."))}
         <p class="small-note" id="shortStrokeDynamic"></p>
+        ${silencerMarkup()}
         ${group("Moving masses", "Pomične mase", ["pistonMass", "bbMass", "bbDiameter"])}<div class="preset-row">${[58, 65, 68, 72, 76, 82].map(m => `<button class="preset" type="button" data-mass="${m}" aria-pressed="${p.pistonMass === m}">${m} g</button>`).join("")}</div>
         <details open><summary>${t("Head, bumper and airbrake geometry", "Geometrija glave, odbojne gumice i zračne kočnice")}</summary><p class="field-help">${t("Pneumatic cushioning: the pin restricts airflow before contact. The rubber bumper acts only when the piston reaches it. These are separate effects.", "Pneumatsko ublažavanje: pin ograničava protok prije kontakta. Odbojna gumica djeluje tek kad je piston dotakne. To su odvojeni učinci.")}</p>
         <section class="control-group bumper-controls"><p class="group-label">${t("Added cylinder-head bumper", "Dodatna odbojna gumica glave cilindra")}</p>${["bumperThickness", "bumperBore", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "restitution"].map(field).join("")}<label for="bumperCurve">${t("Optional measured bumper curve: compression mm, force N", "Neobavezna izmjerena krivulja gumice: stlačenje mm, sila N")}</label><textarea id="bumperCurve" rows="4" placeholder="0, 0&#10;0.5, 100&#10;1.0, 300">${p.bumperCurve.map(v => v.join(", ")).join("\n")}</textarea><p class="field-help">${t("A measured nonlinear curve replaces the single linear stiffness. Start at 0 mm / 0 N and cover the complete compression cap. Dynamic damping is still entered separately; neither input is Shore hardness or dB.", "Izmjerena nelinearna krivulja zamjenjuje jednu linearnu krutost. Počnite s 0 mm / 0 N i pokrijte cijelu granicu stlačenja. Dinamičko prigušenje i dalje se unosi zasebno; nijedan ulaz nije Shore tvrdoća ni dB.")}</p><p class="field-help">${t("Thickness 0 mm means no added pad. With a pad, force and damping create a finite compression/contact interval; the effective cap is the smaller of the entered limit and physical thickness. Reaching that cap uses rigid bottom-out restitution.", "Debljina 0 mm znači da nema dodatne gumice. Uz gumicu, sila i prigušenje stvaraju konačan interval stlačivanja/kontakta; efektivna granica manja je od unesene vrijednosti i fizičke debljine. Dosezanje te granice koristi odskok krutog graničnika.")}</p></section>
@@ -3578,12 +3786,12 @@
       if (view === "calibration") $("calibrationPanel").open = true;
       setFrame(fraction);
     });
-    bindLanguage(); bindControls(); bindFieldHelp(); bindOptimizer(); syncSpringControls(); syncBumperControls(); updateResults(); renderMeasurements(); renderOptimizerResults(); workspace.restoreScroll();
+    bindLanguage(); bindControls(); bindFieldHelp(); bindOptimizer(); syncSpringControls(); syncBumperControls(); syncSilencerControls(); updateResults(); renderMeasurements(); renderOptimizerResults(); workspace.restoreScroll();
   }
   function calibrationMarkup() {
     return `<details class="panel calibration" id="calibrationPanel"><summary>${t("Calibration · actual chrono measurements", "Kalibracija · stvarna mjerenja kronografom")}</summary><div class="calibration-body"><p class="calibration-intro">${t("Your 0.46 g / 330 fps observation is a reference until its full setup is recorded. Energy is derived from mass and velocity, not an independent measurement. Record each shot. All data stays in this browser unless you export it.", "Mjerenje 0,46 g / 330 fps ostaje referenca dok se ne zabilježi potpuna konfiguracija. Energija se izvodi iz mase i brzine, nije neovisno mjerenje. Zabilježite svaki hitac. Podaci ostaju u ovom pregledniku osim ako ih izvezete.")}</p>
       <form id="measurementForm" class="measurement-form"><label>${t("BB mass (g)", "Masa BB-a (g)")}<input id="measurementMass" type="number" value="${p.bbMass}" min=".1" max="1" step=".01" required></label><label>${t("Measured speed (fps)", "Izmjerena brzina (fps)")}<input id="measurementFps" type="number" value="330" min="1" max="1000" step=".1" required></label><label>${t("Chrono uncertainty (fps)", "Nesigurnost kronografa (fps)")}<input id="measurementSigma" type="number" value="1" min=".1" max="100" step=".1" required></label>
-      <label>${t("Piston contact time (ms, optional)", "Vrijeme kontakta pistona (ms, neobavezno)")}<input id="measurementHitMs" type="number" min="0" max="1000" step=".01"></label><label>${t("Peak cylinder bar(g), optional", "Vršni tlak cilindra bar(g), neobavezno")}<input id="measurementPressure" type="number" min="0" max="100" step=".01"></label><label>${t("Peak bumper force (N, optional)", "Vršna sila gumice (N, neobavezno)")}<input id="measurementBumperForce" type="number" min="0" max="100000" step=".1"></label>
+      <label>${t("Piston contact time (ms, optional)", "Vrijeme kontakta pistona (ms, neobavezno)")}<input id="measurementHitMs" type="number" min="0" max="1000" step=".01"></label><label>${t("Peak cylinder bar(g), optional", "Vršni tlak cilindra bar(g), neobavezno")}<input id="measurementPressure" type="number" min="0" max="100" step=".01"></label><label>${t("Peak silencer bar(g), optional", "Vršni tlak prigušivača bar(g), neobavezno")}<input id="measurementSilencerPressure" type="number" min="0" max="100" step=".01"></label><label>${t("Peak bumper force (N, optional)", "Vršna sila gumice (N, neobavezno)")}<input id="measurementBumperForce" type="number" min="0" max="100000" step=".1"></label>
       <label>${t("Use this shot as", "Namjena hica")}<select id="measurementRole"><option value="reference">${t("Reference only", "Samo referenca")}</option><option value="train">${t("Training / fit", "Podatak za prilagodbu")}</option><option value="validation">${t("Held-out validation", "Neovisna provjera")}</option></select></label><label class="wide">${t("Notes: pin, spring, hop setting, BB batch, chrono distance, temperature", "Bilješke: pin, opruga, hop, serija BB-a, udaljenost kronografa, temperatura")}<input id="measurementNotes" type="text" maxlength="2000"></label><label class="wide provenance"><input id="measurementConfirm" type="checkbox">${t("The current inputs describe the hardware used for this measured shot", "Trenutačni ulazi opisuju sklop kojim je ovaj hitac izmjeren")}</label><output id="measurementEnergy" class="wide small-note"></output><button type="submit" class="secondary-button">${t("Add shot", "Dodaj hitac")}</button></form>
       <p class="small-note">${t("Fitting is enabled only for confirmed setups with measured geometry/masses and spring data. Select at most three unknowns. Fitting two parameters requires at least two genuinely different training configurations; repeats alone do not create identifiability. Instrumented contact/pressure/force measurements constrain internal mechanics far better than chrono alone. Held-out shots remain excluded.", "Prilagodba je omogućena samo za potvrđene konfiguracije s izmjerenom geometrijom/masama i podacima opruge. Odaberite najviše tri nepoznanice. Prilagodba dvaju parametara traži najmanje dvije stvarno različite konfiguracije; ponavljanja sama ne stvaraju prepoznatljivost. Instrumentirana mjerenja kontakta/tlaka/sile mnogo bolje ograničavaju unutarnju mehaniku od samog kronografa. Hici za neovisnu provjeru ostaju isključeni.")}</p>
       <fieldset class="fit-parameters"><legend>${t("Parameters to fit", "Parametri za prilagodbu")}</legend>${Object.keys(C.PARAMETER_SPECS).map(key => `<label><input type="checkbox" data-fit-parameter="${key}" ${fitSelection.includes(key) ? "checked" : ""}>${esc(fields[key]?.[language === "hr" ? 1 : 0] || key)}</label>`).join("")}</fieldset>
@@ -3601,16 +3809,16 @@
   }
   function optimizerMarkup() {
     ensureOptimizer();
-    const labels = { cylinder: ["Cylinder", "Cilindar"], barrel: ["Barrel", "Cijev"], head: ["Head / bumper / nozzle", "Glava / gumica / mlaznica"], piston: ["Piston", "Piston"], airbrake: ["Airbrake", "Zračna kočnica"], spring: ["Spring", "Opruga"], bb: ["BB", "BB"] };
+    const labels = { cylinder: ["Cylinder", "Cilindar"], barrel: ["Barrel", "Cijev"], silencer: ["Silencer", "Prigušivač"], head: ["Head / bumper / nozzle", "Glava / gumica / mlaznica"], piston: ["Piston", "Piston"], airbrake: ["Airbrake", "Zračna kočnica"], spring: ["Spring", "Opruga"], bb: ["BB", "BB"] };
     return `<section class="panel optimizer"><div class="optimizer-heading"><div><h2>${t("Find a quieter, efficient setup", "Pronađi tišu i učinkovitiju konfiguraciju")}</h2><p class="small-note">${t("Freeze the parts you want to keep. Search only the hardware choices you can change.", "Zamrznite dijelove koje želite zadržati. Pretražujte samo zamjenjive dijelove.")}</p></div><button class="primary-button" type="button" id="toggleOptimizer" aria-expanded="${optimizer.open}" aria-controls="optimizerBody">${t("Freeze parts & optimize", "Zamrzni dijelove i optimiziraj")}</button></div>
       <div id="optimizerBody" ${optimizer.open ? "" : "hidden"}><p class="optimizer-target">${t("Performance constraint: keep 95–105% of this setup’s predicted BB exit energy.", "Uvjet performansi: zadrži 95–105% predviđene izlazne energije BB-a trenutačne konfiguracije.")}</p>
       <p class="small-note">${t("Checked = frozen. Enter actual available choices separated by commas; use a dot for decimals. The current value is always included. Example piston masses and pin lengths are hypothetical—not verified compatible AMP parts. Changing geometry can require new sealing/friction measurements.", "Označeno = zamrznuto. Unesite stvarno dostupne vrijednosti odvojene zarezima; decimalni znak je točka. Trenutačna vrijednost uvijek je uključena. Primjeri masa pistona i duljina pina hipotetski su — nisu potvrđeni kompatibilni AMP dijelovi. Promjena geometrije može zahtijevati novo mjerenje brtvljenja i trenja.")}</p>
       <div class="optimizer-locks">${Object.entries(O.GROUPS).map(([group, keys]) => `<fieldset class="optimizer-part"><legend><label><input type="checkbox" data-opt-lock="${group}" ${optimizer.locks[group] ? "checked" : ""}>${t("Freeze", "Zamrzni")} ${t(...labels[group])}</label></legend><details ${!optimizer.locks[group] ? "open" : ""}><summary>${t("Candidate values", "Vrijednosti kandidata")}</summary>${keys.map(key => {
         const fixedInput = O.fixedReason(p, key);
-        return `<label class="optimizer-field" for="opt-${key}"><span>${t(fields[key][0], fields[key][1])} (${fields[key][2] === "turns" ? t("turns", "zavoja") : fields[key][2]})</span><input type="text" id="opt-${key}" data-opt-values="${key}" value="${esc(fixedInput ? String(p[key]) : optimizer.values[key])}" ${optimizer.locks[group] || fixedInput ? "disabled" : ""} maxlength="180"><small ${fixedInput ? "" : "hidden"}>${fixedInput === "measured-bumper" ? t("Fixed because the measured bumper force curve replaces linear stiffness.", "Fiksno jer izmjerena krivulja sile gumice zamjenjuje linearnu krutost.") : t("Fixed by the spring input mode or measured curve. Enable length mode in Setup to search spring lengths.", "Fiksno zbog načina unosa opruge ili izmjerene krivulje. Za pretragu duljina uključite taj način u Postavkama.")}</small></label>`;
+        return `<label class="optimizer-field" for="opt-${key}"><span>${t(fields[key][0], fields[key][1])} (${fields[key][2] === "turns" ? t("turns", "zavoja") : fields[key][2]})</span><input type="text" id="opt-${key}" data-opt-values="${key}" value="${esc(fixedInput ? String(p[key]) : optimizer.values[key])}" ${optimizer.locks[group] || fixedInput ? "disabled" : ""} maxlength="180"><small ${fixedInput ? "" : "hidden"}>${fixedInput === "measured-bumper" ? t("Fixed because the measured bumper force curve replaces linear stiffness.", "Fiksno jer izmjerena krivulja sile gumice zamjenjuje linearnu krutost.") : fixedInput === "silencer-disabled" ? t("Install the silencer in Setup before searching its physical geometry.", "Uključite prigušivač u Postavkama prije pretraživanja njegove fizičke geometrije.") : t("Fixed by the spring input mode or measured curve. Enable length mode in Setup to search spring lengths.", "Fiksno zbog načina unosa opruge ili izmjerene krivulje. Za pretragu duljina uključite taj način u Postavkama.")}</small></label>`;
       }).join("")}</details></fieldset>`).join("")}</div>
       <div class="optimizer-options"><label>${t("Ranking preference", "Prioritet rangiranja")}<select id="optimizerPriority">${[["balanced", "Balanced trade-off", "Uravnotežen kompromis"], ["quiet", "Lower sound contributors", "Niži doprinosi zvuku"], ["efficient", "Higher energy efficiency", "Viša energetska učinkovitost"]].map(([value, en, hr]) => `<option value="${value}" ${optimizer.priority === value ? "selected" : ""}>${t(en, hr)}</option>`).join("")}</select></label><label>${t("Maximum combinations", "Najviše kombinacija")}<select id="optimizerBudget">${[60, 120, 240].map(v => `<option ${optimizer.budget === v ? "selected" : ""}>${v}</option>`).join("")}</select></label></div>
-      <p class="small-note">${t("Weather, fitted airflow/leakage, friction, rear damping, rigid restitution and timing criteria stay fixed. Bumper stiffness/damping/compression are searchable hardware only when the head group is unlocked. Every candidate uses the same 250 ms observation limit. Rankings compare total modeled contact dissipation across all contacts, peak muzzle airflow, exit pressure, efficiency and pressure-wave uncertainty—not dB or guaranteed loudness.", "Vrijeme, prilagođeni protok/curenje, trenje, stražnje prigušenje, kruti odskok i vremenski kriteriji ostaju fiksni. Krutost/prigušenje/stlačenje gumice pretraživi su hardver samo kada je grupa glave otključana. Svaki kandidat koristi isti prozor promatranja od 250 ms. Rangiranje uspoređuje ukupno modelirano rasipanje kroz sve kontakte, vršni protok, izlazni tlak, učinkovitost i nesigurnost tlačnih valova — ne dB ni zajamčenu glasnoću.")}</p>
+      <p class="small-note">${t("Weather, fitted airflow/leakage, friction, rear damping, rigid restitution and timing criteria stay fixed. Bumper mechanics are searchable when the head group is unlocked; measured silencer geometry is searchable only when that silencer is installed and unlocked. Every candidate uses the same 250 ms observation limit. Rankings compare total modeled contact dissipation, peak flow at the actual atmospheric outlet (muzzle or silencer end cap), inner-barrel exit pressure, efficiency and pressure-wave uncertainty—not dB or guaranteed loudness.", "Vrijeme, prilagođeni protok/curenje, trenje, stražnje prigušenje, kruti odskok i vremenski kriteriji ostaju fiksni. Mehanika gumice pretraživa je kada je grupa glave otključana; izmjerena geometrija prigušivača pretraživa je samo kada je taj prigušivač ugrađen i otključan. Svaki kandidat koristi isti prozor promatranja od 250 ms. Rangiranje uspoređuje ukupno modelirano rasipanje kontakata, vršni protok na stvarnom izlazu u atmosferu (usta cijevi ili završna kapa prigušivača), tlak pri izlasku iz unutarnje cijevi, učinkovitost i nesigurnost tlačnih valova — ne dB ni zajamčenu glasnoću.")}</p>
       <details><summary>${t("How ranking works", "Kako radi rangiranje")}</summary><p class="small-note">${t("Only completed, numerically acceptable shots inside the energy band qualify. Keep the non-dominated trade-offs across five objectives, then rank the frontier with normalized preference weights. Contact / airflow / pressure / inefficiency / uncertainty weights: balanced 30/17/13/25/15%; sound-biased 38/20/17/10/15%; efficiency-biased 12/8/5/60/15%. Contact uses the complete dissipated contact sequence, not only the first strike. These weights are preferences, not an acoustic formula. A limited search finds the best tested choices, not a global optimum.", "Prikladni su samo završeni, numerički prihvatljivi hici unutar energetskog raspona. Zadržavaju se nedominirani kompromisi kroz pet ciljeva, zatim se fronta rangira normaliziranim ponderima. Kontakt / protok / tlak / neučinkovitost / nesigurnost: uravnoteženo 30/17/13/25/15%; zvuk 38/20/17/10/15%; učinkovitost 12/8/5/60/15%. Kontakt koristi cijeli slijed rasipanja, ne samo prvi udar. Ponderi su prioriteti, ne akustička formula. Ograničena pretraga pronalazi najbolje ispitane opcije, ne globalni optimum.")}</p></details>
       <div class="fit-row"><button class="primary-button" type="button" id="runOptimizer">${t("Find best combinations", "Pronađi najbolje kombinacije")}</button><button class="secondary-button" type="button" id="cancelOptimizer" disabled>${t("Cancel search", "Prekini pretragu")}</button></div><p class="status-line" role="status" id="optimizerStatus">${optimizer.status ? esc(t(...optimizer.status)) : ""}</p><div id="optimizerResults"></div></div></section>`;
   }
@@ -3677,7 +3885,7 @@
       <p class="small-note">${t(`Checked ${r.evaluated} of ${r.total.toLocaleString("en")} combinations. ${r.exhaustive ? "All listed combinations checked." : "Sampled search; untested combinations may be better."} ${r.eligible} eligible; ${r.frontier.length} non-dominated trade-offs.`, `Provjereno ${r.evaluated} od ${r.total.toLocaleString("hr")} kombinacija. ${r.exhaustive ? "Provjerene su sve navedene kombinacije." : "Uzorkovana pretraga; neispitane kombinacije mogu biti bolje."} ${r.eligible} prikladnih; ${r.frontier.length} nedominiranih kompromisa.`)}</p>
       <p class="small-note">${t(`Excluded: ${rejected.energy} outside energy band, ${rejected.unfinished} missing contact/unfinished discharge, ${rejected.noExit} no exit, ${rejected.invalid} invalid, ${rejected.numerical} failed numerical checks. Unfinished impacts are unknown, never zero.`, `Isključeno: ${rejected.energy} izvan energije, ${rejected.unfinished} bez kontakta/nepotpuno pražnjenje, ${rejected.noExit} bez izlaska, ${rejected.invalid} nevaljanih, ${rejected.numerical} numerički neprihvatljivih. Nezavršeni udari nepoznati su, nikad nula.`)}</p>
       ${r.noVariables ? `<p class="lab-warning">${t("All values are frozen or have only the current choice. Nothing can be optimized; unfreeze a part and enter alternatives.", "Sve vrijednosti su zamrznute ili imaju samo trenutačni izbor. Nema promjenjivih veličina; odmrznite dio i unesite alternative.")}</p>` : ""}
-      ${best.length ? `<div class="table-wrap"><table class="optimizer-table"><thead><tr><th>${t("Choice / changes", "Odabir / promjene")}</th><th>${t("BB energy", "Energija BB-a")}</th><th>${t("All-contact loss", "Gubitak svih kontakata")}</th><th>${t("Peak muzzle flow", "Vršni protok")}</th><th>${t("Exit pressure", "Izlazni tlak")}</th><th>${t("Efficiency", "Učinkovitost")}</th><th>${t("Uncertainty", "Nesigurnost")}</th><th></th></tr></thead><tbody>${r.baseline ? `<tr class="optimizer-baseline"><td>${t("Current setup · reference", "Trenutačno · referenca")}</td>${metricCells(r.baseline)}<td></td></tr>` : ""}${best.map((candidate, i) => {
+      ${best.length ? `<div class="table-wrap"><table class="optimizer-table"><thead><tr><th>${t("Choice / changes", "Odabir / promjene")}</th><th>${t("BB energy", "Energija BB-a")}</th><th>${t("All-contact loss", "Gubitak svih kontakata")}</th><th>${t("Peak outlet flow", "Vršni izlazni protok")}</th><th>${t("Barrel-exit pressure", "Tlak na izlazu iz cijevi")}</th><th>${t("Efficiency", "Učinkovitost")}</th><th>${t("Uncertainty", "Nesigurnost")}</th><th></th></tr></thead><tbody>${r.baseline ? `<tr class="optimizer-baseline"><td>${t("Current setup · reference", "Trenutačno · referenca")}</td>${metricCells(r.baseline)}<td></td></tr>` : ""}${best.map((candidate, i) => {
         const m = candidate.metrics, b = r.baseline;
         const compromise = b && (m.impact > b.impact + 1e-9 || m.outflow > b.outflow + 1e-9 || m.exitGauge > b.exitGauge + 1e-4 || m.efficiency < b.efficiency - 1e-8 || m.uncertainty > b.uncertainty + 1e-8);
         return `<tr><td><strong>${i + 1}. ${t("Best found trade-off", "Najbolji pronađeni kompromis")}</strong><p>${esc(changeText(candidate))}</p><small>${compromise ? t("At least one objective is worse than the reference.", "Najmanje jedan cilj lošiji je od reference.") : t("No listed objective is worse than the reference, if available.", "Nijedan navedeni cilj nije lošiji od reference, ako je dostupna.")} ${t("Energy threshold → slowing", "Prag energije → usporavanje")}: ${stamp(m.timingMargin)}.</small></td>${metricCells(m)}<td><button class="secondary-button" type="button" data-apply-optimizer="${i}" ${Object.keys(candidate.changes).length ? "" : "disabled"}>${t("Apply & replay", "Primijeni i prikaži")}</button></td></tr>`;
@@ -3698,7 +3906,7 @@
         if (keys.some(key => [...O.GROUPS.piston, ...O.GROUPS.head, ...O.GROUPS.airbrake].includes(key))) component = "custom";
         if (keys.some(key => O.GROUPS.airbrake.includes(key))) pinLabel = p.airbrakeLength ? "custom" : "plug";
         invalidateFit(); setStatus("A hypothetical optimizer setup is active. Existing measurements are preserved; this new hardware combination is not automatically calibrated.", "Aktivna je hipotetska konfiguracija optimizatora. Postojeća mjerenja sačuvana su; nova kombinacija dijelova nije automatski kalibrirana."); invalidateOptimizer(); syncSetupControls(); recalculate(); optimizer.status = ["Candidate applied. Frozen hardware and environmental/loss assumptions were preserved. Playback now observes up to 250 ms.", "Kandidat je primijenjen. Zamrznuti dijelovi i pretpostavke okoliša/gubitaka sačuvani su. Prikaz sada prati do 250 ms."]; $("optimizerStatus").textContent = t(...optimizer.status);
-        const category = keys.every(key => O.GROUPS.spring.includes(key)) ? "spring" : keys.some(key => [...O.GROUPS.head, ...O.GROUPS.airbrake].includes(key)) ? "airbrake" : keys.some(key => [...O.GROUPS.piston, ...O.GROUPS.bb].includes(key)) ? "masses" : "geometry";
+        const category = keys.every(key => O.GROUPS.spring.includes(key)) ? "spring" : keys.some(key => O.GROUPS.silencer.includes(key)) ? "silencer" : keys.some(key => [...O.GROUPS.head, ...O.GROUPS.airbrake].includes(key)) ? "airbrake" : keys.some(key => [...O.GROUPS.piston, ...O.GROUPS.bb].includes(key)) ? "masses" : "geometry";
         workspace.selectCategory(category); workspace.selectView("shot");
         setFrame(0); $("workspaceBody").scrollTop = 0;
         if (window.innerWidth <= 960) $("previewPanel").scrollIntoView({ block: "start" });
@@ -3745,6 +3953,7 @@
   function updateResults() {
     if (!$("results")) return;
     updateSpringSummary();
+    syncSilencerControls();
     const g = P.geometry(p, 0, 0), effectiveStroke = g.stroke * 1000, before = Math.max(0, effectiveStroke - p.airbrakeLength);
     $("shortStrokeDynamic").textContent = t(`Effective piston travel: ${effectiveStroke.toFixed(1)} mm (${p.bumperThickness.toFixed(1)} mm added bumper). Swept volume: ${(g.sweptVolume * 1e6).toFixed(2)} cm³. Before pin entry: ${before.toFixed(1)} mm / ${(g.ac * before * 1000).toFixed(2)} cm³.`, `Efektivni hod pistona: ${effectiveStroke.toFixed(1)} mm (${p.bumperThickness.toFixed(1)} mm dodatne gumice). Radni volumen: ${(g.sweptVolume * 1e6).toFixed(2)} cm³. Prije ulaska pina: ${before.toFixed(1)} mm / ${(g.ac * before * 1000).toFixed(2)} cm³.`);
     const bumperClearance = p.bumperThickness > 0 ? `${g.bumperGap.toFixed(3)} mm / ${(g.bumperAnnulus * 1e6).toFixed(3)} mm²` : t("inactive (0 mm thickness)", "neaktivno (debljina 0 mm)");
@@ -3754,6 +3963,11 @@
       const errorText = {
         "bumper:curve": ["Bumper curve needs finite, increasing compression points and nondecreasing nonnegative force.", "Krivulja gumice traži konačne rastuće točke stlačenja te neopadajuću nenegativnu silu."],
         "bumper:coverage": ["Bumper curve must start at 0 mm / 0 N and cover the full compression cap.", "Krivulja gumice mora početi s 0 mm / 0 N i pokriti cijelu granicu stlačenja."],
+        "silencer:bb-clearance": ["Every silencer bore must be larger than the entered BB diameter.", "Svaki provrt prigušivača mora biti veći od unesenog promjera BB-a."],
+        "silencer:clearance": ["Silencer baffle and end-cap bores must be smaller than its internal chamber diameter.", "Provrt pregrada i izlazne kape mora biti manji od unutarnjeg promjera komore prigušivača."],
+        "silencer:length": ["The combined baffle thickness must be shorter than the internal expansion length.", "Zbroj debljina pregrada mora biti manji od unutarnje ekspanzijske duljine."],
+        "silencer:packing": ["Silencer solid fill fraction must stay between 0 and 0.89.", "Udio punog volumena ispune prigušivača mora biti između 0 i 0,89."],
+        "silencer:volume": ["The entered silencer geometry leaves no usable gas volume or outlet area.", "Unesena geometrija prigušivača ne ostavlja uporabljiv volumen plina ili izlaznu površinu."],
         "solver:convergence": ["The numerical solver did not converge; this run is invalid, not a settled shot.", "Numerički rješavač nije konvergirao; ovaj hitac nije valjan niti se smatra smirenim."]
       };
       $("resultError").textContent = t("Cannot simulate this setup. Check dimensions, clearances, residual volumes and force curves. Previous results are hidden: ", "Ovu konfiguraciju nije moguće simulirati. Provjerite dimenzije, zazore, preostale volumene i krivulje sile. Prethodni rezultati su skriveni: ") + (shot?.errors || []).map(code => errorText[code] ? t(...errorText[code]) : code).join(" · "); return;
@@ -3766,11 +3980,13 @@
     next.innerHTML = `<div class="readout-grid">
       ${metric(t("Cylinder / barrel volumes", "Volumeni cilindra / cijevi"), `${fmt(s.cylinderVolume * 1e6, 2)} / ${fmt(s.barrelVolume * 1e6, 2)}`, "cm³", "geometry")}
       ${metric(t("Cylinder / barrel ratio", "Omjer cilindra / cijevi"), fmt(s.ratio, 2, ": 1"), t("Swept volume / barrel volume", "Radni volumen / volumen cijevi"), "geometry")}
+      ${metric(t("Silencer free volume / barrel", "Slobodni volumen prigušivača / cijev"), p.silencerEnabled ? `${fmt(s.silencerVolume * 1e6, 2)} / ${fmt(s.silencerExpansionRatio, 2, ": 1")}` : t("inactive", "neaktivno"), p.silencerEnabled ? t("Calculated from internal dimensions, baffle solids and fill fraction", "Izračunato iz unutarnjih dimenzija, punog volumena pregrada i udjela ispune") : t("No silencer chamber in this run", "U ovoj simulaciji nema komore prigušivača"), "geometry")}
       ${metric(t("Bumper / effective contact travel", "Gumica / efektivni hod do kontakta"), `${fmt(p.bumperThickness, 1)} / ${fmt(s.stroke * 1000, 1)}`, "mm", "geometry")}
       ${metric(t("Bumper compression / peak force", "Stlačenje gumice / vršna sila"), p.bumperThickness > 0 ? `${fmt(s.maxBumperCompression * 1000, 3)} / ${fmt(s.peakBumperForce, 1)}` : t("inactive", "neaktivno"), t("mm / N · conditional contact model", "mm / N · uvjetni model kontakta"))}
-      ${metric(t("Predicted muzzle speed", "Predviđena izlazna brzina"), fmt(fps(s.exitVelocity), 1, "fps"), s.exitEnergy === null ? t("BB did not exit within the run", "BB nije izašao tijekom simulacije") : `${fmt(s.exitEnergy, 3, "J")} · ${t("conditional, not chrono", "uvjetno, nije kronograf")}`)}
+      ${metric(p.silencerEnabled ? t("Predicted inner-barrel exit speed", "Predviđena brzina na izlazu iz unutarnje cijevi") : t("Predicted muzzle speed", "Predviđena izlazna brzina"), fmt(fps(s.exitVelocity), 1, "fps"), s.exitEnergy === null ? t("BB did not exit within the run", "BB nije izašao tijekom simulacije") : `${fmt(s.exitEnergy, 3, "J")} · ${t("conditional, not chrono", "uvjetno, nije kronograf")}`)}
       ${metric(t("Energy gained at slowing event", "Energija pri događaju usporavanja"), fmt(s.preBrakeShare === null ? null : s.preBrakeShare * 100, 1, "%"), t("Relative to exit energy; can exceed 100%", "U odnosu na izlaznu energiju; može prijeći 100%"))}
       ${metric(t("Peak cylinder / behind / ahead-BB pressure", "Vršni tlak cilindra / iza / ispred BB-a"), `${fmt((s.peakCylinderPressure - s.ambientPressure) / 1e5, 2)} / ${fmt((s.peakPressure - s.ambientPressure) / 1e5, 2)} / ${fmt((s.peakFrontPressure - s.ambientPressure) / 1e5, 2)}`, t("bar above atmosphere", "bar iznad atmosferskog tlaka"))}
+      ${metric(t("Silencer pressure / outlet pulse", "Tlak prigušivača / izlazni impuls"), p.silencerEnabled ? `${fmt((s.peakSilencerPressure - s.ambientPressure) / 1e5, 2)} / ${fmt(s.outflowPulseDuration * 1000, 2)}` : t("inactive", "neaktivno"), p.silencerEnabled ? t("peak bar(g) / duration above 10% peak flow in ms · not dB", "vršni bar(g) / trajanje iznad 10% vršnog protoka u ms · nije dB") : t("Direct muzzle discharge", "Izravno pražnjenje na ustima"))}
       ${metric(t("Relative exit-energy retention", "Relativno zadržavanje izlazne energije"), fmt(retention, 1, "%"), t("Same mass, no-pin baseline; not sound reduction", "Ista masa, referenca bez pina; nije utišavanje"))}
       ${metric(t("Piston momentum at entry", "Količina gibanja pistona pri ulasku"), fmt(s.momentumAtEngage, 3, "kg·m/s"), t("Actual piston mass × signed velocity", "Stvarna masa pistona × predznačena brzina"))}
       ${metric(t("Pin entry relative to BB exit", "Ulazak pina u odnosu na izlazak BB-a"), fmt(diff, 2, "ms"), t("Negative = pin enters first", "Negativno = pin ulazi prvi"))}
@@ -3778,14 +3994,14 @@
       ${s.waveDiagnostics.risk !== "low" ? `<div class="lab-warning" role="status"><strong>${t("Pressure-wave timing uncertainty is not negligible", "Nesigurnost vremenskog odnosa zbog tlačnih valova nije zanemariva")}</strong><p>${t(`The causal travel-time envelope finds up to ${fmt(s.waveDiagnostics.maxTransit * 1000, 3)} ms one-way transit and ${fmt(s.waveDiagnostics.relativePressureSpan * 100, 1)}% pressure-history spread. Its ${s.waveDiagnostics.referenceCellCount}-cell scale is only a resolution reference, not a solved 1D flow field. The primary motion still uses lumped chamber pressure; treat sub-millisecond event ordering as conditional until instrumented or fully coupled 1D validation agrees.`, `Uzročna ovojnica vremena putovanja nalazi do ${fmt(s.waveDiagnostics.maxTransit * 1000, 3)} ms jednosmjernog prolaza i ${fmt(s.waveDiagnostics.relativePressureSpan * 100, 1)}% raspona povijesti tlaka. Skala od ${s.waveDiagnostics.referenceCellCount} ćelije samo je referentna rezolucija, a ne riješeno 1D polje protoka. Primarno gibanje i dalje koristi koncentrirani tlak komore; redoslijed događaja ispod milisekunde smatrajte uvjetnim dok se ne potvrdi instrumentiranim ili potpuno spregnutim 1D modelom.`)}</p></div>` : ""}
       ${!s.complete ? `<div class="lab-warning">${t("Run ended with missing events:", "Simulacija je završila bez događaja:")} ${s.exitTime === null ? t("BB exit. ", "Izlazak BB-a. ") : ""}${s.pistonHitTime === null ? t("Piston contact. ", "Kontakt pistona. ") : ""}${t("Missing contact is not a predicted soft landing. Increase modeled time if appropriate.", "Izostanak kontakta ne znači predviđen mekan udar. Po potrebi povećajte vrijeme simulacije.")}</div>` : ""}
       <section class="panel timing-card"><div class="timing-head"><strong>${verdict}</strong><span>${fmt(delta, 2, "ms")}</span></div><p class="small-note">${t("The amber event is measured from the modeled acceleration after entry—not proof that all slowing is caused by the pin. Compression can slow a piston without an airbrake. Green marks a chosen share of maximum BB energy before exit, not a universal optimum.", "Jantarni događaj temelji se na modeliranom ubrzanju nakon ulaska — nije dokaz da je sve usporavanje uzrokovano pinom. Kompresija može usporiti piston i bez kočnice. Zelena označuje odabrani udio najveće energije BB-a prije izlaska, ne univerzalni optimum.")}</p><div class="event-list">${events().map(([key, label, cls]) => `<button type="button" data-event="${key}" class="${cls}" ${s[key] === null ? "disabled" : ""}>${label}<br><span class="mono">${stamp(s[key])}</span></button>`).join("")}</div></section>
-      <section class="panel stage"><div class="stage-toolbar"><button class="primary-button" type="button" id="playButton">${t("Fire / play", "Opali / pokreni")}</button><button class="secondary-button" id="resetButton" type="button">${t("Reset", "Početak")}</button><input id="scrubber" aria-label="${t("Shot time", "Vrijeme opaljenja")}" type="range" min="0" max="1000" value="${fraction * 1000}"><span id="clock" class="clock mono"></span></div><canvas id="mechanism" role="img" aria-label="${t("Schematic piston, bumper, airbrake and BB positions; live numeric values below", "Shematski položaji pistona, odbojne gumice, pina i BB-a; brojčane vrijednosti ispod")}"></canvas><div id="phaseText" class="stage-status" aria-live="off"></div><div id="liveStrip" class="live-strip"></div><p class="results-note">${t("Schematic cutaway. The green pad visibly compresses according to the lumped stiffness/damping model; its exact rubber shape is still illustrative. Glow indicates modeled pressure; particles and trails illustrate flow and motion, not gas dynamics or sound. Every cue pauses with model time.", "Shematski presjek. Zelena gumica vidljivo se stišće prema koncentriranom modelu krutosti/prigušenja; točan oblik gume i dalje je ilustrativan. Sjaj označuje modelirani tlak; čestice i tragovi ilustriraju protok i gibanje, ne dinamiku plina ni zvuk. Sve se pauzira s vremenom modela.")}</p></section>
-      <section class="panel graphs"><div class="graphs-header"><div><h2>${t("Shot traces", "Krivulje opaljenja")}</h2><p>${t("Pressure: amber cylinder, cyan behind BB, violet ahead of BB; dashed blue is the causal travel-time estimate, not a solved 1D pressure. Events: green energy threshold, dashed amber slowing, cyan exit. Negative values remain visible.", "Tlak: jantarni cilindar, cijan iza BB-a, ljubičasti ispred BB-a; isprekidana plava je uzročna procjena vremena putovanja, a ne riješeni 1D tlak. Događaji: zeleni prag energije, isprekidano jantarno usporavanje, cijan izlazak. Negativne vrijednosti ostaju vidljive.")}</p></div></div><div class="graphs-mechanism"><div class="graphs-mechanism-heading"><strong>${t("Live firing cutaway", "Živi presjek opaljenja")}</strong><span>${t("synchronized with graph cursor", "sinkronizirano s pokazivačem grafova")}</span></div><canvas id="mechanismGraph" role="img" aria-label="${t("Synchronized piston, bumper, airbrake and BB positions above the shot graphs", "Sinkronizirani položaji pistona, gumice, pina i BB-a iznad grafova opaljenja")}"></canvas></div><div class="chart-grid">${[["pressureChart", t("Pressure vs time", "Tlak kroz vrijeme"), "bar(g)"], ["pistonChart", t("Piston velocity vs time", "Brzina pistona kroz vrijeme"), "m/s"], ["bbChart", t("BB velocity vs time", "Brzina BB-a kroz vrijeme"), "m/s"]].map(([id, label, units]) => `<div class="chart"><div class="chart-title"><span>${label}</span><span>${units} / ms</span></div><canvas id="${id}" role="img" aria-label="${label}; ${t("numeric values in live readouts; export full trace below", "brojčane vrijednosti u prikazu uživo; izvoz cijele krivulje ispod")}"></canvas></div>`).join("")}</div>${I.impactMarkup(s, "impactGraph", "graphs", t, fmt)}</section>
+      <section class="panel stage"><div class="stage-toolbar"><button class="primary-button" type="button" id="playButton">${t("Fire / play", "Opali / pokreni")}</button><button class="secondary-button" id="resetButton" type="button">${t("Reset", "Početak")}</button><input id="scrubber" aria-label="${t("Shot time", "Vrijeme opaljenja")}" type="range" min="0" max="1000" value="${fraction * 1000}"><span id="clock" class="clock mono"></span></div><canvas id="mechanism" role="img" aria-label="${t("Schematic piston, bumper, airbrake, BB and optional silencer positions; live numeric values below", "Shematski položaji pistona, odbojne gumice, pina, BB-a i neobaveznog prigušivača; brojčane vrijednosti ispod")}"></canvas><div id="phaseText" class="stage-status" aria-live="off"></div><div id="liveStrip" class="live-strip"></div><p class="results-note">${t("Schematic cutaway. The green pad visibly compresses according to the lumped stiffness/damping model; its exact rubber shape is still illustrative. The silencer drawing follows entered geometry but not exact baffle shape. After inner-barrel exit the drawn BB coasts at its exit speed: acceleration between baffles is not solved. Glow indicates modeled pressure; particles and trails illustrate flow and motion, not resolved gas dynamics or sound. Every cue pauses with model time.", "Shematski presjek. Zelena gumica vidljivo se stišće prema koncentriranom modelu krutosti/prigušenja; točan oblik gume i dalje je ilustrativan. Crtež prigušivača prati unesenu geometriju, ali ne točan oblik pregrada. Nakon izlaska iz unutarnje cijevi nacrtani BB nastavlja izlaznom brzinom: ubrzavanje između pregrada nije riješeno. Sjaj označuje modelirani tlak; čestice i tragovi ilustriraju protok i gibanje, ne razriješenu dinamiku plina ni zvuk. Sve se pauzira s vremenom modela.")}</p></section>
+      <section class="panel graphs"><div class="graphs-header"><div><h2>${t("Shot traces", "Krivulje opaljenja")}</h2><p>${t(`Pressure: amber cylinder, cyan behind BB, violet ahead of BB${p.silencerEnabled ? ", green silencer chamber" : ""}; dashed blue is the causal travel-time estimate, not a solved 1D pressure. Events: green energy threshold, dashed amber slowing, cyan exit. Negative values remain visible.`, `Tlak: jantarni cilindar, cijan iza BB-a, ljubičasti ispred BB-a${p.silencerEnabled ? ", zelena komora prigušivača" : ""}; isprekidana plava je uzročna procjena vremena putovanja, a ne riješeni 1D tlak. Događaji: zeleni prag energije, isprekidano jantarno usporavanje, cijan izlazak. Negativne vrijednosti ostaju vidljive.`)}</p></div></div><div class="graphs-mechanism"><div class="graphs-mechanism-heading"><strong>${t("Live firing cutaway", "Živi presjek opaljenja")}</strong><span>${t("synchronized with graph cursor", "sinkronizirano s pokazivačem grafova")}</span></div><canvas id="mechanismGraph" role="img" aria-label="${t("Synchronized piston, bumper, airbrake, BB and optional silencer above the shot graphs", "Sinkronizirani položaji pistona, gumice, pina, BB-a i neobaveznog prigušivača iznad grafova opaljenja")}"></canvas></div><div class="chart-grid">${[["pressureChart", t("Pressure vs time", "Tlak kroz vrijeme"), "bar(g)"], ["pistonChart", t("Piston velocity vs time", "Brzina pistona kroz vrijeme"), "m/s"], ["bbChart", t("BB velocity vs time", "Brzina BB-a kroz vrijeme"), "m/s"]].map(([id, label, units]) => `<div class="chart"><div class="chart-title"><span>${label}</span><span>${units} / ms</span></div><canvas id="${id}" role="img" aria-label="${label}; ${t("numeric values in live readouts; export full trace below", "brojčane vrijednosti u prikazu uživo; izvoz cijele krivulje ispod")}"></canvas></div>`).join("")}</div>${I.impactMarkup(s, "impactGraph", "graphs", t, fmt)}</section>
       ${Parts.markup(p, t)}
-      ${I.soundMarkup(s, baseline, t, fmt)}
+      ${I.soundMarkup(s, baseline, unsilencedReference, t, fmt)}
       ${I.impactMarkup(s, "impactResultsChart", "results", t, fmt)}
       ${I.feedbackMarkup(changeComparison, s, baseline, p, provenance, fields, t, fmt)}
       <section class="panel insight"><div class="panel-heading"><h2>${t("Energy, verification and uncertainty", "Energija, provjera i nesigurnost")}</h2><span class="tag unknown">${t("not experimentally validated", "nije eksperimentalno potvrđeno")}</span></div><div class="assumption-grid"><span>${t("Maximum BB energy observed", "Najveća opažena energija BB-a")}</span><strong>${fmt(s.maxBbEnergy, 3, "J")}</strong><span>${t("Energy lost before exit", "Energija izgubljena prije izlaska")}</span><strong>${fmt(s.bbEnergyLoss, 3, "J")}</strong><span>${t("Positive / negative net BB work", "Pozitivan / negativan neto rad na BB-u")}</span><strong>${fmt(s.positiveBbWork, 3)} / ${fmt(s.negativeBbWork, 3, "J")}</strong><span>${t("Energy balance residual", "Odstupanje energetske bilance")}</span><strong>${fmt(s.energyResidual * 1000, 4, "mJ")}</strong><span>${t("Gas mass residual", "Odstupanje bilance mase plina")}</span><strong>${s.massResidual.toExponential(2)} kg</strong><span>${t("Ambient barrel sound-crossing scale", "Vrijeme prolaza zvuka kroz cijev pri okolišnim uvjetima")}</span><strong>${stamp(s.soundCrossingTime)}</strong><span>${t("Causal transit / 24-cell reference scale", "Uzročni prolaz / referentna skala 24 ćelije")}</span><strong>${stamp(s.waveDiagnostics.maxTransit)} / ${stamp(s.waveDiagnostics.referenceCellTransit)}</strong><span>${t("Wave-envelope pressure spread", "Raspon tlačne ovojnice")}</span><strong>${fmt(s.waveDiagnostics.maxPressureDelta / 1e5, 3, "bar")} · ${fmt(s.waveDiagnostics.relativePressureSpan * 100, 1, "%")}</strong></div>
-      <p class="small-note">${t("A small numerical residual does not validate the physics. Cylinder, behind-BB and ahead-BB gas are conservative lumped control volumes; profile-sliced duct losses and the effective leaky-piston BB remain approximations. The front volume vents through the muzzle and opposes BB motion. Spatial pressure waves, spring surge, distributed rubber deformation and structural acoustics are not resolved by the primary solver; the causal diagnostic below bounds that limitation without solving it. Bumper force is conditional on the entered force law and damping; sub-millisecond timing still needs instrumented validation.", "Malo numeričko odstupanje ne potvrđuje fizikalni model. Plin u cilindru, iza BB-a i ispred BB-a predstavljaju konzervativne koncentrirane kontrolne volumene; gubici kanala podijeljeni po profilu i BB kao efektivni propusni klip ostaju aproksimacije. Prednji volumen odzračuje kroz usta i suprotstavlja se gibanju BB-a. Primarni solver ne razrješava prostorne tlačne valove, valove opruge, raspodijeljenu deformaciju gume ni strukturnu akustiku; uzročna dijagnostika niže ograničava taj nedostatak bez njegova rješavanja. Sila gumice ovisi o unesenom zakonu sile i prigušenju; vremenski odnos ispod milisekunde i dalje traži instrumentiranu provjeru.")}</p>
+      <p class="small-note">${t("A small numerical residual does not validate the physics. Cylinder, behind-BB, ahead-BB and optional silencer gas are conservative lumped control volumes; profile-sliced duct losses, the effective leaky-piston BB and lumped silencer loss factor remain approximations. The front volume vents through the muzzle and opposes BB motion. The solved BB trajectory ends at the inner-barrel crown; its later travel through a silencer is drawn at constant exit speed. Spatial pressure waves, moving-BB blockage inside the silencer, baffle-resolved jets, acoustic transmission, spring surge, distributed rubber deformation and structural acoustics are not resolved. Sub-millisecond timing and silencer behavior still need instrumented validation.", "Malo numeričko odstupanje ne potvrđuje fizikalni model. Plin u cilindru, iza BB-a, ispred BB-a i neobavezno u prigušivaču predstavljaju konzervativne koncentrirane kontrolne volumene; gubici kanala podijeljeni po profilu, BB kao efektivni propusni klip i koncentrirani faktor gubitaka prigušivača ostaju aproksimacije. Prednji volumen odzračuje kroz usta i suprotstavlja se gibanju BB-a. Riješena putanja BB-a završava na kruni unutarnje cijevi; kasniji prolaz kroz prigušivač nacrtan je stalnom izlaznom brzinom. Prostorni tlačni valovi, blokiranje protoka BB-om unutar prigušivača, mlazovi kroz pojedine pregrade, akustički prijenos, valovi opruge, raspodijeljena deformacija gume ni strukturna akustika nisu razriješeni. Vremenski odnos ispod milisekunde i ponašanje prigušivača i dalje traže instrumentiranu provjeru.")}</p>
       <div class="fit-row"><button class="secondary-button" id="convergenceButton" type="button">${t("Check finer time steps", "Provjeri manje vremenske korake")}</button><button class="secondary-button" id="sensitivityButton" type="button">${t("Check input sensitivity", "Provjeri osjetljivost na ulaze")}</button><button class="secondary-button" id="exportRun" type="button">${t("Export setup and full trace", "Izvezi postavke i cijelu krivulju")}</button></div>
       <p class="small-note">${t("Sensitivity examples vary head and pin diameter by ±0.02 mm and spring force by ±5%, in all eight combinations. These are explicit test ranges, not measured tolerances or statistical confidence intervals.", "Primjeri osjetljivosti mijenjaju promjer glave i pina za ±0,02 mm te silu opruge za ±5%, u svih osam kombinacija. To su izričito zadani ispitni rasponi, a ne izmjerene tolerancije ili statistički intervali pouzdanosti.")}</p><p id="diagnosticReport" class="status-line" role="status">${diagnostic ? esc(t(...diagnostic)) : ""}</p>
       <div class="source-links"><a href="https://tridos.design/products/ultimate-ssg10-vsr10-piston-cylinder-head-kit" target="_blank" rel="noreferrer">AMP / Tridos</a><a href="https://www.grc.nasa.gov/www/k-12/airplane/mflchk.html" target="_blank" rel="noreferrer">${t("Compressible mass flow", "Stlačivi protok")}</a><a href="https://cris.technion.ac.il/en/publications/the-internal-ballistics-of-airguns/" target="_blank" rel="noreferrer">${t("Thermodynamic model reference", "Referenca termodinamičkog modela")}</a></div></section>`;
@@ -3798,7 +4014,7 @@
     const summary = [
       compactMetric(t("Predicted exit", "Predviđeni izlazak"), fmt(s.exitEnergy, 3, "J"), `${fmt(fps(s.exitVelocity), 1, "fps")} · ${t("volume ratio", "omjer volumena")} ${fmt(s.ratio, 2)}`),
       compactMetric(t("Piston strike", "Udar pistona"), fmt(s.impactEnergy === null ? null : s.impactEnergy * 1000, 2, "mJ"), s.impactEnergy === null ? t("No contact recorded", "Kontakt nije zabilježen") : p.bumperThickness > 0 ? `${t("Peak modeled force", "Vršna modelirana sila")} ${fmt(s.peakBumperForce, 1, "N")} · ${t("not dB", "nije dB")}` : t("Rigid contact energy · not dB", "Energija krutog kontakta · nije dB")),
-      compactMetric(t("Muzzle pressure", "Tlak na ustima"), fmt(s.exitPressure === null ? null : (s.exitPressure - s.ambientPressure) / 1e5, 2, "bar(g)"), `${t("Peak outflow", "Vršni protok")}: ${fmt(s.exitTime === null ? null : s.peakOutflow * 1000, 2, "g/s")}`),
+      compactMetric(p.silencerEnabled ? t("Silencer outlet", "Izlaz prigušivača") : t("Muzzle pressure", "Tlak na ustima"), p.silencerEnabled ? fmt(s.peakOutflow * 1000, 2, "g/s") : fmt(s.exitPressure === null ? null : (s.exitPressure - s.ambientPressure) / 1e5, 2, "bar(g)"), p.silencerEnabled ? `${t("Peak chamber pressure", "Vršni tlak komore")}: ${fmt((s.peakSilencerPressure - s.ambientPressure) / 1e5, 2, "bar(g)")} · ${t("not dB", "nije dB")}` : `${t("Peak outflow", "Vršni protok")}: ${fmt(s.exitTime === null ? null : s.peakOutflow * 1000, 2, "g/s")}`),
       compactMetric(t("Useful energy → slowing", "Korisna energija → usporavanje"), fmt(delta, 2, "ms"), delta === null ? t("Timing unavailable", "Vrijeme nije dostupno") : delta === 0 ? t("Threshold and slowing coincide", "Prag i usporavanje se podudaraju") : delta > 0 ? t("Threshold reached first", "Prag je dosegnut prvi") : t("Slowing begins first", "Usporavanje počinje prvo"))
     ].join("");
     globalThis.PneumaticWorkspace.prepareResults(next, summary, {
@@ -3807,7 +4023,7 @@
       explainFeedback: t("What changed & recommended next steps", "Što se promijenilo i preporučeni sljedeći koraci"),
       live: t("Live values · pressure, velocity & spring", "Vrijednosti uživo · tlak, brzina i opruga"),
       help: t("Playback options & model notes", "Opcije prikaza i napomene modela"),
-      flag: p.airbrakeLength ? t("Airbrake active · conditional model, not measured performance", "Zračna kočnica uključena · uvjetni model, ne izmjerene performanse") : t("No-airbrake reference · conditional model, not measured performance", "Referenca bez kočnice · uvjetni model, ne izmjerene performanse")
+      flag: `${p.airbrakeLength ? t("Airbrake active", "Zračna kočnica uključena") : t("No-airbrake reference", "Referenca bez kočnice")} · ${p.silencerEnabled ? t("silencer chamber active", "komora prigušivača uključena") : t("direct muzzle", "izravna usta")} · ${t("conditional model, not measured performance", "uvjetni model, ne izmjerene performanse")}`
     }, s.complete ? "" : t("Incomplete run: ", "Nezavršena simulacija: ") + (s.exitTime === null ? t("BB has not exited. ", "BB nije izašao. ") : "") + (s.pistonHitTime === null ? t("Piston contact unknown—not a soft landing.", "Kontakt pistona nepoznat — nije mekan udar.") : ""));
     // Stable panel keys keep conditional warnings from replacing neighboring UI.
     for (const parent of [next, stage]) for (const element of parent.children) {
@@ -3840,6 +4056,7 @@
     }
     shot = nextShot;
     baseline = shot.valid ? P.simulate({ ...p, airbrakeLength: 0, airbrakeTaper: 0 }) : null;
+    unsilencedReference = shot.valid && p.silencerEnabled ? P.simulate({ ...p, silencerEnabled: 0 }) : null;
     if (shot.valid) fraction = Math.min(1, playheadTime / shot.duration);
     updateResults();
   }
@@ -3858,12 +4075,13 @@
     }
     for (const [id, value] of Object.entries({ platformPreset: selectedPlatform, component, springLabel, pinLabel })) $(id).value = value;
     $("springLengthMode").checked = p.springLengthMode === 1;
+    $("silencerEnabled").checked = p.silencerEnabled === 1;
     $("springCurve").value = p.springCurve.map(pair => pair.join(", ")).join("\n");
     $("bumperCurve").value = p.bumperCurve.map(pair => pair.join(", ")).join("\n");
     document.querySelectorAll("[data-provenance]").forEach(box => { box.checked = provenance[box.dataset.provenance] === "measured"; });
     document.querySelectorAll("[data-mass]").forEach(button => button.setAttribute("aria-pressed", String(p.pistonMass === Number(button.dataset.mass))));
     $("measurementConfirm").checked = false;
-    syncSpringControls(); syncBumperControls();
+    syncSpringControls(); syncBumperControls(); syncSilencerControls();
   }
   function bindFieldHelp() {
     const place = button => {
@@ -3901,11 +4119,11 @@
       selectedPlatform = "custom"; $("platformPreset").value = "custom";
       if (key.startsWith("airbrake")) { pinLabel = p.airbrakeLength > 0 ? "custom" : "plug"; $("pinLabel").value = pinLabel; }
       if (key.startsWith("spring")) { provenance.spring = "assumed"; invalidateFit(); }
-      else if (["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "frontDeadVolume", "pistonMass", "bbMass", "bbDiameter", "headBore", "headLength", "nozzleBore", "nozzleLength", "bumperThickness", "bumperBore", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "restitution", "airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "deadVolume", "breechVolume"].includes(key)) provenance.geometry = "assumed";
+      else if (["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "frontDeadVolume", "pistonMass", "bbMass", "bbDiameter", "headBore", "headLength", "nozzleBore", "nozzleLength", "bumperThickness", "bumperBore", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "restitution", "airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "deadVolume", "breechVolume", "silencerLength", "silencerInnerDiameter", "silencerBaffleCount", "silencerBaffleThickness", "silencerBaffleBore", "silencerEndCapBore", "silencerPackingFraction", "silencerDischargeCoefficient", "silencerHeatTransfer"].includes(key)) provenance.geometry = "assumed";
       document.querySelectorAll("[data-provenance]").forEach(box => { box.checked = provenance[box.dataset.provenance] === "measured"; });
       $("measurementConfirm").checked = false;
       document.querySelectorAll("[data-mass]").forEach(button => button.setAttribute("aria-pressed", Number(button.dataset.mass) === p.pistonMass));
-      syncSpringControls(); syncBumperControls(); scheduleCalculation();
+      syncSpringControls(); syncBumperControls(); syncSilencerControls(); scheduleCalculation();
     }));
     document.querySelectorAll("[data-provenance]").forEach(box => box.addEventListener("change", () => { provenance[box.dataset.provenance] = box.checked ? "measured" : "assumed"; }));
     document.querySelectorAll("[data-mass]").forEach(button => button.addEventListener("click", () => { $("pistonMass").value = button.dataset.mass; $("pistonMass").dispatchEvent(new Event("input", { bubbles: true })); }));
@@ -3914,6 +4132,12 @@
       provenance.spring = "assumed"; document.querySelector('[data-provenance="spring"]').checked = false;
       $("measurementConfirm").checked = false; selectedPlatform = "custom"; $("platformPreset").value = "custom";
       invalidateFit(); syncSpringControls(); scheduleCalculation();
+    });
+    $("silencerEnabled").addEventListener("change", e => {
+      p.silencerEnabled = e.target.checked ? 1 : 0;
+      provenance.geometry = "assumed"; document.querySelectorAll('[data-provenance="geometry"]').forEach(box => { box.checked = false; });
+      $("measurementConfirm").checked = false; selectedPlatform = "custom"; $("platformPreset").value = "custom";
+      invalidateFit(); syncSilencerControls(); scheduleCalculation();
     });
     $("platformPreset").addEventListener("change", event => {
       selectedPlatform = event.target.value;
@@ -3951,7 +4175,7 @@
       const confirmed = $("measurementConfirm").checked, mass = Number($("measurementMass").value);
       if (confirmed && P.validate({ ...p, bbMass: mass }).length) { setStatus("Correct invalid setup inputs before recording a confirmed shot.", "Ispravite nevaljane ulaze prije spremanja potvrđenog hica."); return; }
       const row = C.cleanRecord({ id: `shot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, bbMass: mass, fps: Number($("measurementFps").value), sigma: Number($("measurementSigma").value),
-        pistonHitMs: $("measurementHitMs").value, peakCylinderBarG: $("measurementPressure").value, peakBumperForceN: $("measurementBumperForce").value,
+        pistonHitMs: $("measurementHitMs").value, peakCylinderBarG: $("measurementPressure").value, peakSilencerBarG: $("measurementSilencerPressure").value, peakBumperForceN: $("measurementBumperForce").value,
         setup: confirmed ? { ...clone(p), bbMass: mass } : null, confirmed, provenance: clone(provenance), role: $("measurementRole").value, solverVersion: P.VERSION,
         notes: `${component} / ${pinLabel} / ${springLabel}. ${$("measurementNotes").value}` });
       if (!row) return;
@@ -3993,6 +4217,7 @@
           "fit:too-many-configurations": ["Fit limit: 32 distinct configurations per dataset.", "Ograničenje prilagodbe: 32 različite konfiguracije po skupu."],
           "fit:not-identifiable": ["Not enough distinct training configurations for the selected number of parameters.", "Nema dovoljno različitih konfiguracija za odabrani broj parametara."],
           "fit:parameters": ["Select between one and three supported parameters.", "Odaberite jedan do tri podržana parametra."],
+          "fit:silencer-disabled": ["Silencer outlet Cd needs at least one eligible training setup with that silencer installed.", "Cd izlaza prigušivača traži barem jednu prikladnu konfiguraciju za prilagodbu s ugrađenim prigušivačem."],
           "fit:measured-spring": ["Spring stiffness cannot be fitted while a measured force curve is active.", "Krutost opruge ne može se prilagođavati dok je aktivna izmjerena krivulja sile."],
           "fit:measured-bumper": ["Bumper stiffness cannot be fitted while a measured bumper force curve is active.", "Krutost gumice ne može se prilagođavati dok je aktivna izmjerena krivulja sile gumice."]
         };
@@ -4003,7 +4228,7 @@
   }
   function renderMeasurements() {
     if (!$("measurementRows")) return;
-    $("measurementRows").innerHTML = measurements.map((r, i) => `<tr><td>${fmt(r.bbMass, 2, "g")}</td><td>${fmt(r.fps, 1)} / ${fmt(C.energy(r.bbMass, r.fps), 3)}${Number.isFinite(r.pistonHitMs) ? `<br><small>${t("contact", "kontakt")} ${fmt(r.pistonHitMs, 2, "ms")}</small>` : ""}${Number.isFinite(r.peakCylinderBarG) ? `<br><small>${t("peak pressure", "vršni tlak")} ${fmt(r.peakCylinderBarG, 2, "bar(g)")}</small>` : ""}${Number.isFinite(r.peakBumperForceN) ? `<br><small>${t("peak bumper force", "vršna sila gumice")} ${fmt(r.peakBumperForceN, 1, "N")}</small>` : ""}</td><td>${r.role === "train" ? t("Training", "Prilagodba") : r.role === "validation" ? t("Held-out", "Neovisna provjera") : t("Reference only", "Samo referenca")}<br><small>${C.eligible(r) ? t("Measured inputs confirmed", "Izmjereni ulazi potvrđeni") : t("Not fit-eligible", "Nije prikladno za prilagodbu")}${r.setup ? ` · ${fmt(r.setup.pistonMass, 1, "g")} / ${fmt(r.setup.barrelLength, 0, "mm")}` : ` · ${t("setup incomplete", "nepotpuna konfiguracija")}`}</small></td><td>${esc(r.notes)}</td><td><button type="button" class="danger-button" data-remove="${i}" aria-label="${t("Remove shot", "Ukloni hitac")} ${i + 1}">×</button></td></tr>`).join("");
+    $("measurementRows").innerHTML = measurements.map((r, i) => `<tr><td>${fmt(r.bbMass, 2, "g")}</td><td>${fmt(r.fps, 1)} / ${fmt(C.energy(r.bbMass, r.fps), 3)}${Number.isFinite(r.pistonHitMs) ? `<br><small>${t("contact", "kontakt")} ${fmt(r.pistonHitMs, 2, "ms")}</small>` : ""}${Number.isFinite(r.peakCylinderBarG) ? `<br><small>${t("peak cylinder", "vršni tlak cilindra")} ${fmt(r.peakCylinderBarG, 2, "bar(g)")}</small>` : ""}${Number.isFinite(r.peakSilencerBarG) ? `<br><small>${t("peak silencer", "vršni tlak prigušivača")} ${fmt(r.peakSilencerBarG, 2, "bar(g)")}</small>` : ""}${Number.isFinite(r.peakBumperForceN) ? `<br><small>${t("peak bumper force", "vršna sila gumice")} ${fmt(r.peakBumperForceN, 1, "N")}</small>` : ""}</td><td>${r.role === "train" ? t("Training", "Prilagodba") : r.role === "validation" ? t("Held-out", "Neovisna provjera") : t("Reference only", "Samo referenca")}<br><small>${C.eligible(r) ? t("Measured inputs confirmed", "Izmjereni ulazi potvrđeni") : t("Not fit-eligible", "Nije prikladno za prilagodbu")}${r.setup ? ` · ${fmt(r.setup.pistonMass, 1, "g")} / ${fmt(r.setup.barrelLength, 0, "mm")}` : ` · ${t("setup incomplete", "nepotpuna konfiguracija")}`}</small></td><td>${esc(r.notes)}</td><td><button type="button" class="danger-button" data-remove="${i}" aria-label="${t("Remove shot", "Ukloni hitac")} ${i + 1}">×</button></td></tr>`).join("");
     document.querySelectorAll("[data-remove]").forEach(button => button.addEventListener("click", () => {
       if (busy) return;
       const i = Number(button.dataset.remove);
@@ -4069,7 +4294,7 @@
       else if (button.dataset.feedbackView) {
         stop(); workspace.selectView(button.dataset.feedbackView);
       }
-      else if (button.id === "exportRun") download("airsoft-pneumatic-run.json", { schemaVersion: 3, solverVersion: P.VERSION, identity: { selectedPlatform, component, springLabel, pinLabel }, provenance, setup: p, result: shot, baseline: { exitEnergy: baseline?.exitEnergy ?? null, impactEnergy: baseline?.impactEnergy ?? null }, limitations: "Unvalidated three-control-volume lumped model with a causal wave-travel envelope; not a coupled 1D flow solution and not exact joules or dB; see docs/MODEL.md" });
+      else if (button.id === "exportRun") download("airsoft-pneumatic-run.json", { schemaVersion: 4, solverVersion: P.VERSION, identity: { selectedPlatform, component, springLabel, pinLabel }, provenance, setup: p, result: shot, baseline: { exitEnergy: baseline?.exitEnergy ?? null, impactEnergy: baseline?.impactEnergy ?? null, unsilencedPeakOutflow: unsilencedReference?.peakOutflow ?? null }, limitations: "Unvalidated lumped control-volume model with optional silencer chamber and a causal wave-travel envelope; not a baffle-resolved CFD/acoustic solution and not exact joules or dB; see docs/MODEL.md" });
     };
     results.oninput = event => {
       if (calculationPending || !shot?.valid || busy) return;
@@ -4137,7 +4362,7 @@
         else if (overlap <= p.bumperThickness + p.headLength + 1e-6) parts.push(t("Pin has entered the metal head bore; pressure difference and local clearance set airflow.", "Pin je ušao u metalni provrt glave; razlika tlaka i lokalni zazor određuju protok."));
         else parts.push(t("Pin reaches the nozzle segment; all overlapped passages contribute to flow resistance.", "Pin doseže segment mlaznice; svi preklopljeni kanali doprinose otporu protoku."));
       }
-      if (f.bbExited) parts.push(t("BB has exited; gas continues to flow through the muzzle.", "BB je izašao; plin se nastavlja prazniti kroz usta cijevi."));
+      if (f.bbExited) parts.push(p.silencerEnabled ? t("BB has left the inner barrel; gas expands into the silencer and exits through its end cap.", "BB je napustio unutarnju cijev; plin se širi u prigušivač i izlazi kroz završnu kapu.") : t("BB has exited; gas continues to flow through the muzzle.", "BB je izašao; plin se nastavlja prazniti kroz usta cijevi."));
       else if (Math.abs(f.bbV) < .01) parts.push(t("BB held or stalled.", "BB zadržan ili zaustavljen."));
       else parts.push(f.bbA >= 0 ? t("BB gaining speed in the barrel.", "BB ubrzava u cijevi.") : t("BB losing speed in the barrel.", "BB usporava u cijevi."));
       if (f.bumperCompression > 0) parts.push(t(`The bumper is compressed by ${fmt(f.bumperCompression * 1000, 3)} mm and applies ${fmt(f.bumperForce, 1)} N in the entered contact model.`, `Gumica je stisnuta ${fmt(f.bumperCompression * 1000, 3)} mm i djeluje silom ${fmt(f.bumperForce, 1)} N u unesenom modelu kontakta.`));
@@ -4153,6 +4378,7 @@
       [t("BB velocity", "Brzina BB-a"), fmt(f.bbV, 2, "m/s")],
       [t("BB acceleration", "Ubrzanje BB-a"), fmt(f.bbA, 0, "m/s²")],
       [t("Head airflow", "Protok kroz glavu"), fmt(f.flow * 1000, 3, "g/s")],
+      [t("Silencer pressure / outlet flow", "Tlak prigušivača / izlazni protok"), p.silencerEnabled ? `${fmt((f.silencerPressure - shot.ambientPressure) / 1e5, 2, "bar(g)")} / ${fmt(f.silencerOutflow * 1000, 3, "g/s")}` : t("inactive", "neaktivno")],
       [t("Spring compression", "Stlačenje opruge"), fmt(P.springState(p).cockedCompression - f.pistonX * 1000, 1, "mm")],
       [t("Spring force", "Sila opruge"), fmt(P.springForce(p, f.pistonX), 2, "N")]
     ];
@@ -4177,7 +4403,7 @@
   }
   function drawCharts(time) {
     const traces = [
-      ["pressureChart", [[f => (f.cylinderPressure - shot.ambientPressure) / 1e5, "#ffbf69"], [f => (f.pressure - shot.ambientPressure) / 1e5, "#5de4e7"], [f => (f.frontPressure - shot.ambientPressure) / 1e5, "#b99cff"], [f => (f.wavePressureEstimate - shot.ambientPressure) / 1e5, "#8da2ff", [5, 4]]]],
+      ["pressureChart", [[f => (f.cylinderPressure - shot.ambientPressure) / 1e5, "#ffbf69"], [f => (f.pressure - shot.ambientPressure) / 1e5, "#5de4e7"], [f => (f.frontPressure - shot.ambientPressure) / 1e5, "#b99cff"], ...(p.silencerEnabled ? [[f => (f.silencerPressure - shot.ambientPressure) / 1e5, "#6ee7a8"]] : []), [f => (f.wavePressureEstimate - shot.ambientPressure) / 1e5, "#8da2ff", [5, 4]]]],
       ["pistonChart", [[f => f.pistonV, "#ffbf69"]]], ["bbChart", [[f => f.bbV, "#5de4e7"]]]
     ];
     for (const [id, series] of traces) {

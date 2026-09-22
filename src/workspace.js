@@ -3,7 +3,7 @@
 (function (root) {
   "use strict";
   const CATEGORIES = [
-    ["geometry", "Cylinder & barrel", "Cilindar i cijev"], ["masses", "Piston & BB", "Piston i BB"],
+    ["geometry", "Cylinder & barrel", "Cilindar i cijev"], ["silencer", "Silencer", "Prigušivač"], ["masses", "Piston & BB", "Piston i BB"],
     ["airbrake", "Airbrake, bumper & head", "Zračna kočnica, gumica i glava"], ["spring", "Spring", "Opruga"],
     ["losses", "Losses & environment", "Gubici i okoliš"], ["rifle", "Rifle presets", "Predlošci replika"],
     ["solver", "Timing & solver", "Vrijeme i rješavač"]
@@ -14,7 +14,7 @@
     const aside = doc.querySelector(".controls-panel"), main = doc.querySelector(".main");
     aside.id = "settingsPanel"; main.id = "previewPanel";
     const members = {
-      rifle: [$("platformPreset").closest("section")], geometry: [$("cylinderBore").closest("section"), $("shortStrokeDynamic")],
+      rifle: [$("platformPreset").closest("section")], geometry: [$("cylinderBore").closest("section"), $("shortStrokeDynamic")], silencer: [$("silencerDetails")].filter(Boolean),
       masses: [$("pistonMass").closest("section"), aside.querySelector(".preset-row")], airbrake: [$("pinLabel").closest("details")],
       spring: [$("springDetails")], losses: [$("dischargeCoefficient").closest("details")], solver: [$("usefulFraction").closest("details")]
     };

@@ -95,6 +95,48 @@ test('spring force is invariant at fixed compression, linear and measured curves
   close(P.springEnergy(p, 0), P.springEnergy(curve, 0));
   assert.ok(P.validate({ springCurve: [[50,25],[100,50]] }).includes('spring:coverage'));
 });
+test('silencer geometry separates measured free volume from conditional outlet loss', () => {
+  const base = P.silencerGeometry(P.normalize({ silencerEnabled: 1 }));
+  const packed = P.silencerGeometry(P.normalize({ silencerEnabled: 1, silencerPackingFraction: .35 }));
+  const open = P.silencerGeometry(P.normalize({ silencerEnabled: 1, silencerBaffleCount: 0, silencerBaffleBore: 20, silencerEndCapBore: 20 }));
+  assert.ok(base.grossVolume > base.freeVolume && base.freeVolume > 0);
+  assert.ok(packed.freeVolume < base.freeVolume && packed.lossFactor > base.lossFactor);
+  assert.ok(open.effectiveOutletArea > base.effectiveOutletArea);
+  assert.equal(P.silencerGeometry(P.normalize()).effectiveOutletArea, 0);
+  assert.ok(P.validate({ silencerEnabled: 1, silencerBaffleBore: 5.9 }).includes('silencer:bb-clearance'));
+  assert.ok(P.validate({ silencerEnabled: 1, silencerLength: 20, silencerBaffleCount: 5, silencerBaffleThickness: 5 }).includes('silencer:length'));
+  assert.ok(P.validate({ silencerPackingFraction: .9 }).includes('silencer:packing'));
+});
+test('instrumented silencer pressure remains an optional calibration residual', () => {
+  const row = C.cleanRecord({ bbMass: .46, fps: 330, peakSilencerBarG: .3, peakSilencerSigmaBar: .02 });
+  assert.equal(row.peakSilencerBarG, .3); assert.equal(row.peakSilencerSigmaBar, .02);
+  const shot = { valid: true, exitVelocity: 100, ambientPressure: 101300, peakSilencerPressure: 141300 };
+  const term = C.residualTerms(shot, row).find(value => value.kind === 'peakSilencerBarG');
+  close(term.raw, .1); close(term.sigma, .02);
+  assert.ok(Object.hasOwn(C.PARAMETER_SPECS, 'silencerDischargeCoefficient'));
+});
+test('silencer outlet coefficient cannot be fitted from only unsilenced setups', async () => {
+  const setup = P.normalize();
+  const row = C.cleanRecord({ id: 'unsilenced', bbMass: setup.bbMass, fps: 330, role: 'train', setup, confirmed: true,
+    solverVersion: P.VERSION, provenance: { geometry: 'measured', spring: 'measured' } });
+  await assert.rejects(C.fitParameters([row], ['silencerDischargeCoefficient']), /silencer-disabled/);
+});
+test('installed silencer conserves the fourth gas volume and spreads final atmospheric outflow', () => {
+  const direct = P.simulate({ maxTime: 250 });
+  const silenced = P.simulate({ silencerEnabled: 1, maxTime: 250 });
+  const restricted = P.simulate({ silencerEnabled: 1, silencerEndCapBore: 6.5, maxTime: 250 });
+  for (const shot of [direct, silenced, restricted]) {
+    assert.equal(shot.valid, true); assert.ok(shot.exitTime !== null && shot.dischargeComplete);
+    assert.ok(Math.abs(shot.massResidual) < 1e-9);
+    assert.ok(Math.abs(shot.energyResidual) / shot.energyScale < .001);
+  }
+  assert.ok(silenced.peakSilencerPressure > silenced.ambientPressure);
+  assert.ok(silenced.peakMuzzleTransfer > silenced.peakOutflow);
+  assert.ok(silenced.peakOutflow < direct.peakOutflow);
+  assert.ok(restricted.peakOutflow < silenced.peakOutflow);
+  assert.ok(restricted.peakSilencerPressure > silenced.peakSilencerPressure);
+  assert.ok(silenced.frames.some(frame => frame.silencerOutflow > 0 && frame.silencerPressure > silenced.ambientPressure));
+});
 for (const [name, params] of Object.entries({
   bbTooWide: { bbDiameter: 6.02 }, pinTooWide: { ...RESTRICTIVE_PIN, airbrakeDiameter: 4.1 }, negativeMass: { pistonMass: -1 }, nonfinite: { headBore: NaN },
   longPin: { airbrakeLength: 90 }, impossibleTemperature: { airTemperature: -274 }, displacedBreech: { ...RESTRICTIVE_PIN, breechVolume: .05 },
@@ -302,7 +344,7 @@ test('browser bundle is classic standalone JS and exports identical solver', () 
   const pure = script.slice(0, script.indexOf('/* UI shared'));
   const ctx = vm.createContext({ setTimeout }); vm.runInContext(pure, ctx);
   assert.equal(ctx.PneumaticPhysics.VERSION, P.VERSION);
-  assert.equal(ctx.PneumaticOptimizer.VERSION, '2.0.0');
+  assert.equal(ctx.PneumaticOptimizer.VERSION, '2.1.0');
   assert.equal(typeof ctx.PneumaticPlayback.frameAt, 'function');
   close(ctx.PneumaticPhysics.simulate({ maxTime: 10 }).frames.at(-1).pistonX, P.simulate({ maxTime: 10 }).frames.at(-1).pistonX);
   assert.equal(fs.readFileSync('dist/app.js','utf8').trim(), script.trim());

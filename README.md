@@ -2,7 +2,7 @@
 
 Standalone English/Croatian tools for exploring spring-airsoft pneumatic timing. Open `index.html` directly—no server, account, network access or runtime dependencies are required. The first screen is a tool menu; the pneumatic timing lab is its first tool.
 
-## Physics model v4.0
+## Physics model v4.1
 
 The lab now solves connected cylinder, behind-BB and ahead-BB gas volumes with mass/energy accounting, compressible reversible flow, profile-sliced head/airbrake restriction, spring force, signed piston/BB motion, finite bumper contact, leakage and post-exit discharge. It exposes integration/conservation diagnostics, step-refinement checks, a causal pressure-wave timing envelope and explicit input-sensitivity scenarios.
 
@@ -19,6 +19,7 @@ The lab now solves connected cylinder, behind-BB and ahead-BB gas volumes with m
 - Spring stiffness/preload or a user-entered force/compression curve. M110–M220 are identity labels only, not hidden power multipliers.
 - Optional spring free/installed lengths and a cut-spring estimate; derived preload, active-coil rate adjustment and known-solid-height checks.
 - Seal and nozzle leakage, BB clearance leakage into the front gas, hop release/moving resistance, seal friction, optional spring effective mass, heat exchange, air temperature and pressure. Head Cd and muzzle Cd are separate unknowns; muzzle Cd controls front-gas venting before exit and compressed-gas discharge afterward, so it can affect exit speed.
+- Optional silencer as a fourth conservative gas volume. Enter installed state, usable internal expansion length, chamber ID, baffle count and representative thickness, smallest baffle/core bore, end-cap bore and solid fill fraction. The app calculates free gas volume, transient chamber pressure, barrel-to-silencer transfer and final outlet flow; outlet Cd and heat conductance stay explicitly unknown/calibratable. The lumped baffle/fill loss is a disclosed heuristic—not CFD, acoustic absorption or dB attenuation.
 
 AMP / Tridos Ultimate is the user's identified assembly; Scorpion remains a separate identity option. AMP pin selections do not invent dimensions. The Tridos listing says nominal 71 g, while AMP lists 69 g without a brake / 72 g with its longest pin. Weigh the actual assembly. The **default is a clearly labeled no-airbrake reference** (zero pin projection), not a verified model of the installed rifle. Enter measured pin geometry to enable an airbrake. The 4 mm passage and inactive 3.8 mm pin-diameter starting values are **not verified AMP specifications**.
 
@@ -36,7 +37,7 @@ A pre-cut measured curve cannot be reused for a hypothetical cut. For an already
 
 ### Tuning workspace
 
-On laptop/desktop-sized viewports, settings and results have independent scroll areas. Choose **Cylinder & barrel**, **Piston & BB**, **Airbrake, bumper & head**, **Spring**, **Losses & environment**, **Rifle presets**, or **Timing & solver** from the settings selector; changing categories keeps the preview in place and remembers each category's scroll position. Inputs are moved once, never duplicated or reset.
+On laptop/desktop-sized viewports, settings and results have independent scroll areas. Choose **Cylinder & barrel**, **Silencer**, **Piston & BB**, **Airbrake, bumper & head**, **Spring**, **Losses & environment**, **Rifle presets**, or **Timing & solver** from the settings selector; changing categories keeps the preview in place and remembers each category's scroll position. Inputs are moved once, never duplicated or reset.
 
 Use **Shot**, **Parts**, **Graphs**, **Results**, **Optimize**, and **Chrono** to switch views directly. The compact Shot view shows the cutaway plus predicted exit energy, volume ratio, piston-contact energy, muzzle pressure/flow and useful-energy timing. Full telemetry and playback/model notes expand on demand. Playback and scrubbing remain available in Shot, Parts, Graphs and Results. Applying an optimizer choice opens Shot, selects the relevant settings category and replays it.
 
@@ -44,7 +45,7 @@ Use **Shot**, **Parts**, **Graphs**, **Results**, **Optimize**, and **Chrono** t
 
 **Parts / Dijelovi** is a setup-driven measurement atlas, separate from the firing animation. Its contact-state cutaway shows the piston, airbrake profile, independent bumper opening, metal head receiving bore, downstream nozzle and barrel. Axial head-stack lengths share a drawing scale so the atlas explicitly reports whether the pin tip ends inside the bumper, receiving bore or nozzle. Radial bores and tiny clearances are enlarged for legibility and are labeled as such; the numeric inputs, not the drawing, are the measurement record.
 
-Additional diagrams identify cylinder bore, nominal stroke versus bumper-reduced contact travel, piston mass, barrel/BB diameters and clearance, spring seats, free length, cut length and compression reference planes. Every dimension card shows the live setup value, a suggested instrument or evidence route and the exact endpoints to measure in English and Croatian. Spring values that have not been entered remain visibly unknown rather than being inferred.
+Additional diagrams identify cylinder bore, nominal stroke versus bumper-reduced contact travel, piston mass, barrel/BB diameters and clearance, spring seats, free length, cut length and compression reference planes. A dedicated sectioned silencer diagram labels internal expansion length/diameter, repeated baffle bore/count/thickness, end-cap bore, fill fraction, gross/solid/free volume and conditional equivalent outlet area. Every dimension card shows the live setup value, a suggested instrument or evidence route and the exact endpoints to measure in English and Croatian. Spring values that have not been entered remain visibly unknown rather than being inferred.
 
 The atlas also lists non-caliper inputs—friction, restitution, leak areas, flow coefficient, hop release force, heat transfer, environment and analysis thresholds—separately as bench-test, calibration, environmental or convention values. It does not imply that these are direct part dimensions. Safety text requires an unloaded, fully decocked and disassembled setup, and cavity-volume guidance does not recommend introducing liquid into an assembled replica.
 
@@ -54,7 +55,7 @@ The action list turns timing, contact-energy, muzzle-flow and measurement-proven
 
 The Shot view also includes a visual tuning-target bar: green = the selected share of peak BB energy, cyan = BB exit, amber = substantial slowing after pin entry. Its explicitly labeled linear event window may be shorter than the full shot; it is a static event comparison, not a playback-progress bar. Event buttons seek actual model time. Missing events have no marker, and the no-airbrake reference never invents a braking event. Coincident markers keep their true positions with separate dot lanes.
 
-**Piston impact & muzzle blast — what do these mean?** opens the explanatory cards at the top of Results. They distinguish the mechanical strike from escaping-air discharge, with actual modeled mJ and g/s rather than an arbitrary loudness index. The gradient bars compare each quantity with the same modeled inputs/mass and zero airbrake projection: 100% is that reference. The drawn scale ends at 200%, with any larger numerical ratio shown uncapped and the cap disclosed. Missing events, invalid baselines and zero baselines stay unavailable; none is labeled quiet. These ratios are not sound reduction, dB, peak force, durability or suppressor predictions. Outflow comparisons are peaks observed during each run; unfinished discharge remains explicitly unresolved.
+**Piston impact & muzzle blast — what do these mean?** opens the explanatory cards at the top of Results. They distinguish the mechanical strike from escaping-air discharge, with actual modeled mJ and g/s rather than an arbitrary loudness index. Impact is compared with the same model at zero airbrake projection. With a silencer installed, actual end-cap outlet flow is instead compared with the identical setup without the silencer; the card also reports inner-barrel exit pressure, free expansion volume, peak silencer pressure, barrel-transfer/outlet peaks and pulse duration. The drawn scale ends at 200%, with any larger numerical ratio shown uncapped and the cap disclosed. Missing events, invalid baselines and zero baselines stay unavailable; none is labeled quiet. These ratios are not sound reduction, dB, peak force, durability or certified suppressor performance. Unfinished discharge remains explicitly unresolved.
 
 Graphs and Results both include a **Piston contact sequence**. Each continuous contact episode is plotted and listed with start time, incoming speed and piston kinetic energy; compliant-pad entries also show modeled peak compression, peak force and duration. Recontact is counted only after separation. Pressure-driven reversal before the head is excluded. These conditional mechanics are not proof of audible knocks, acoustic energy, durability, loudness or dB.
 
@@ -66,7 +67,7 @@ The animation and graphs have dedicated views next to the settings. Graphs repea
 
 Parameter edits update the existing panels, canvases and readouts in place. Playback pauses at the same model time (clamped to a shorter run if necessary), with a small updating indicator; it does not reset to the beginning. Presets, the no-pin option and optimizer application preserve open sections and unfinished chrono notes. Invalid inputs hide stale results without collapsing their layout. Stale optimizer tables stay visibly marked and cannot be applied or exported until another search.
 
-The cutaway adds layered metal and spring shading, pressure glow, signed airflow marks, a directional BB trail and a flow-dependent muzzle plume. These visual cues are schematic—not simulated molecules, resolved pressure waves or sound. Their state follows model time, so scrubbing and pausing freeze every cue. Graph traces are cached; only the time cursor is redrawn during playback. The presentation changes do not alter the physics equations or parameters.
+The cutaway adds layered metal and spring shading, pressure glow, signed airflow marks, a directional BB trail and a flow-dependent outlet plume. When installed, the silencer is drawn at the entered relative length with its chamber, representative repeated baffles, fill cue, pressure glow and final end-cap outlet; the inner-barrel crown remains a separate location. These visual cues are schematic—not simulated molecules, resolved pressure waves or sound. The solved BB trajectory ends at the inner-barrel crown, so its later drawn travel through the silencer coasts at exit speed rather than inventing baffle-space acceleration. Their state follows model time, so scrubbing and pausing freeze every cue. Graph traces are cached; only the time cursor is redrawn during playback.
 
 **Firing focus + faster settling** reserves most playback time for the shot and initial discharge, then shows the entire later interval faster. Uniform full-run slow motion and playback-speed controls are also available. Nothing is cut from the trajectory: the clock, scrubber, graphs, event buttons and exported data keep physical model time.
 
@@ -84,20 +85,20 @@ Contact speed/kinetic energy, conditional bumper force/compression, and muzzle p
 - Record individual shots with setup snapshots, notes, chrono uncertainty and training/held-out/reference roles.
 - Explicitly confirm the shot's setup and independently measured geometry/masses and spring data before fitting.
 - Fit one to three selected bounded loss/contact parameters. Repeats improve repeatability information, not the number of identifiable parameters; the app requires at least as many distinct training setups as fitted parameters.
-- Optionally record piston-contact time, peak cylinder pressure and peak bumper force to constrain internal behavior beyond chrono speed.
+- Optionally record piston-contact time, peak cylinder pressure, peak silencer pressure and peak bumper force to constrain internal behavior beyond chrono speed. Silencer outlet Cd can be selected as a fit parameter, but chrono speed alone cannot identify acoustic behavior.
 - Report training and held-out errors, observation counts, parameter-bound/weak-constraint warnings, and export the fit profile/residuals.
 - Preserve old v2 records as unverified references and discard old fitted coefficients.
-- Preserve complete v3.0–v3.4 setup snapshots when adding only historically missing/contact-flow defaults, including a v3.2 pad's former implicit head-bore-sized opening. Old versions remain excluded from new fits and their original snapshots stay in exports.
+- Preserve complete v3.0–v4.0 setup snapshots when adding only historically missing/contact-flow/silencer defaults, including a v3.2 pad's former implicit head-bore-sized opening. Old versions remain excluded from new fits and their original snapshots stay in exports.
 - JSON import/export; full setup and shot-trace export; local storage only.
 - Limits: 2,000 records and 32 distinct configurations per fit. Export a backup before deleting measurements.
 
 ### Freeze parts and optimize
 
-Choose **Optimize** to open **Freeze parts & optimize**. Checked groups stay fixed: cylinder, barrel, head/nozzle, piston, airbrake, spring and BB. Enter discrete values for unlocked hardware, using comma-separated numbers and decimal dots. The current value is always included. Example masses and pin lengths are hypothetical alternatives, not a catalog of compatible AMP parts.
+Choose **Optimize** to open **Freeze parts & optimize**. Checked groups stay fixed: cylinder, barrel, silencer, head/nozzle, piston, airbrake, spring and BB. Enter discrete values for unlocked hardware, using comma-separated numbers and decimal dots. The current value is always included. Silencer geometry is searchable only after that silencer is installed; the optimizer cannot silently add one, change its unknown flow/thermal coefficients or claim acoustic compatibility. Example masses and pin lengths are hypothetical alternatives, not a catalog of compatible AMP parts.
 
 The optimizer preserves **95–105% of the starting setup's predicted BB exit energy**. An unlocked head group can include alternative bumper stiffness, damping and compression limits; weather, fitted flow/leakage, other friction/damping and timing criteria remain fixed. All candidates are observed with the same 250 ms time limit; missing contact or incomplete discharge never counts as zero noise.
 
-The shortlist balances total modeled dissipation across all piston contacts, peak muzzle flow, exit pressure, spring-to-BB energy efficiency and pressure-wave timing uncertainty. It retains non-dominated tradeoffs, then uses disclosed ranking weights for balanced, sound-biased or efficiency-biased preferences. It is a **best-found model comparison**, not a claim of lowest real-world dB. Search coverage, exclusions and any worsening relative to the reference are shown.
+The shortlist balances total modeled dissipation across all piston contacts, peak flow at the actual atmospheric outlet (muzzle or silencer end cap), inner-barrel exit pressure, spring-to-BB energy efficiency and pressure-wave timing uncertainty. It retains non-dominated tradeoffs, then uses disclosed ranking weights for balanced, sound-biased or efficiency-biased preferences. It is a **best-found model comparison**, not a claim of lowest real-world dB. Search coverage, exclusions and any worsening relative to the reference are shown.
 
 Searches are deterministic and capped at 60/120/240 combinations, can be cancelled, and do not change the live setup. **Apply & replay** rechecks a candidate, preserves frozen hardware and environmental/loss inputs, marks changed hardware as unmeasured and extends the display's observation limit to 250 ms. Actual chrono records are untouched. Setup or search changes invalidate old results. Search snapshots, locks, metrics and ranking weights can be exported.
 
@@ -125,7 +126,7 @@ npm test
 npm run package:cloudflare
 ```
 
-There are no npm dependencies to install. Tests cover geometry/work invariants, flow/choking/laminar limits, invalid setups, missing events, rebound and BB deceleration, leakage/heat accounting, timestep refinement, synthetic calibration, migration, the Parts field inventory and endpoint classification, persistent nodes/disclosures, workspace navigation/scroll/focus, and standalone/build parity. Tests are numerical/source/DOM-contract checks, not browser visual QA or experimental validation.
+There are no npm dependencies to install. Tests cover geometry/work invariants, flow/choking/laminar limits, invalid setups, missing events, rebound and BB deceleration, leakage/heat accounting, silencer free volume/pressure/outlet trends and conservation, timestep refinement, synthetic calibration, migration, the Parts field inventory and endpoint classification, persistent nodes/disclosures, workspace navigation/scroll/focus, and standalone/build parity. Tests are numerical/source/DOM-contract checks, not experimental acoustic validation.
 
 For a local HTTP preview, optionally run `python3 -m http.server 8000`, then open `http://127.0.0.1:8000`.
 
@@ -161,4 +162,4 @@ Run `npm run package:cloudflare` and upload `airsoft-tools-cloudflare.zip`. The 
 
 Product identity: [Tridos AMP kit](https://tridos.design/products/ultimate-ssg10-vsr10-piston-cylinder-head-kit), [AMP manufacturer](https://amp-machine.com/shop/p/am-ultimate-vsr-piston-cylinder-head-71g-stainless-steel-one-piece-piston-with-airbrake-and-high-flow-cylinder-head-with-rubber-damper).
 
-Physics methods: [Do Duc et al., internal ballistics](https://cris.technion.ac.il/en/publications/the-internal-ballistics-of-airguns/), [NASA compressible flow](https://www.grc.nasa.gov/www/k-12/airplane/mflchk.html). More references and measurement requirements are in the physics plan.
+Physics methods: [Do Duc et al., internal ballistics](https://cris.technion.ac.il/en/publications/the-internal-ballistics-of-airguns/), [NASA compressible-flow/orifice analysis](https://ntrs.nasa.gov/api/citations/19660020229/downloads/19660020229.pdf), [single-chamber muffler early-time model](https://www.sciencedirect.com/science/article/pii/0895717788901367), and [weak-shock silencer baffle experiment/CFD](https://www.sciencedirect.com/science/article/abs/pii/S0022460X03007946). More references and measurement requirements are in the physics plan.

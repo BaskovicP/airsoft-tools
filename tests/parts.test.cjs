@@ -52,3 +52,14 @@ test("spring atlas distinguishes direct and length modes without mutating setup"
   assert.match(directHtml, /Direct compression mode/); assert.match(directHtml, /54\.0 mm/);
   assert.match(lengthHtml, /Length mode active/); assert.match(lengthHtml, /Resulting free length/); assert.match(lengthHtml, /simulated cut 10\.0 mm/);
 });
+
+test("silencer atlas identifies every internal measurement and calculated free volume", () => {
+  const html = Parts.markup(P.normalize({ silencerEnabled: 1, silencerLength: 180, silencerInnerDiameter: 30, silencerBaffleCount: 6, silencerBaffleThickness: 2.5, silencerBaffleBore: 8.5, silencerEndCapBore: 9, silencerPackingFraction: .2 }), en);
+  assert.match(html, /Silencer expansion chamber/);
+  assert.match(html, /internal expansion length 180\.0 mm/);
+  assert.match(html, /baffle bore Ø 8\.50 mm/);
+  assert.match(html, /end cap Ø 9\.00 mm/);
+  assert.match(html, /6 × 2\.50 mm · fill 20\.0%/);
+  assert.match(html, /Calculated free gas volume/);
+  assert.match(html, /does not certify BB-strike clearance or predict dB/);
+});
