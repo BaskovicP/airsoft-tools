@@ -110,8 +110,25 @@ test("parameter preset paths and live frames cannot rebuild the results shell", 
 
 test("Graphs renders the same live cutaway at the graph cursor time", () => {
   assert.match(functionSource("updateResults"), /id="mechanismGraph"/);
-  assert.match(functionSource("setFrame"), /workspaceState\.view === "graphs"\) \{ drawMechanism\(f, "mechanismGraph"\); drawCharts\(f\.t\); \}/);
+  assert.match(functionSource("setFrame"), /workspaceState\.view === "graphs"\) \{ drawMechanism\(f, "mechanismGraph"\); drawCharts\(f\.t\); drawImpactChart\("impactGraph", f\.t\); \}/);
   assert.match(functionSource("drawMechanism"), /canvasContext\(canvasId\)/);
+});
+
+test("Graphs and Results expose the same exact piston-contact sequence", () => {
+  const update = functionSource("updateResults"), frame = functionSource("setFrame"), chart = functionSource("drawImpactChart");
+  assert.match(update, /impactMarkup\(s, "impactGraph", "graphs"/);
+  assert.match(update, /impactMarkup\(s, "impactResultsChart", "results"/);
+  assert.match(frame, /workspaceState\.view === "details"\) drawImpactChart\("impactResultsChart", f\.t\)/);
+  assert.match(chart, /I\.impactSummary\(shot\)/); assert.match(chart, /event\.pistonEnergy \* 1000/);
+});
+
+test("clicking a listed recontact seeks its exact model time", () => {
+  const { context: c, nodes } = harness(); let sought = null;
+  c.setFrame = value => { sought = value; }; c.shot.duration = .06; c.playing = true;
+  nodes.results.contains = () => true;
+  vm.runInContext(functionSource("bindResults"), c); c.bindResults();
+  nodes.results.onclick({ target: { closest: () => ({ id: "", disabled: false, dataset: { impactTime: ".03" } }) } });
+  assert.equal(sought, .5); assert.equal(c.playing, false);
 });
 
 test("impact explanation shortcut reveals Results and moves focus to the actual cards", () => {

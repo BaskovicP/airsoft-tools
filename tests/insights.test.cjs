@@ -87,6 +87,29 @@ test("Croatian explanations and unavailable quantities do not introduce NaN or n
   assert.doesNotMatch(html, /NaN|Infinity|null|undefined/);
 });
 
+test("impact sequence keeps first contact and later recontacts as separate exact events", () => {
+  const pistonImpacts = [
+    { index: 1, time: .03, incomingVelocity: 3, reboundVelocity: -.15, pistonEnergy: .3195 },
+    { index: 2, time: .031, incomingVelocity: .2, reboundVelocity: -.01, pistonEnergy: .00142 }
+  ];
+  const summary = I.impactSummary(fixture({ pistonImpacts }));
+  assert.equal(summary.count, 2); assert.equal(summary.first, pistonImpacts[0]); assert.equal(summary.last, pistonImpacts[1]);
+  assert.ok(Math.abs(summary.laterEnergy - .00142) < 1e-12); assert.ok(Math.abs(summary.totalEnergy - .32092) < 1e-12);
+  const html = I.impactMarkup(fixture({ pistonImpacts }), "impactGraph", "graphs", t, fmt);
+  assert.match(html, /id="impactGraph"/); assert.match(html, /2 contacts/);
+  assert.match(html, /data-impact-time="0\.03"/); assert.match(html, /data-impact-time="0\.031"/);
+  assert.match(html, /pressure-driven reversal before contact is not counted/); assert.match(html, /does not predict peak force/);
+});
+
+test("impact sequence does not turn a pre-contact pressure reversal into an impact", () => {
+  const shot = fixture({ pistonImpacts: [], pistonHitTime: null, pistonImpactVelocity: null, impactEnergy: null, preContactReversalTime: .01 });
+  assert.equal(I.impactSummary(shot).count, 0);
+  const html = I.impactMarkup(shot, "impactResultsChart", "results", (en, hr) => hr, fmt);
+  assert.match(html, /Kontakt pistona nije zabilježen|nije došlo do kontakta pistona/);
+  assert.match(html, /Povrat zbog tlaka prije kontakta ne broji se kao udar/);
+  assert.doesNotMatch(html, /NaN|Infinity|null|undefined/);
+});
+
 test("real no-airbrake reference stays at 100% and does not invent a brake event", () => {
   const p = P.normalize(), s = P.simulate(p), q = I.soundQuantities(s, s);
   assert.equal(q.impactComparison.percent, 100); assert.equal(q.flowComparison.percent, 100);

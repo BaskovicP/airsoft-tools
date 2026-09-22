@@ -372,9 +372,10 @@
       ${!s.complete ? `<div class="lab-warning">${t("Run ended with missing events:", "Simulacija je završila bez događaja:")} ${s.exitTime === null ? t("BB exit. ", "Izlazak BB-a. ") : ""}${s.pistonHitTime === null ? t("Piston contact. ", "Kontakt pistona. ") : ""}${t("Missing contact is not a predicted soft landing. Increase modeled time if appropriate.", "Izostanak kontakta ne znači predviđen mekan udar. Po potrebi povećajte vrijeme simulacije.")}</div>` : ""}
       <section class="panel timing-card"><div class="timing-head"><strong>${verdict}</strong><span>${fmt(delta, 2, "ms")}</span></div><p class="small-note">${t("The amber event is measured from the modeled acceleration after entry—not proof that all slowing is caused by the pin. Compression can slow a piston without an airbrake. Green marks a chosen share of maximum BB energy before exit, not a universal optimum.", "Jantarni događaj temelji se na modeliranom ubrzanju nakon ulaska — nije dokaz da je sve usporavanje uzrokovano pinom. Kompresija može usporiti piston i bez kočnice. Zelena označuje odabrani udio najveće energije BB-a prije izlaska, ne univerzalni optimum.")}</p><div class="event-list">${events().map(([key, label, cls]) => `<button type="button" data-event="${key}" class="${cls}" ${s[key] === null ? "disabled" : ""}>${label}<br><span class="mono">${stamp(s[key])}</span></button>`).join("")}</div></section>
       <section class="panel stage"><div class="stage-toolbar"><button class="primary-button" type="button" id="playButton">${t("Fire / play", "Opali / pokreni")}</button><button class="secondary-button" id="resetButton" type="button">${t("Reset", "Početak")}</button><input id="scrubber" aria-label="${t("Shot time", "Vrijeme opaljenja")}" type="range" min="0" max="1000" value="${fraction * 1000}"><span id="clock" class="clock mono"></span></div><canvas id="mechanism" role="img" aria-label="${t("Schematic piston, bumper, airbrake and BB positions; live numeric values below", "Shematski položaji pistona, odbojne gumice, pina i BB-a; brojčane vrijednosti ispod")}"></canvas><div id="phaseText" class="stage-status" aria-live="off"></div><div id="liveStrip" class="live-strip"></div><p class="results-note">${t("Schematic cutaway. The green pad is the entered bumper; its contact highlight is symbolic because rubber deformation is not resolved. Glow indicates modeled pressure; particles and trails illustrate flow and motion, not gas dynamics or sound. Every cue pauses with model time.", "Shematski presjek. Zelena gumica prikazuje uneseni odbojnik; isticanje pri kontaktu simbolično je jer deformacija gume nije razriješena. Sjaj označuje modelirani tlak; čestice i tragovi ilustriraju protok i gibanje, ne dinamiku plina ni zvuk. Sve se pauzira s vremenom modela.")}</p></section>
-      <section class="panel graphs"><div class="graphs-header"><div><h2>${t("Shot traces", "Krivulje opaljenja")}</h2><p>${t("Pressure: amber cylinder, cyan behind BB. Events: green energy threshold, dashed amber slowing, cyan exit. Negative values remain visible.", "Tlak: jantarni cilindar, cijan iza BB-a. Događaji: zeleni prag energije, isprekidano jantarno usporavanje, cijan izlazak. Negativne vrijednosti ostaju vidljive.")}</p></div></div><div class="graphs-mechanism"><div class="graphs-mechanism-heading"><strong>${t("Live firing cutaway", "Živi presjek opaljenja")}</strong><span>${t("synchronized with graph cursor", "sinkronizirano s pokazivačem grafova")}</span></div><canvas id="mechanismGraph" role="img" aria-label="${t("Synchronized piston, bumper, airbrake and BB positions above the shot graphs", "Sinkronizirani položaji pistona, gumice, pina i BB-a iznad grafova opaljenja")}"></canvas></div><div class="chart-grid">${[["pressureChart", t("Pressure vs time", "Tlak kroz vrijeme"), "bar(g)"], ["pistonChart", t("Piston velocity vs time", "Brzina pistona kroz vrijeme"), "m/s"], ["bbChart", t("BB velocity vs time", "Brzina BB-a kroz vrijeme"), "m/s"]].map(([id, label, units]) => `<div class="chart"><div class="chart-title"><span>${label}</span><span>${units} / ms</span></div><canvas id="${id}" role="img" aria-label="${label}; ${t("numeric values in live readouts; export full trace below", "brojčane vrijednosti u prikazu uživo; izvoz cijele krivulje ispod")}"></canvas></div>`).join("")}</div></section>
+      <section class="panel graphs"><div class="graphs-header"><div><h2>${t("Shot traces", "Krivulje opaljenja")}</h2><p>${t("Pressure: amber cylinder, cyan behind BB. Events: green energy threshold, dashed amber slowing, cyan exit. Negative values remain visible.", "Tlak: jantarni cilindar, cijan iza BB-a. Događaji: zeleni prag energije, isprekidano jantarno usporavanje, cijan izlazak. Negativne vrijednosti ostaju vidljive.")}</p></div></div><div class="graphs-mechanism"><div class="graphs-mechanism-heading"><strong>${t("Live firing cutaway", "Živi presjek opaljenja")}</strong><span>${t("synchronized with graph cursor", "sinkronizirano s pokazivačem grafova")}</span></div><canvas id="mechanismGraph" role="img" aria-label="${t("Synchronized piston, bumper, airbrake and BB positions above the shot graphs", "Sinkronizirani položaji pistona, gumice, pina i BB-a iznad grafova opaljenja")}"></canvas></div><div class="chart-grid">${[["pressureChart", t("Pressure vs time", "Tlak kroz vrijeme"), "bar(g)"], ["pistonChart", t("Piston velocity vs time", "Brzina pistona kroz vrijeme"), "m/s"], ["bbChart", t("BB velocity vs time", "Brzina BB-a kroz vrijeme"), "m/s"]].map(([id, label, units]) => `<div class="chart"><div class="chart-title"><span>${label}</span><span>${units} / ms</span></div><canvas id="${id}" role="img" aria-label="${label}; ${t("numeric values in live readouts; export full trace below", "brojčane vrijednosti u prikazu uživo; izvoz cijele krivulje ispod")}"></canvas></div>`).join("")}</div>${I.impactMarkup(s, "impactGraph", "graphs", t, fmt)}</section>
       ${Parts.markup(p, t)}
       ${I.soundMarkup(s, baseline, t, fmt)}
+      ${I.impactMarkup(s, "impactResultsChart", "results", t, fmt)}
       ${I.feedbackMarkup(changeComparison, s, baseline, p, provenance, fields, t, fmt)}
       <section class="panel insight"><div class="panel-heading"><h2>${t("Energy, verification and uncertainty", "Energija, provjera i nesigurnost")}</h2><span class="tag unknown">${t("not experimentally validated", "nije eksperimentalno potvrđeno")}</span></div><div class="assumption-grid"><span>${t("Maximum BB energy observed", "Najveća opažena energija BB-a")}</span><strong>${fmt(s.maxBbEnergy, 3, "J")}</strong><span>${t("Energy lost before exit", "Energija izgubljena prije izlaska")}</span><strong>${fmt(s.bbEnergyLoss, 3, "J")}</strong><span>${t("Positive / negative net BB work", "Pozitivan / negativan neto rad na BB-u")}</span><strong>${fmt(s.positiveBbWork, 3)} / ${fmt(s.negativeBbWork, 3, "J")}</strong><span>${t("Energy balance residual", "Odstupanje energetske bilance")}</span><strong>${fmt(s.energyResidual * 1000, 4, "mJ")}</strong><span>${t("Gas mass residual", "Odstupanje bilance mase plina")}</span><strong>${s.massResidual.toExponential(2)} kg</strong><span>${t("Ambient barrel sound-crossing scale", "Vrijeme prolaza zvuka kroz cijev pri okolišnim uvjetima")}</span><strong>${stamp(s.soundCrossingTime)}</strong></div>
       <p class="small-note">${t("A small numerical residual does not validate the physics. Two uniform-pressure gas volumes, approximate series duct losses, an effective leaky-piston BB and atmospheric pressure ahead of it are simplifications. Pressure waves, spring surge, detailed cup/bumper deformation and structural acoustics are not resolved. Sub-millisecond timing needs instrumented and spatial-flow validation.", "Malo numeričko odstupanje ne potvrđuje fizikalni model. Dva plinska volumena jednolikog tlaka, približni gubici u kanalima, BB kao efektivni propusni klip i atmosferski tlak ispred njega pojednostavljenja su. Tlačni valovi, valovi opruge, detaljna deformacija brtve/odbojnika i strukturna akustika nisu razriješeni. Vremenski odnos ispod milisekunde zahtijeva instrumentiranu i prostornu provjeru protoka.")}</p>
@@ -586,7 +587,10 @@
       if (calculationPending || !shot?.valid || busy) return;
       const button = event.target.closest("button");
       if (!button || button.disabled || !results.contains(button)) return;
-      if (button.dataset.event) {
+      if (button.dataset.impactTime !== undefined) {
+        const time = Number(button.dataset.impactTime);
+        if (Number.isFinite(time)) { stop(); setFrame(time / shot.duration); }
+      } else if (button.dataset.event) {
         const time = shot[button.dataset.event];
         if (time !== null) { stop(); setFrame(time / shot.duration); }
       } else if (button.id === "playButton") { if (playing) stop(); else startPlayback(); }
@@ -703,7 +707,8 @@
       if (item.lastChild.textContent !== value) item.lastChild.textContent = value;
     });
     if (workspaceState.view === "shot") drawMechanism(f, "mechanism");
-    if (workspaceState.view === "graphs") { drawMechanism(f, "mechanismGraph"); drawCharts(f.t); }
+    if (workspaceState.view === "graphs") { drawMechanism(f, "mechanismGraph"); drawCharts(f.t); drawImpactChart("impactGraph", f.t); }
+    if (workspaceState.view === "details") drawImpactChart("impactResultsChart", f.t);
   }
   function canvasContext(id, fallbackWidth = 900, fallbackHeight = 300) {
     const canvas = $(id), rect = canvas.getBoundingClientRect(), w = rect.width || fallbackWidth, h = rect.height || fallbackHeight, dpr = Math.min(devicePixelRatio || 1, 2);
@@ -747,6 +752,48 @@
       ctx.save(); ctx.beginPath(); ctx.rect(left, top, right - left, bottom - top); ctx.clip();
       ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cursor, top); ctx.lineTo(cursor, bottom); ctx.stroke(); ctx.restore();
     }
+  }
+  function drawImpactChart(id, time) {
+    const canvas = $(id);
+    if (!canvas) return;
+    const { ctx, w, h } = canvasContext(id, 900, 220), summary = I.impactSummary(shot), impacts = summary.impacts;
+    const left = 58, right = w - 18, top = 24, bottom = h - 34, plotWidth = Math.max(1, right - left), plotHeight = Math.max(1, bottom - top);
+    ctx.font = "11px ui-monospace, monospace";
+    if (!impacts.length) {
+      ctx.fillStyle = "#91a0a7"; ctx.textAlign = "center";
+      ctx.fillText(t("No piston contact recorded", "Kontakt pistona nije zabilježen"), w / 2, h / 2);
+      return;
+    }
+    const firstTime = impacts[0].time, lastTime = impacts.at(-1).time;
+    const eventSpan = Math.max(0, lastTime - firstTime), padding = eventSpan > 0 ? Math.max(.00008, eventSpan * .16) : .00075;
+    const startTime = Math.max(0, firstTime - padding), endTime = Math.min(shot.duration, Math.max(firstTime + padding, lastTime + padding));
+    const timeSpan = Math.max(1e-9, endTime - startTime), maxEnergy = Math.max(...impacts.map(event => event.pistonEnergy * 1000), 1e-6), yMax = maxEnergy * 1.12;
+    const x = value => left + (value - startTime) / timeSpan * plotWidth;
+    const y = value => bottom - value / yMax * plotHeight;
+    ctx.textAlign = "right";
+    for (let i = 0; i < 4; i++) {
+      const value = yMax * i / 3, yy = y(value);
+      ctx.strokeStyle = "#28343c"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(left, yy); ctx.lineTo(right, yy); ctx.stroke();
+      ctx.fillStyle = "#91a0a7"; ctx.fillText(value < .1 ? value.toFixed(3) : value < 10 ? value.toFixed(2) : value.toFixed(0), left - 7, yy + 4);
+    }
+    ctx.strokeStyle = "#62757d"; ctx.beginPath(); ctx.moveTo(left, bottom); ctx.lineTo(right, bottom); ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.rect(left, top, plotWidth, plotHeight); ctx.clip();
+    impacts.forEach((event, index) => {
+      const xx = x(event.time), yy = y(event.pistonEnergy * 1000), color = index === 0 ? "#ffbf69" : "#5de4e7";
+      ctx.strokeStyle = color; ctx.globalAlpha = .22; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(xx, top); ctx.lineTo(xx, bottom); ctx.stroke();
+      ctx.globalAlpha = 1; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(xx, bottom); ctx.lineTo(xx, yy); ctx.stroke();
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(xx, yy, 4, 0, Math.PI * 2); ctx.fill();
+    });
+    if (time >= startTime && time <= endTime) {
+      const cursor = x(time); ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cursor, top); ctx.lineTo(cursor, bottom); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.textAlign = "center"; ctx.fillStyle = "#91a0a7";
+    ctx.fillText(`${(startTime * 1000).toFixed(2)} ms`, left, h - 10); ctx.fillText(`${(endTime * 1000).toFixed(2)} ms`, right, h - 10);
+    impacts.slice(0, 8).forEach((event, index) => {
+      const xx = Math.max(left + 8, Math.min(right - 8, x(event.time)));
+      ctx.fillStyle = index === 0 ? "#ffbf69" : "#5de4e7"; ctx.fillText(`#${index + 1}`, xx, top - 7);
+    });
   }
   window.addEventListener("hashchange", () => { if (busy) return; clearTimeout(debounce); if (location.hash === "#pneumatic-timing") recalculate(); render(); });
   window.addEventListener("resize", () => { if (shot?.valid && $("mechanism")) setFrame(fraction); });

@@ -102,6 +102,26 @@ test('absent pin does not invent airbrake events; contact is still possible', ()
   assert.equal(s.engageTime, null); assert.equal(s.strongBrakeTime, null); assert.equal(s.preBrakeShare, null);
   assert.ok(s.pistonHitTime > 0); assert.ok(s.impactEnergy > 0); assert.ok(s.decelTime > 0);
 });
+test('every front-boundary contact is recorded independently of display sampling', () => {
+  const a = P.simulate(), b = P.simulate({}, { sampleInterval: 1 });
+  assert.ok(a.pistonImpacts.length >= 2, 'default restitution should expose at least one recontact');
+  assert.equal(a.pistonImpacts.length, b.pistonImpacts.length);
+  close(a.pistonImpacts[0].time, a.pistonHitTime); close(a.pistonImpacts[0].incomingVelocity, a.pistonImpactVelocity);
+  close(a.pistonImpacts[0].pistonEnergy, a.impactEnergy);
+  for (let i = 0; i < a.pistonImpacts.length; i++) {
+    const event = a.pistonImpacts[i], sampled = b.pistonImpacts[i];
+    assert.equal(event.index, i + 1); assert.ok(event.incomingVelocity > 0); assert.ok(event.reboundVelocity <= 0);
+    assert.ok(event.pistonEnergy >= 0); assert.ok(event.effectiveMovingEnergy >= event.pistonEnergy); assert.ok(event.dissipatedEnergy >= 0);
+    assert.ok(Number.isFinite(event.cylinderPressure)); assert.ok(Number.isFinite(event.bbPressure));
+    if (i) assert.ok(event.time > a.pistonImpacts[i - 1].time);
+    close(event.time, sampled.time); close(event.pistonEnergy, sampled.pistonEnergy);
+  }
+});
+test('zero restitution settles at one recorded contact without fabricating rebound', () => {
+  const s = P.simulate({ restitution: 0 });
+  assert.equal(s.pistonImpacts.length, 1); assert.equal(s.pistonImpacts[0].reboundVelocity, 0);
+  close(s.pistonImpacts[0].dissipatedEnergy, s.pistonImpacts[0].effectiveMovingEnergy);
+});
 test('short timeout is not a muzzle velocity', () => {
   const s = P.simulate({}, { maxTime: 1 });
   assert.equal(s.valid, true); assert.equal(s.exitVelocity, null); assert.equal(s.exitTime, null); assert.equal(s.impactEnergy, null);

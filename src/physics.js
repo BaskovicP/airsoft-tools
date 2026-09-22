@@ -205,6 +205,7 @@
     let exitTime = null, exitVelocity = null, exitPressure = null, exitGasMass = null, pistonHitTime = null, impactVelocity = null;
     let engageTime = null, decelTime = null, strongBrakeTime = null, momentumAtEngage = null, brakeEnergy = null, reboundTime = null;
     let preContactReversalTime = null, contactReboundTime = null, peakPistonX = 0, maxPistonRetreat = 0, maxPreContactRetreat = 0;
+    const pistonImpacts = [];
     let maxBbEnergy = 0, maxBbTime = 0, peakPistonV = 0, peakCylinderPressure = pa, rejectedSteps = 0, steps = 0, nextStore = 0;
     const frames = [], history = [], maxTime = (options.maxTime ?? p.maxTime) / 1000;
     const maxDt = options.dt ?? 1e-5, tolerance = options.tolerance ?? 2e-5;
@@ -276,10 +277,16 @@
         s[0] = g0.stroke;
         // Preserve the contact discontinuity for playback; never interpolate a
         // negative post-impact velocity backwards into the pre-impact trajectory.
-        frames.push(frame(evaluate(s)));
-        if (pistonHitTime === null) { pistonHitTime = t; impactVelocity = s[1]; }
-        hit = true; contactLoss += .5 * mp * s[1] ** 2 * (1 - p.restitution ** 2); s[1] *= -p.restitution;
+        const contactState = evaluate(s), incomingVelocity = s[1];
+        frames.push(frame(contactState));
+        if (pistonHitTime === null) { pistonHitTime = t; impactVelocity = incomingVelocity; }
+        hit = true; contactLoss += .5 * mp * incomingVelocity ** 2 * (1 - p.restitution ** 2); s[1] *= -p.restitution;
         if (Math.abs(s[1]) < .005) { contactLoss += .5 * mp * s[1] ** 2; s[1] = 0; }
+        pistonImpacts.push({ index: pistonImpacts.length + 1, time: t, incomingVelocity, reboundVelocity: s[1],
+          pistonEnergy: .5 * p.pistonMass / 1000 * incomingVelocity ** 2,
+          effectiveMovingEnergy: .5 * mp * incomingVelocity ** 2,
+          dissipatedEnergy: .5 * mp * (incomingVelocity ** 2 - s[1] ** 2),
+          cylinderPressure: contactState.pc, bbPressure: contactState.pb });
         frames.push(frame(evaluate(s)));
       }
       e = evaluate(s);
@@ -319,6 +326,7 @@
       barrelLength: L, barrelVolume: g0.barrelVolume, cylinderVolume: g0.sweptVolume, ratio: g0.sweptVolume / g0.barrelVolume,
       ambientPressure: pa, engageTime, decelTime, strongBrakeTime, reboundTime, usefulTime, exitTime, pistonHitTime,
       preContactReversalTime, contactReboundTime, maxPistonRetreat, maxPreContactRetreat,
+      pistonImpacts,
       exitVelocity, exitEnergy, exitPressure, exitGasMass, pistonImpactVelocity: impactVelocity,
       impactEnergy: impactVelocity === null ? null : .5 * p.pistonMass / 1000 * impactVelocity ** 2,
       momentumAtEngage, preBrakeShare: brakeEnergy === null || !exitEnergy ? null : brakeEnergy / exitEnergy,
