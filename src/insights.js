@@ -108,7 +108,98 @@
       <p>${s.dischargeComplete && baseline?.dischargeComplete ? t("Both runs relaxed to within 1% of atmospheric pressure.", "Obje simulacije približile su se atmosferskom tlaku unutar 1%.") : t("Discharge remains unresolved in one or both runs. Later outflow may change the observed comparison; unfinished discharge is not silence.", "Pražnjenje nije završeno u jednoj ili obje simulacije. Kasniji protok može promijeniti opaženu usporedbu; nezavršeno pražnjenje ne znači tišinu.")}</p></article>
       </div></section>`;
   }
-  const api = { thresholdPercent, timing, verdictText, timingMarkup, compare, soundQuantities, soundMarkup };
+  function parameterChanges(before = {}, after = {}) {
+    const keys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
+    return [...keys].filter(key => JSON.stringify(before?.[key]) !== JSON.stringify(after?.[key]))
+      .map(key => ({ key, before: before?.[key], after: after?.[key] }));
+  }
+  const relativeDelta = (before, after) => {
+    const delta = finite(before) && finite(after) ? after - before : null;
+    const percent = finite(delta) && before !== 0 ? delta / Math.abs(before) * 100 : null;
+    return { before: finite(before) ? before : null, after: finite(after) ? after : null,
+      delta: finite(delta) ? delta : null, percent: finite(percent) ? percent : null };
+  };
+  function comparisonSnapshot(before, after) {
+    if (!before?.valid || !after?.valid) return null;
+    const margin = shot => finite(shot.strongBrakeTime) && finite(shot.usefulTime) ? (shot.strongBrakeTime - shot.usefulTime) * 1000 : null;
+    const gauge = shot => finite(shot.exitPressure) && finite(shot.ambientPressure) ? (shot.exitPressure - shot.ambientPressure) / 1e5 : null;
+    return { changes: parameterChanges(before.params, after.params), metrics: {
+      energy: relativeDelta(before.exitEnergy, after.exitEnergy),
+      velocity: relativeDelta(finite(before.exitVelocity) ? before.exitVelocity / .3048 : null, finite(after.exitVelocity) ? after.exitVelocity / .3048 : null),
+      impact: relativeDelta(finite(before.impactEnergy) ? before.impactEnergy * 1000 : null, finite(after.impactEnergy) ? after.impactEnergy * 1000 : null),
+      flow: relativeDelta(finite(before.peakOutflow) ? before.peakOutflow * 1000 : null, finite(after.peakOutflow) ? after.peakOutflow * 1000 : null),
+      exitGauge: relativeDelta(gauge(before), gauge(after)), timingMargin: relativeDelta(margin(before), margin(after))
+    } };
+  }
+  function actionPlan(s, baseline, p, provenance = {}) {
+    const actions = [], timingResult = timing(s, p), sound = soundQuantities(s, baseline);
+    const timingCodes = { early: ["delay-braking", "warning", "airbrake"], "same-threshold": ["timing-edge", "caution", "airbrake"],
+      "after-threshold": ["timing-useful-first", "good", "airbrake"], "same-exit": ["timing-useful-first", "good", "airbrake"],
+      "after-exit": ["timing-after-exit", "good", "airbrake"], "no-slowing": ["strengthen-cushion", "caution", "airbrake"],
+      "no-pin": ["measure-pin", "unknown", "airbrake"], "no-exit": ["resolve-exit", "warning", "solver"], unavailable: ["timing-unknown", "unknown", "solver"] };
+    const timingAction = timingCodes[timingResult.verdict] || timingCodes.unavailable;
+    actions.push({ code: timingAction[0], tone: timingAction[1], category: timingAction[2] });
+    if (sound.impactComparison.percent === null) actions.push({ code: "impact-unknown", tone: "unknown", category: "airbrake" });
+    else if (sound.impactComparison.percent < 85) actions.push({ code: "impact-lower", tone: "good", category: "airbrake", percent: sound.impactComparison.percent });
+    else if (sound.impactComparison.percent > 110) actions.push({ code: "impact-higher", tone: "warning", category: "airbrake", percent: sound.impactComparison.percent });
+    else actions.push({ code: "impact-similar", tone: "caution", category: "airbrake", percent: sound.impactComparison.percent });
+    if (sound.flowComparison.percent === null) actions.push({ code: "muzzle-unknown", tone: "unknown", category: "geometry" });
+    else if (sound.flowComparison.percent < 85) actions.push({ code: "muzzle-lower", tone: "good", category: "geometry", percent: sound.flowComparison.percent });
+    else if (sound.flowComparison.percent > 110) actions.push({ code: "muzzle-higher", tone: "warning", category: "geometry", percent: sound.flowComparison.percent });
+    else actions.push({ code: "muzzle-similar", tone: "caution", category: "geometry", percent: sound.flowComparison.percent });
+    if (provenance.geometry !== "measured" || provenance.spring !== "measured") actions.push({ code: "measure-first", tone: "unknown", view: "calibration" });
+    return actions;
+  }
+  function feedbackMarkup(snapshot, s, baseline, p, provenance, fieldLabels, t, fmt) {
+    const signed = (value, digits, unit) => finite(value) ? `${value > 0 ? "+" : ""}${fmt(value, digits, unit)}` : "—";
+    const valueText = (change, side) => {
+      const meta = fieldLabels?.[change.key], value = change[side];
+      if (change.key === "springLengthMode") return value ? t("length mode", "način duljina") : t("direct preload", "izravno prednaprezanje");
+      if (Array.isArray(value)) return t("curve updated", "krivulja izmijenjena");
+      return finite(value) ? fmt(value, meta?.[2] === "turns" ? 2 : 3, meta?.[2] === "turns" ? t("turns", "zavoja") : meta?.[2] || "") : String(value ?? "—");
+    };
+    const changeName = change => fieldLabels?.[change.key] ? t(fieldLabels[change.key][0], fieldLabels[change.key][1]) : change.key === "springLengthMode" ? t("Spring input mode", "Način unosa opruge") : change.key === "springCurve" ? t("Measured spring curve", "Izmjerena krivulja opruge") : change.key;
+    const shownChanges = snapshot?.changes?.slice(0, 4) || [], extra = Math.max(0, (snapshot?.changes?.length || 0) - shownChanges.length);
+    const metricInfo = [
+      ["energy", t("BB exit energy", "Izlazna energija BB-a"), 3, "J", "context"],
+      ["velocity", t("Muzzle velocity", "Izlazna brzina"), 1, "fps", "context"],
+      ["impact", t("Piston contact energy", "Energija kontakta pistona"), 2, "mJ", "lower"],
+      ["flow", t("Peak muzzle flow", "Vršni protok na ustima"), 2, "g/s", "lower"],
+      ["exitGauge", t("Pressure at BB exit", "Tlak pri izlasku BB-a"), 2, "bar(g)", "lower"],
+      ["timingMargin", t("Useful energy → slowing", "Korisna energija → usporavanje"), 2, "ms", "higher"]
+    ];
+    const metricTone = (metric, goal) => !finite(metric?.delta) ? "unknown" : Math.abs(metric.delta) < 1e-12 ? "same" : goal === "context" ? "context" : goal === "lower" ? metric.delta < 0 ? "good" : "warning" : metric.delta > 0 ? "good" : "warning";
+    const metrics = snapshot ? metricInfo.map(([key, label, digits, unit, goal]) => {
+      const metric = snapshot.metrics[key];
+      return `<div class="change-metric" data-tone="${metricTone(metric, goal)}"><span>${label}</span><strong>${fmt(metric.after, digits, unit)}</strong><small>${t("Before", "Prije")}: ${fmt(metric.before, digits, unit)} · Δ ${signed(metric.delta, digits, unit)}${finite(metric.percent) ? ` (${signed(metric.percent, 1, "%")})` : ""}</small></div>`;
+    }).join("") : "";
+    const actionCopy = {
+      "delay-braking": ["Delay strong braking", "Odgodi snažno kočenje", "The piston slows strongly before the selected BB-energy threshold. Try a slightly shorter pin, smaller pin diameter, or larger local bore—one change at a time. Recheck contact energy because reducing restriction can increase piston strike.", "Piston snažno usporava prije odabranog praga energije BB-a. Probajte malo kraći pin, manji promjer pina ili veći lokalni otvor — jednu promjenu odjednom. Ponovno provjerite energiju kontakta jer manji otpor može pojačati udar pistona."],
+      "timing-edge": ["Create a little more timing margin", "Stvori malo veći vremenski razmak", "Useful BB energy and strong slowing nearly coincide. Make only a small reduction in restriction, then confirm that the useful-energy event remains first.", "Korisna energija BB-a i snažno usporavanje gotovo se podudaraju. Samo malo smanjite ograničenje protoka pa potvrdite da događaj korisne energije ostaje prvi."],
+      "timing-useful-first": ["Useful acceleration comes first", "Korisno ubrzavanje dolazi prvo", "The selected BB-energy threshold is reached before strong piston slowing. Fine-tune only if piston contact or muzzle discharge still needs improvement.", "Odabrani prag energije BB-a dosegnut je prije snažnog usporavanja pistona. Dodatno podešavajte samo ako još treba smanjiti kontakt pistona ili pražnjenje na ustima."],
+      "timing-after-exit": ["Timing target achieved in the model", "Vremenski cilj ostvaren je u modelu", "Strong slowing starts after BB exit. If contact energy remains high, increase cushioning in very small steps and stop before the timing margin becomes negative.", "Snažno usporavanje počinje nakon izlaska BB-a. Ako je energija kontakta još visoka, povećavajte ublažavanje u vrlo malim koracima i stanite prije nego vremenski razmak postane negativan."],
+      "strengthen-cushion": ["No strong cushion event detected", "Nije prepoznato snažno pneumatsko ublažavanje", "If piston contact is still too energetic, test a slightly longer pin or smaller measured clearance. Do not treat a missing event as a soft landing.", "Ako je kontakt pistona još prejak, isprobajte malo dulji pin ili manji izmjereni zazor. Izostanak događaja ne smatrajte mekanim zaustavljanjem."],
+      "measure-pin": ["Establish an airbrake reference", "Postavi referencu zračne kočnice", "The airbrake is off. Enter measured pin, bumper, head and nozzle geometry before judging pneumatic cushioning.", "Zračna kočnica je isključena. Unesite izmjerenu geometriju pina, gumice, glave i mlaznice prije procjene pneumatskog ublažavanja."],
+      "resolve-exit": ["Resolve BB exit first", "Prvo riješi izlazak BB-a", "The model did not record BB exit, so timing and muzzle recommendations are incomplete. Check spring force, hop resistance, barrel drag and observation time.", "Model nije zabilježio izlazak BB-a pa preporuke za vremenski odnos i usta cijevi nisu potpune. Provjerite silu opruge, otpor hopa, otpor cijevi i vrijeme promatranja."],
+      "timing-unknown": ["Timing is unresolved", "Vremenski odnos nije riješen", "Required events are missing. Inspect the event list and input validity before tuning the airbrake.", "Nedostaju potrebni događaji. Prije podešavanja zračne kočnice provjerite popis događaja i valjanost ulaza."],
+      "impact-lower": ["Mechanical strike contributor is lower", "Doprinos mehaničkog udara je niži", "Modeled contact energy is lower than the no-airbrake reference. Keep this gain only if BB energy and timing remain acceptable; actual sound still depends on the bumper and rifle structure.", "Modelirana energija kontakta niža je od reference bez zračne kočnice. Zadržite dobitak samo ako su energija BB-a i vremenski odnos prihvatljivi; stvarni zvuk i dalje ovisi o gumici i konstrukciji replike."],
+      "impact-higher": ["Mechanical strike moved the wrong way", "Mehanički udar krenuo je u pogrešnom smjeru", "Contact energy is higher than the no-airbrake reference. Check for poorly timed restriction or reversal before adding more airbrake.", "Energija kontakta viša je od reference bez zračne kočnice. Prije jačanja zračne kočnice provjerite loše tempirano ograničenje ili povratno gibanje."],
+      "impact-similar": ["Contact energy is broadly similar", "Energija kontakta je približno slična", "The modeled airbrake has not materially changed first-contact energy. Use measured bumper behavior and chrono data before interpreting sound.", "Modelirana zračna kočnica nije bitno promijenila energiju prvog kontakta. Prije zaključivanja o zvuku koristite izmjereno ponašanje gumice i podatke kronografa."],
+      "impact-unknown": ["Piston contact is unknown", "Kontakt pistona je nepoznat", "No first contact was recorded. This is not evidence of silence or a soft landing; extend the run or inspect a pressure-driven reversal.", "Prvi kontakt nije zabilježen. To nije dokaz tišine ni mekanog zaustavljanja; produljite simulaciju ili provjerite povrat uzrokovan tlakom."],
+      "muzzle-lower": ["Escaping-air contributor is lower", "Doprinos izlaznog zraka je niži", "Peak modeled muzzle flow is lower than the no-airbrake reference. Confirm exit energy before keeping the change; this is not a dB prediction.", "Vršni modelirani protok na ustima niži je od reference bez zračne kočnice. Prije zadržavanja promjene potvrdite izlaznu energiju; ovo nije predviđanje dB."],
+      "muzzle-higher": ["More compressed air remains at the muzzle", "Više stlačenog zraka ostaje na ustima", "Peak muzzle flow is higher than the reference. Explore cylinder/barrel volume matching or a longer barrel while preserving the required BB energy.", "Vršni protok na ustima viši je od reference. Istražite usklađivanje volumena cilindra i cijevi ili dulju cijev uz očuvanje potrebne energije BB-a."],
+      "muzzle-similar": ["Muzzle discharge is broadly similar", "Pražnjenje na ustima je približno slično", "The current airbrake has not materially changed peak outflow. Volume matching and exit pressure are the more relevant next checks.", "Trenutačna zračna kočnica nije bitno promijenila vršni protok. Usklađivanje volumena i izlazni tlak važnije su sljedeće provjere."],
+      "muzzle-unknown": ["Muzzle discharge is unknown", "Pražnjenje na ustima je nepoznato", "Without a recorded BB exit, the model cannot compare muzzle flow.", "Bez zabilježenog izlaska BB-a model ne može usporediti protok na ustima."],
+      "measure-first": ["Replace assumptions with measurements", "Zamijeni pretpostavke mjerenjima", "Geometry or spring data are still marked assumed. Measure the hardware and add confirmed chrono shots before treating small model differences as meaningful.", "Geometrija ili podaci opruge još su označeni kao pretpostavke. Izmjerite dijelove i dodajte potvrđene kronografske hitce prije nego male razlike modela smatrate značajnima."]
+    };
+    const actions = actionPlan(s, baseline, p, provenance).map((action, index) => {
+      const copy = actionCopy[action.code], target = action.view ? `data-feedback-view="${action.view}"` : `data-feedback-category="${action.category}"`;
+      return `<article class="action-step" data-tone="${action.tone}"><span class="action-number">${index + 1}</span><div><strong>${t(copy[0], copy[1])}</strong>${finite(action.percent) ? `<small>${fmt(action.percent, 1, "%")} · ${t("of no-airbrake reference", "reference bez zračne kočnice")}</small>` : ""}<p>${t(copy[2], copy[3])}</p><button type="button" class="secondary-button" ${target}>${action.view === "calibration" ? t("Open chrono calibration", "Otvori kalibraciju kronografom") : action.category === "geometry" ? t("Open cylinder & barrel", "Otvori cilindar i cijev") : action.category === "solver" ? t("Open timing & solver", "Otvori vrijeme i rješavač") : t("Open airbrake settings", "Otvori postavke zračne kočnice")}</button></div></article>`;
+    }).join("");
+    const comparison = snapshot?.changes?.length ? `<div class="change-summary"><div class="change-copy"><strong>${snapshot.changes.length === 1 ? t("One modeled input changed", "Promijenjen je jedan modelirani ulaz") : t(`${snapshot.changes.length} modeled inputs changed together`, `${snapshot.changes.length} modelirana ulaza promijenjena su zajedno`)}</strong><p>${snapshot.changes.length === 1 ? t("This is a direct before/after model comparison. It is still not experimental proof.", "Ovo je izravna usporedba modela prije i poslije. Još uvijek nije eksperimentalni dokaz.") : t("The outcome is combined; it cannot be assigned to one input without changing them separately.", "Rezultat je zajednički; ne može se pripisati jednom ulazu bez odvojenih promjena.")}</p></div><div class="change-chips">${shownChanges.map(change => `<span><b>${changeName(change)}</b>${valueText(change, "before")} → ${valueText(change, "after")}</span>`).join("")}${extra ? `<span>+${extra} ${t("more", "više")}</span>` : ""}</div></div><div class="change-metrics">${metrics}</div>` : `<div class="change-empty"><strong>${t("Make one change to create an A/B comparison", "Napravite jednu promjenu za A/B usporedbu")}</strong><p>${t("The next valid calculation will compare every key outcome with this setup.", "Sljedeći valjani izračun usporedit će sve ključne rezultate s ovom konfiguracijom.")}</p></div>`;
+    return `<section id="setupFeedback" class="panel setup-feedback" tabindex="-1"><div class="feedback-heading"><div><h2>${t("What changed & what to try next", "Što se promijenilo i što probati dalje")}</h2><p>${t("Model-guided feedback from the last valid setup, followed by prioritized tuning hypotheses.", "Povratne informacije modela prema zadnjoj valjanoj konfiguraciji, zatim prioritetne hipoteze za podešavanje.")}</p></div><span class="tag unknown">${t("not guaranteed", "nije jamstvo")}</span></div>${comparison}<h3>${t("Action steps", "Sljedeći koraci")}</h3><div class="action-steps">${actions}</div><div class="feedback-footer"><p>${t("Change one hardware input at a time, preserve the energy you need, and verify with chrono measurements. “Similar” means 85–110% of the no-airbrake reference. These steps optimize model quantities—not real dB.", "Mijenjajte po jedan dio, očuvajte potrebnu energiju i provjerite kronografom. „Slično” znači 85–110% reference bez zračne kočnice. Ovi koraci optimiziraju veličine modela — ne stvarne dB.")}</p><button type="button" class="primary-button" data-feedback-view="optimizer">${t("Compare combinations at 95–105% energy", "Usporedi kombinacije uz 95–105% energije")}</button></div></section>`;
+  }
+  const api = { thresholdPercent, timing, verdictText, timingMarkup, compare, soundQuantities, soundMarkup, parameterChanges, comparisonSnapshot, actionPlan, feedbackMarkup };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.PneumaticInsights = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

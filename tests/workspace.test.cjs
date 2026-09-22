@@ -106,7 +106,7 @@ test("prepared results retain one transport/canvas and keep incomplete warnings 
   const stage = node("section", { class: "stage" }, [node("p", { class: "playback-reference" }), transport, canvas, live, node("p", { class: "results-note" }), node("div", { class: "playback-options" })]);
   const graphs = node("section", { class: "graphs" }), details = node("div", { class: "readout-grid" }), sound = node("section", { id: "soundExplanations" });
   const next = node("div", {}, [details, sound, stage, graphs]);
-  W.prepareResults(next, "<div><strong>2.3 J</strong></div>", { flag: "Model only", live: "Live values", help: "Options", timingHTML: '<section id="shotTiming"></section>', explainSound: "Impact explained" }, "Missing contact");
+  W.prepareResults(next, "<div><strong>2.3 J</strong></div>", { flag: "Model only", live: "Live values", help: "Options", timingHTML: '<section id="shotTiming"></section>', explainSound: "Impact explained", explainFeedback: "Changes explained" }, "Missing contact");
   assert.equal(next.children[0], transport); assert.equal(transport.id, "workspace-transport");
   assert.equal(next.querySelector("#mechanism"), canvas); assert.equal(next.querySelectorAll("#mechanism").length, 1);
   assert.equal(next.querySelector("#liveStrip"), live); assert.equal(live.parentNode.id, "liveValuesDetails");
@@ -114,6 +114,7 @@ test("prepared results retain one transport/canvas and keep incomplete warnings 
   assert.equal(details.parentNode.id, "workspace-details"); assert.equal(graphs.dataset.workspacePanel, "graphs");
   assert.equal(next.querySelector("#playbackDetails").getAttribute("data-preserve-open"), "");
   assert.equal(next.querySelector("#shotTiming").parentNode, stage); assert.equal(next.querySelector("#explainSound").parentNode, stage);
+  assert.equal(next.querySelector("#explainFeedback").parentNode, stage);
   assert.equal(next.querySelector("#workspace-details").children[0], sound);
 });
 

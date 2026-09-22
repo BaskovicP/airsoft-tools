@@ -99,6 +99,10 @@ The no-pin baseline keeps the same assembly mass and other inputs, removing pin 
 
 Sound-related outputs are first-contact piston speed/energy and muzzle pressure, gas inventory, peak flow and mass discharged during the modeled interval. None is dB, acoustic intensity, suppressor performance or a universal hard/soft classification. Structural modes, microphone placement, rubber properties and spring noise require measurements.
 
+The Results feedback layer does not add another physical law. It compares the current valid run with the previous valid run and reports signed differences in selected solver outputs. One-input comparisons are conditional A/B model results; multi-input comparisons are marked as combined and are not decomposed into invented per-input causes. Invalid runs do not become a comparison baseline.
+
+Action steps are deterministic interpretation rules, not a fitted controller or proof of an optimum. They use the timing verdict, availability of contact/exit, impact-energy and peak-outflow ratios against the same-setup no-airbrake reference, and measured/assumed provenance. Impact or flow below 85% is labeled lower, above 110% higher and the interval between broadly similar. Recommendations expose the relevant controls and the existing 95–105% energy-constrained optimizer; they do not predict dB or replace chrono/geometry measurements.
+
 ## Numerics and verification
 
 The pure solver is independent of animation and shared verbatim by standalone/hosted versions. An adaptive explicit midpoint method limits the step to 10 μs by default, estimates local change from Euler/midpoint differences, reduces steps near geometry/events, rejects nonpositive mass/energy/volume states, and records samples independently. This is not a formal high-order embedded integrator or spatial convergence study.

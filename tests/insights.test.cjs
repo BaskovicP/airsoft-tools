@@ -4,7 +4,7 @@ const I = require("../src/insights.js"), P = require("../src/physics.js");
 const t = en => en, fmt = (v, digits = 2, unit = "") => Number.isFinite(v) ? `${v.toFixed(digits)} ${unit}`.trim() : "—", stamp = v => v === null ? "—" : fmt(v * 1000, 2, "ms");
 const fixture = (overrides = {}) => ({ valid: true, duration: .1, usefulTime: .01, exitTime: .02, strongBrakeTime: .025, pistonHitTime: .03,
   impactEnergy: .002, peakOutflow: .008, pistonImpactVelocity: .3, ambientPressure: 101325, exitPressure: 151325, exitGasMass: 1e-5,
-  muzzleMass: 2e-5, dischargeComplete: true, ...overrides });
+  muzzleMass: 2e-5, dischargeComplete: true, exitEnergy: 2, exitVelocity: 100, params: { pistonMass: 71, airbrakeLength: 10 }, ...overrides });
 const setup = { airbrakeLength: 10, usefulFraction: .95 };
 
 test("timing uses actual ordered solver timestamps and a disclosed linear event window", () => {
@@ -91,4 +91,35 @@ test("real no-airbrake reference stays at 100% and does not invent a brake event
   const p = P.normalize(), s = P.simulate(p), q = I.soundQuantities(s, s);
   assert.equal(q.impactComparison.percent, 100); assert.equal(q.flowComparison.percent, 100);
   assert.equal(I.timing(s, p).verdict, "no-pin"); assert.equal(I.timing(s, p).events[2].percent, null);
+});
+
+test("before/after snapshot identifies changed inputs and preserves signed outcome deltas", () => {
+  const before = fixture({ params: { pistonMass: 58, springCurve: [] }, exitEnergy: 2, exitVelocity: 100, impactEnergy: .004, peakOutflow: .008, strongBrakeTime: .02 });
+  const after = fixture({ params: { pistonMass: 82, springCurve: [] }, exitEnergy: 2.1, exitVelocity: 105, impactEnergy: .003, peakOutflow: .01, strongBrakeTime: .018 });
+  const result = I.comparisonSnapshot(before, after);
+  assert.deepEqual(result.changes, [{ key: "pistonMass", before: 58, after: 82 }]);
+  assert.ok(Math.abs(result.metrics.energy.delta - .1) < 1e-12); assert.ok(Math.abs(result.metrics.energy.percent - 5) < 1e-12);
+  assert.equal(result.metrics.impact.delta, -1); assert.equal(result.metrics.flow.delta, 2);
+  assert.ok(result.metrics.timingMargin.delta < 0);
+  assert.equal(I.comparisonSnapshot({ valid: false }, after), null);
+});
+
+test("action plan prioritizes timing, impact, muzzle flow and unmeasured inputs", () => {
+  const baseline = fixture({ impactEnergy: .002, peakOutflow: .008 });
+  const early = fixture({ strongBrakeTime: .005, impactEnergy: .003, peakOutflow: .01 });
+  const plan = I.actionPlan(early, baseline, setup, { geometry: "assumed", spring: "measured" });
+  assert.deepEqual(plan.map(v => v.code), ["delay-braking", "impact-higher", "muzzle-higher", "measure-first"]);
+  assert.deepEqual(plan.map(v => v.category || v.view), ["airbrake", "airbrake", "geometry", "calibration"]);
+  assert.equal(I.actionPlan(fixture({ strongBrakeTime: null }), baseline, { ...setup, airbrakeLength: 0 }, { geometry: "measured", spring: "measured" })[0].code, "measure-pin");
+});
+
+test("feedback markup explains one-variable causality, deltas and actionable bilingual links", () => {
+  const before = fixture({ params: { pistonMass: 58 }, impactEnergy: .003 }), after = fixture({ params: { pistonMass: 82 }, impactEnergy: .002 });
+  const snapshot = I.comparisonSnapshot(before, after), labels = { pistonMass: ["Assembled piston mass", "Masa sastavljenog pistona", "g"] };
+  const html = I.feedbackMarkup(snapshot, after, fixture(), setup, { geometry: "assumed", spring: "assumed" }, labels, t, fmt);
+  assert.match(html, /One modeled input changed/); assert.match(html, /58\.000 g → 82\.000 g/);
+  assert.match(html, /Piston contact energy/); assert.match(html, /data-feedback-category="airbrake"/);
+  assert.match(html, /data-feedback-view="optimizer"/); assert.match(html, /not guaranteed/);
+  const hr = I.feedbackMarkup(null, after, fixture(), setup, { geometry: "measured", spring: "measured" }, labels, (en, hr) => hr, fmt);
+  assert.match(hr, /Napravite jednu promjenu/); assert.match(hr, /Sljedeći koraci/); assert.doesNotMatch(hr, /NaN|Infinity|null|undefined/);
 });

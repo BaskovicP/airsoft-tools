@@ -13,6 +13,7 @@ function functionSource(name) {
 function harness() {
   const timers = new Map(), nodes = {}, context = {
     p: {}, optimizer: null, shot: { valid: true, duration: .06 }, baseline: {}, fraction: .3, playheadTime: .018,
+    lastValidShot: null, changeComparison: null, I: { comparisonSnapshot: () => null },
     diagnostic: null, calculationPending: false, debounce: null, busy: false, playing: true,
     chartCache: new Map(), workspace: null, location: { hash: "#pneumatic-timing" },
     P: { simulate: () => context.nextShot }, nextShot: { valid: true, duration: .06 },
@@ -48,6 +49,18 @@ test("valid → invalid → different-duration valid retains physical playhead t
   assert.ok(Math.abs(c.fraction - .072) < 1e-12); assert.equal(c.playheadTime, .018);
   c.nextShot = { valid: true, duration: .01 }; c.recalculate();
   assert.equal(c.fraction, 1); assert.equal(c.playheadTime, .01);
+});
+
+test("feedback compares against the last valid setup and survives an invalid intermediate edit", () => {
+  const { context: c } = harness(), first = { valid: true, duration: .06, params: { pistonMass: 58 } }, calls = [];
+  c.lastValidShot = first;
+  c.I.comparisonSnapshot = (before, after) => { calls.push([before, after]); return { changes: [{ key: "pistonMass" }], metrics: {} }; };
+  const second = { valid: true, duration: .06, params: { pistonMass: 82 } }; c.nextShot = second; c.recalculate();
+  assert.equal(c.lastValidShot, second); assert.equal(c.changeComparison.changes[0].key, "pistonMass");
+  const comparison = c.changeComparison; c.nextShot = { valid: false, errors: ["dimension"] }; c.recalculate();
+  assert.equal(c.lastValidShot, second); assert.equal(c.changeComparison, comparison);
+  const third = { valid: true, duration: .06, params: { pistonMass: 71 } }; c.nextShot = third; c.recalculate();
+  assert.equal(calls.at(-1)[0], second); assert.equal(calls.at(-1)[1], third);
 });
 
 test("invalid and pending states cannot expose active stale results and recover without removing content", () => {
@@ -96,12 +109,15 @@ test("parameter preset paths and live frames cannot rebuild the results shell", 
 });
 
 test("impact explanation shortcut reveals Results and moves focus to the actual cards", () => {
-  const { context: c, nodes } = harness(); let view, focused = false, revealed = false;
+  const { context: c, nodes } = harness(); let view, focused = false, feedbackFocused = false, revealed = false;
   c.workspace = { selectView: value => { view = value; } }; c.window = { innerWidth: 390 };
   nodes.results.contains = () => true; nodes.workspaceBody = { scrollTop: 400 };
   nodes.soundExplanations = { focus: () => { focused = true; } }; nodes.previewPanel = { scrollIntoView: () => { revealed = true; } };
+  nodes.setupFeedback = { focus: () => { feedbackFocused = true; }, scrollIntoView: () => {} };
   vm.runInContext(functionSource("bindResults"), c); c.bindResults();
   nodes.results.onclick({ target: { closest: () => ({ id: "explainSound", dataset: {} }) } });
   assert.equal(view, "details"); assert.equal(focused, true); assert.equal(revealed, true);
   assert.equal(nodes.workspaceBody.scrollTop, 0); assert.equal(c.playing, false);
+  nodes.results.onclick({ target: { closest: () => ({ id: "explainFeedback", dataset: {} }) } });
+  assert.equal(view, "details"); assert.equal(feedbackFocused, true);
 });

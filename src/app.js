@@ -15,6 +15,7 @@
   let p = P.normalize(), selectedPlatform = "ssg10", component = "amp", springLabel = "unspecified", pinLabel = "plug";
   let provenance = { geometry: "assumed", spring: "assumed" }, shot = null, baseline = null, fraction = 0, playing = false, animation = 0;
   let measurements = [], fit = null, status = null, diagnostic = null, busy = false, debounce = null;
+  let lastValidShot = null, changeComparison = null;
   let optimizer = null;
   let playbackUniform = false, playbackSpeed = 1, calculationPending = false, playheadTime = 0;
   const chartCache = new Map();
@@ -373,6 +374,7 @@
       <section class="panel stage"><div class="stage-toolbar"><button class="primary-button" type="button" id="playButton">${t("Fire / play", "Opali / pokreni")}</button><button class="secondary-button" id="resetButton" type="button">${t("Reset", "Početak")}</button><input id="scrubber" aria-label="${t("Shot time", "Vrijeme opaljenja")}" type="range" min="0" max="1000" value="${fraction * 1000}"><span id="clock" class="clock mono"></span></div><canvas id="mechanism" role="img" aria-label="${t("Schematic piston, bumper, airbrake and BB positions; live numeric values below", "Shematski položaji pistona, odbojne gumice, pina i BB-a; brojčane vrijednosti ispod")}"></canvas><div id="phaseText" class="stage-status" aria-live="off"></div><div id="liveStrip" class="live-strip"></div><p class="results-note">${t("Schematic cutaway. The green pad is the entered bumper; its contact highlight is symbolic because rubber deformation is not resolved. Glow indicates modeled pressure; particles and trails illustrate flow and motion, not gas dynamics or sound. Every cue pauses with model time.", "Shematski presjek. Zelena gumica prikazuje uneseni odbojnik; isticanje pri kontaktu simbolično je jer deformacija gume nije razriješena. Sjaj označuje modelirani tlak; čestice i tragovi ilustriraju protok i gibanje, ne dinamiku plina ni zvuk. Sve se pauzira s vremenom modela.")}</p></section>
       <section class="panel graphs"><div class="graphs-header"><div><h2>${t("Shot traces", "Krivulje opaljenja")}</h2><p>${t("Pressure: amber cylinder, cyan behind BB. Events: green energy threshold, dashed amber slowing, cyan exit. Negative values remain visible.", "Tlak: jantarni cilindar, cijan iza BB-a. Događaji: zeleni prag energije, isprekidano jantarno usporavanje, cijan izlazak. Negativne vrijednosti ostaju vidljive.")}</p></div></div><div class="chart-grid">${[["pressureChart", t("Pressure vs time", "Tlak kroz vrijeme"), "bar(g)"], ["pistonChart", t("Piston velocity vs time", "Brzina pistona kroz vrijeme"), "m/s"], ["bbChart", t("BB velocity vs time", "Brzina BB-a kroz vrijeme"), "m/s"]].map(([id, label, units]) => `<div class="chart"><div class="chart-title"><span>${label}</span><span>${units} / ms</span></div><canvas id="${id}" role="img" aria-label="${label}; ${t("numeric values in live readouts; export full trace below", "brojčane vrijednosti u prikazu uživo; izvoz cijele krivulje ispod")}"></canvas></div>`).join("")}</div></section>
       ${I.soundMarkup(s, baseline, t, fmt)}
+      ${I.feedbackMarkup(changeComparison, s, baseline, p, provenance, fields, t, fmt)}
       <section class="panel insight"><div class="panel-heading"><h2>${t("Energy, verification and uncertainty", "Energija, provjera i nesigurnost")}</h2><span class="tag unknown">${t("not experimentally validated", "nije eksperimentalno potvrđeno")}</span></div><div class="assumption-grid"><span>${t("Maximum BB energy observed", "Najveća opažena energija BB-a")}</span><strong>${fmt(s.maxBbEnergy, 3, "J")}</strong><span>${t("Energy lost before exit", "Energija izgubljena prije izlaska")}</span><strong>${fmt(s.bbEnergyLoss, 3, "J")}</strong><span>${t("Positive / negative net BB work", "Pozitivan / negativan neto rad na BB-u")}</span><strong>${fmt(s.positiveBbWork, 3)} / ${fmt(s.negativeBbWork, 3, "J")}</strong><span>${t("Energy balance residual", "Odstupanje energetske bilance")}</span><strong>${fmt(s.energyResidual * 1000, 4, "mJ")}</strong><span>${t("Gas mass residual", "Odstupanje bilance mase plina")}</span><strong>${s.massResidual.toExponential(2)} kg</strong><span>${t("Ambient barrel sound-crossing scale", "Vrijeme prolaza zvuka kroz cijev pri okolišnim uvjetima")}</span><strong>${stamp(s.soundCrossingTime)}</strong></div>
       <p class="small-note">${t("A small numerical residual does not validate the physics. Two uniform-pressure gas volumes, approximate series duct losses, an effective leaky-piston BB and atmospheric pressure ahead of it are simplifications. Pressure waves, spring surge, detailed cup/bumper deformation and structural acoustics are not resolved. Sub-millisecond timing needs instrumented and spatial-flow validation.", "Malo numeričko odstupanje ne potvrđuje fizikalni model. Dva plinska volumena jednolikog tlaka, približni gubici u kanalima, BB kao efektivni propusni klip i atmosferski tlak ispred njega pojednostavljenja su. Tlačni valovi, valovi opruge, detaljna deformacija brtve/odbojnika i strukturna akustika nisu razriješeni. Vremenski odnos ispod milisekunde zahtijeva instrumentiranu i prostornu provjeru protoka.")}</p>
       <div class="fit-row"><button class="secondary-button" id="convergenceButton" type="button">${t("Check finer time steps", "Provjeri manje vremenske korake")}</button><button class="secondary-button" id="sensitivityButton" type="button">${t("Check input sensitivity", "Provjeri osjetljivost na ulaze")}</button><button class="secondary-button" id="exportRun" type="button">${t("Export setup and full trace", "Izvezi postavke i cijelu krivulju")}</button></div>
@@ -393,6 +395,7 @@
     globalThis.PneumaticWorkspace.prepareResults(next, summary, {
       timingHTML: I.timingMarkup(s, p, t, fmt, stamp),
       explainSound: t("Piston impact & muzzle blast — what do these mean?", "Udar pistona i prasak na ustima — što to znači?"),
+      explainFeedback: t("What changed & recommended next steps", "Što se promijenilo i preporučeni sljedeći koraci"),
       live: t("Live values · pressure, velocity & spring", "Vrijednosti uživo · tlak, brzina i opruga"),
       help: t("Playback options & model notes", "Opcije prikaza i napomene modela"),
       flag: p.airbrakeLength ? t("Airbrake active · conditional model, not measured performance", "Zračna kočnica uključena · uvjetni model, ne izmjerene performanse") : t("No-airbrake reference · conditional model, not measured performance", "Referenca bez kočnice · uvjetni model, ne izmjerene performanse")
@@ -420,7 +423,13 @@
     clearTimeout(debounce);
     if (optimizer?.result && JSON.stringify(p) !== JSON.stringify(optimizer.result.base)) invalidateOptimizer();
     stop(); diagnostic = null; calculationPending = false; chartCache.clear();
-    shot = P.simulate(p);
+    const nextShot = P.simulate(p);
+    if (nextShot.valid) {
+      const nextComparison = I.comparisonSnapshot(lastValidShot, nextShot);
+      if (nextComparison?.changes.length) changeComparison = nextComparison;
+      lastValidShot = nextShot;
+    }
+    shot = nextShot;
     baseline = shot.valid ? P.simulate({ ...p, airbrakeLength: 0, airbrakeTaper: 0 }) : null;
     if (shot.valid) fraction = Math.min(1, playheadTime / shot.duration);
     updateResults();
@@ -588,6 +597,19 @@
         $("soundExplanations").focus({ preventScroll: true });
         if (window.innerWidth <= 960) $("previewPanel").scrollIntoView({ block: "start" });
       }
+      else if (button.id === "explainFeedback") {
+        stop(); workspace.selectView("details"); $("setupFeedback").focus({ preventScroll: true });
+        $("setupFeedback").scrollIntoView({ block: "start" });
+        if (window.innerWidth <= 960) $("previewPanel").scrollIntoView({ block: "start" });
+      }
+      else if (button.dataset.feedbackCategory) {
+        stop(); workspace.selectCategory(button.dataset.feedbackCategory);
+        document.querySelector(".controls-panel").classList.remove("is-collapsed"); $("toggleControls").setAttribute("aria-expanded", "true");
+        if (window.innerWidth <= 960) $("settingsPanel").scrollIntoView({ block: "start" });
+      }
+      else if (button.dataset.feedbackView) {
+        stop(); workspace.selectView(button.dataset.feedbackView);
+      }
       else if (button.id === "exportRun") download("airsoft-pneumatic-run.json", { schemaVersion: 3, solverVersion: P.VERSION, identity: { selectedPlatform, component, springLabel, pinLabel }, provenance, setup: p, result: shot, baseline: { exitEnergy: baseline?.exitEnergy ?? null, impactEnergy: baseline?.impactEnergy ?? null }, limitations: "Unvalidated two-volume, leaky-piston model; not exact joules or dB; see docs/MODEL.md" });
     };
     results.oninput = event => {
@@ -727,6 +749,6 @@
   }
   window.addEventListener("hashchange", () => { if (busy) return; clearTimeout(debounce); if (location.hash === "#pneumatic-timing") recalculate(); render(); });
   window.addEventListener("resize", () => { if (shot?.valid && $("mechanism")) setFrame(fraction); });
-  if (location.hash === "#pneumatic-timing") { shot = P.simulate(p); baseline = P.simulate({ ...p, airbrakeLength: 0, airbrakeTaper: 0 }); }
+  if (location.hash === "#pneumatic-timing") { shot = P.simulate(p); lastValidShot = shot.valid ? shot : null; baseline = P.simulate({ ...p, airbrakeLength: 0, airbrakeTaper: 0 }); }
   render();
 })();

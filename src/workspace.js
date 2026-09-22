@@ -109,6 +109,9 @@
     if (caption.explainSound) {
       const explain = doc.createElement("button"); explain.id = "explainSound"; explain.type = "button"; explain.className = "sound-explain-link"; explain.textContent = caption.explainSound; stage.append(explain);
     }
+    if (caption.explainFeedback) {
+      const explain = doc.createElement("button"); explain.id = "explainFeedback"; explain.type = "button"; explain.className = "feedback-explain-link"; explain.textContent = caption.explainFeedback; stage.append(explain);
+    }
     stage.append(live, help);
     stage.id = "workspace-shot"; stage.dataset.workspacePanel = "shot";
     graphs.id = "workspace-graphs"; graphs.dataset.workspacePanel = "graphs";
