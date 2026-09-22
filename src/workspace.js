@@ -4,7 +4,7 @@
   "use strict";
   const CATEGORIES = [
     ["geometry", "Cylinder & barrel", "Cilindar i cijev"], ["masses", "Piston & BB", "Piston i BB"],
-    ["airbrake", "Airbrake & head", "Zračna kočnica i glava"], ["spring", "Spring", "Opruga"],
+    ["airbrake", "Airbrake, bumper & head", "Zračna kočnica, gumica i glava"], ["spring", "Spring", "Opruga"],
     ["losses", "Losses & environment", "Gubici i okoliš"], ["rifle", "Rifle presets", "Predlošci replika"],
     ["solver", "Timing & solver", "Vrijeme i rješavač"]
   ];

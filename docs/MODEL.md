@@ -1,4 +1,4 @@
-# Implemented model v3.1 — scope and verification
+# Implemented model v3.2 — scope and verification
 
 This release replaces the v2 pressure/airbrake heuristics with a conservative **two-volume, quasi-steady-flow engineering approximation**. It does not claim experimental SSG10 accuracy or implement every higher-fidelity item in the research plan. All quantities below are SI internally.
 
@@ -6,10 +6,10 @@ This release replaces the v2 pressure/airbrake heuristics with a conservative **
 
 State: piston position/velocity; BB position/velocity; mass and internal energy of cylinder and downstream gas; cumulative boundary energy/mass, friction/contact losses, positive/negative BB net work. Ambient air is a reservoir. Air is ideal with R = 287.05 J/(kg K), gamma = 1.4 and constant heat capacities.
 
-Let `x` increase toward the head, `S` be stroke, `Ac` cylinder area, `Ab` barrel area, `y` BB travel, `Lpin` projection and `z=max(0,Lpin−(S−x))` insertion. The pin has a linearly tapered tip then constant-diameter shaft; `Vpin(z)` is its integrated occupied volume:
+Let `x` increase toward the head, `S0` be the nominal travel to the rigid head without an added pad, `b` added bumper thickness, `S=S0−b` the actual contact travel, `Ac` cylinder area, `Ah` head-bore area, `Ab` barrel area, `y` BB travel, `Lpin` projection and `z=max(0,Lpin−(S−x))` insertion. The bumper is approximated as an annulus whose central opening equals the entered head bore, so `Vbumper=(Ac−Ah)b`. The pin has a linearly tapered tip then constant-diameter shaft; `Vpin(z)` is its integrated occupied volume:
 
 ```text
-Vc = residualCylinder + Ac(S−x) − Vpin(Lpin) + Vpin(z)
+Vc = residualCylinder + Ac(S0−x) − Vbumper − Vpin(Lpin) + Vpin(z)
 Vb = downstreamStorage + Ab y − Vpin(z)
 dVc/dx = −Ac + Apin(z)
 dVb/dx = −Apin(z)
@@ -21,7 +21,7 @@ The matching derivatives couple mechanical work to compression work. There is no
 
 **BB approximation:** pressure force and volume displacement both use barrel area. The BB is treated as a leaky effective piston, not a resolved moving sphere. Actual BB diameter sets the clearance leakage area. Using BB projected force area but barrel displacement area without extra transport terms would break this model's work consistency. Ahead-of-BB gas is assumed atmospheric; this has not been validated for the relevant timing tolerance. Full spherical flow, front-gas compression and hop/backspin mechanics remain future work (plan C10/C17).
 
-The entered downstream volume includes head/nozzle/breech storage only once, before pin subtraction. Passage lengths do not automatically add a second copy. Negative storage or interference geometry is rejected. A pin cannot extend beyond the modeled head/nozzle passages. Arbitrary bulb-shaped pins, elastomeric interference and multi-cavity heads need an extended geometry model.
+The entered downstream volume includes head/nozzle/breech storage only once, before pin subtraction. `residualCylinder` is the bare rigid-head cavity; the pad solid is subtracted separately. The bumper opening contributes `b` to the receiving-passage length. Negative storage or interference geometry is rejected. A pin cannot extend beyond the actual contact travel or the modeled bumper/head/nozzle passages. Real pad outside diameters, central holes, deformation and extrusion vary; measure them if this approximation matters. Arbitrary bulb-shaped pins, elastomeric interference and multi-cavity heads need an extended geometry model.
 
 ## Thermodynamics and flow
 
@@ -45,14 +45,15 @@ Piston/nozzle leakage inputs are *effective* areas including loss coefficients. 
 
 ## Mechanics, short stroking and contact
 
-A spring is either linear `F=k(preload+S−x)` or linearly interpolated measured force/compression pairs covering the complete installed range. Spring energy is the integral of that force; spring labels never multiply output. Preload is compression remaining at the front contact position, not an extra spacer of assumed zero baseline.
+A spring is either linear or linearly interpolated from measured force/compression pairs covering the complete installed range. Let `preload0` describe compression at the bare rigid-head plane. An added bumper moves contact rearward, so `preloadContact=preload0+b`, while `preloadContact+S=preload0+S0`: the same cocked position keeps the same initial compression. Thus `F=k(preloadContact+S−x)`. Spring energy is the integral of that force; spring labels never multiply output.
 
 ### Optional length / cut mode
 
-Direct preload remains the default and is unchanged. Length mode derives it from measurements. In the following equations lengths are meters (the UI accepts mm), `L0` is unloaded length before a hypothetical cut, `c` is the reduction in unloaded axial length, `Lf=L0−c`, and `Hf` is the actual spring-seat separation at front contact after accounting for spacers:
+Direct preload remains the default. Length mode derives it from measurements. In the following equations lengths are meters (the UI accepts mm), `L0` is unloaded length before a hypothetical cut, `c` is the reduction in unloaded axial length, `Lf=L0−c`, and `H0` is the spring-seat separation at the bare rigid-head plane after accounting for spacers. The actual bumper-contact seat distance is `Hf=H0−b`:
 
 ```text
-Hcocked = Hf − S
+Hf = H0 − b
+Hcocked = Hf − S = H0 − S0
 preload = Lf − Hf             (replaces the direct input)
 compression(x) = preload + S − x
 kcut = k0 Na / (Na − Nremoved)
@@ -72,9 +73,9 @@ Effective moving mass is piston assembly mass plus optional spring mass/3. That 
 
 Piston friction is signed Coulomb resistance plus optional pressure-dependent seal resistance and linear rear/mechanical damping. At rest, static resistance can hold motion. BB release and moving resistance are separate. The solver allows underpressure, negative acceleration and piston rebound. Small zero-crossing/end-stop projections are tracked as numerical/contact energy losses; finite-step event projection produces a small remaining balance residual, which is displayed rather than hidden.
 
-Front contact uses a dissipative restitution coefficient. Repeated contacts remain possible; the displayed impact is the **first** one. This is not a resolved rubber spring/damper or prediction of peak contact force/duration. Changing a real bumper's thickness changes the contact plane and thus the entered stroke, remaining gas volume and spring compression. Restitution alone cannot describe these geometric changes.
+Front contact uses a dissipative restitution coefficient. Repeated contacts remain possible; the displayed impact is the **first** one. Thickness now changes contact travel, swept volume, annular occupied volume, receiving-passage length and contact spring compression explicitly. Restitution changes only the instantaneous post-contact velocity. This is still not a resolved rubber spring/damper or prediction of compression, hardness, peak contact force, contact duration, sound or durability. The animation's contact bulge is a symbolic state cue.
 
-### Default reference and reverse motion (v3.1.1)
+### Default reference and reverse motion (v3.2.0)
 
 The app now starts with zero airbrake projection, explicitly labeled a **no-pin reference**, not a measured AMP/SSG10 configuration. Other example dimensions, masses and spring/loss data are still conditional assumptions. The old 20 mm projection, 3.8 mm shaft, 4 mm passage, 2 mm taper combination remains an explicit regression fixture. It predicts about 12.2 mm of pre-contact retreat, independent of contact restitution. Timestep refinement preserves the reversal; its force balance and assumed restriction cause it, rather than an impact or broad numerical instability. Removing that unverified restriction from the default does not establish accuracy for an actual airbrake.
 
@@ -84,7 +85,7 @@ Exact pre/post-impact samples at the contact timestamp preserve the velocity dis
 
 The default phase-paced playback allocates 80% of screen time to the interval through BB exit + 1.5 ms if that interval is less than 80% of the full run. The remainder shows **all** subsequent settling states faster, with a visible phase label. No-exit or short-tail runs and the uniform mode use one linear mapping. Clock, scrubber and graph axes remain physical milliseconds, and export/optimization still use the complete solution. Every timeline mapping is continuous, monotone, invertible and ends at the actual run duration.
 
-The short-stroke control changes the cocked position, keeping bore, front stop, pin projection and spring compression at the front stop fixed. Thus it reduces swept volume and released spring energy, not spring stiffness. Other constructions must be represented by separately measured input changes.
+The nominal short-stroke control changes the cocked position. Added bumper thickness instead moves the front contact plane rearward while keeping the same cocked position: effective travel is `S0−b`, contact spring compression rises by `b`, and cocked compression is unchanged. Both reduce swept volume and available released spring work, not spring stiffness. Other constructions must be represented by separately measured input changes.
 
 ## Events and indicators
 
@@ -104,7 +105,7 @@ The pure solver is independent of animation and shared verbatim by standalone/ho
 
 The energy ledger includes gas internal energy, remaining releasable spring energy, piston/BB kinetic energy, friction/contact dissipation, external enthalpy, wall heat and ambient boundary work. Gas mass includes all external flows. Energy residual is relative to the same ambient reference. Conservation checks verify the discretization of the selected model, not the validity of its component laws.
 
-Tests cover geometry derivatives, annular clearance fixtures, reversible/choked flow, the laminar thin-gap limit, equilibrium/no drive, invalid assemblies, missing events, rebound, BB deceleration, heat/leak accounting, a contact-before-exit case and timestep refinement. Default refinements must change exit speed by less than 0.1% and exit time by less than 0.02 ms. Contact-case energy residual must remain below 0.1% of available spring energy; it is not assumed monotonic. The interface offers additional 5 μs / 2.5 μs checks of the user's current configuration.
+Tests cover geometry derivatives, annular bumper/contact geometry, annular airbrake clearance fixtures, reversible/choked flow, the laminar thin-gap limit, equilibrium/no drive, invalid assemblies, missing events, rebound, BB deceleration, heat/leak accounting, a contact-before-exit case and timestep refinement. Default refinements must change exit speed by less than 0.1% and exit time by less than 0.02 ms. Contact-case energy residual must remain below 0.1% of available spring energy; it is not assumed monotonic. The interface offers additional 5 μs / 2.5 μs checks of the user's current configuration.
 
 Sensitivity runs vary head and shaft diameters ±0.02 mm and spring force ±5% in eight combinations. They explicitly count invalid/no-exit/missing-event cases. These are illustrative ranges, not measured tolerances, confidence intervals or a complete uncertainty budget. Correlated input distributions and model discrepancy are not inferred.
 
@@ -112,7 +113,7 @@ Sensitivity runs vary head and shaft diameters ±0.02 mm and spring force ±5% i
 
 Schema v3 preserves old v2 rows as reference-only with the original setup archived separately. Old drive/efficiency fits are never reused. The supplied measurement has no invented configuration. Energy is calculated from the measured mass/speed using exact `1 fps = 0.3048 m/s`.
 
-Complete v3.0 snapshots missing all seven length-mode fields receive inactive defaults (`springLengthMode=0`) and retain confirmation, role and original solver version, with the original snapshot also archived. The old version remains fit-ineligible. Incomplete snapshots are not filled with invented hardware. Hypothetical nonzero cuts remain ineligible even if a user checks measured provenance. Calibration grouping canonicalizes the actual spring force law: hidden length fields, inactive direct preload and stiffness overridden by a curve do not create independent conditions.
+Complete v3.0 snapshots missing all seven length-mode fields and the bumper field receive inactive defaults; complete v3.1.1 snapshots receive `bumperThickness=0`. They retain confirmation, role and original solver version, with the original snapshot also archived. Old versions remain fit-ineligible. Incomplete snapshots are not filled with invented hardware. Hypothetical nonzero cuts remain ineligible even if a user checks measured provenance. Calibration grouping canonicalizes the actual spring force law: hidden length fields, inactive direct preload and stiffness overridden by a curve do not create independent conditions.
 
 Rows require an explicit boolean confirmation, complete valid parameter snapshot, current solver version and declared measured geometry/masses/spring before training/validation eligibility. Confirmation is a user assertion, not automatic verification. Notes carry BB batch/hop/chrono/environment details. The importer validates finite values and escapes text on display; legacy schemas never silently become calibrated records.
 
@@ -120,7 +121,7 @@ A bounded one-parameter Cd fit minimizes mean squared residual normalized by eac
 
 ## Hardware optimizer
 
-The optimizer is a bounded discrete search over explicitly unlocked hardware groups. Cylinder locks cover bore, stroke and cylinder residual volume; barrel locks cover length and diameter; head locks cover both passage sections and downstream storage. Other groups cover piston mass, airbrake geometry, measured/linear spring inputs and BB mass/diameter. All unlisted quantities, including weather, empirical losses, heat transfer, restitution and timing thresholds, remain fixed. A measured spring curve cannot be scaled or replaced by the optimizer; its rate, mass, free length and cut/coil properties stay fixed. Direct preload or front-seat separation may vary within the applicable mode and measured compression coverage.
+The optimizer is a bounded discrete search over explicitly unlocked hardware groups. Cylinder locks cover bore, nominal stroke and cylinder residual volume; barrel locks cover length and diameter; head locks cover both passage sections, bumper thickness and downstream storage. Other groups cover piston mass, airbrake geometry, measured/linear spring inputs and BB mass/diameter. All unlisted quantities, including weather, empirical losses, heat transfer, restitution and timing thresholds, remain fixed. A measured spring curve cannot be scaled or replaced by the optimizer; its rate, mass, free length and cut/coil properties stay fixed. Direct preload or front-seat separation may vary within the applicable mode and measured compression coverage.
 
 Length mode permits explicitly supplied free/seat/cut lengths and coil counts when no force curve is present. The mode itself cannot be optimized, and inactive inputs cannot be searched. Remaining solid height stays fixed so a search cannot disable a known coil-bind constraint. Invalid or slack combinations are rejected by the same solver validation. Candidate lists are hypothetical independent dimensions, not a catalogue of matched cuts/coils/masses: actual compatibility and remaining mass/solid-height measurements must be checked for each modification.
 
@@ -140,6 +141,6 @@ Applying a recommendation runs the normal full-trace solver again, checks eligib
 - C12–C14: physical/conventional events and interpretable energy/discharge indicators implemented; no causal force-isolation or acoustic validation claimed.
 - C15: measurement provenance, one-parameter fitting, holdouts, exports and sensitivity checks implemented; experimental dataset, formal parameter uncertainty and internal-timing validation remain outstanding.
 - C17: sound-crossing scale and explicit timing warning shown; **1D compressible-flow solver comparison remains future work**.
-- C18: temperature viscosity, pressure-dependent seal friction and simple bumper/rear damping options included; detailed deformation, eccentricity, spring surge and structural acoustics need further component models and measurements.
+- C18: temperature viscosity, pressure-dependent seal friction, explicit bumper thickness/contact geometry, restitution and rear damping options included; detailed elastomer deformation, eccentricity, spring surge and structural acoustics need further component models and measurements.
 
 The required next evidence is the user's actual head/pin/cylinder geometry, assembled masses, installed spring curve, repeated documented chrono shots and synchronized internal timing/pressure measurements. More numerical precision or a closer one-point chrono fit cannot substitute for that evidence.

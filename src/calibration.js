@@ -3,6 +3,7 @@
   const P = typeof module !== "undefined" && module.exports ? require("./physics.js") : root.PneumaticPhysics;
   const SCHEMA = 3, KEY = "ssg10-pneumatic-lab-v3", OLD_KEY = "ssg10-pneumatic-lab-v2";
   const LENGTH_FIELDS = ["springLengthMode", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"];
+  const BUMPER_FIELDS = ["bumperThickness"];
   const fps = v => v / .3048;
   const energy = (mass, speed) => .5 * mass / 1000 * (speed * .3048) ** 2;
   function reference() {
@@ -15,7 +16,10 @@
     const sigma = Number(row.sigma ?? 1);
     // v3.0 had no length mode: only add inactive defaults to a complete old snapshot.
     // Preserve confirmation/role/version; the old solver version remains fit-ineligible.
-    const previousComplete = row.solverVersion === "3.0.0" && row.setup && LENGTH_FIELDS.every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => !LENGTH_FIELDS.includes(k)).every(k => Object.hasOwn(row.setup, k));
+    const previousComplete = row.setup && (
+      row.solverVersion === "3.0.0" && [...LENGTH_FIELDS, ...BUMPER_FIELDS].every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => ![...LENGTH_FIELDS, ...BUMPER_FIELDS].includes(k)).every(k => Object.hasOwn(row.setup, k)) ||
+      row.solverVersion === "3.1.1" && BUMPER_FIELDS.every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => !BUMPER_FIELDS.includes(k)).every(k => Object.hasOwn(row.setup, k))
+    );
     const setupComplete = row.setup && (previousComplete || Object.keys(P.DEFAULTS).every(k => Object.hasOwn(row.setup, k)));
     const setup = !legacy && setupComplete && P.validate(row.setup).length === 0 ? P.normalize(row.setup) : null;
     const provenance = Object.fromEntries(Object.entries(row.provenance || {}).filter(([k, v]) => ["geometry", "spring"].includes(k) && ["assumed", "measured"].includes(v)));

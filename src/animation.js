@@ -5,7 +5,7 @@
   const B = typeof module !== "undefined" && module.exports ? require("./playback.js") : root.PneumaticPlayback;
   const clamp = (v, low = 0, high = 1) => Math.max(low, Math.min(high, v));
   function draw(ctx, w, h, p, shot, f, t, fmt) {
-    const { wall, head, face, step, passageEnd, barrelStart, end, pinLength, scale } = B.mechanism(p, f.pistonX);
+    const { wall, head, rigidHead, bumperWidth, face, step, passageEnd, barrelStart, end, pinLength, scale } = B.mechanism(p, f.pistonX);
     const axis = 156, top = 100, bottom = 212;
     const bb = f.bbExited ? end + (f.t - shot.exitTime) * shot.exitVelocity * (end - barrelStart) / shot.barrelLength : barrelStart + f.bbX / shot.barrelLength * (end - barrelStart);
     const radial = 26 / Math.max(p.headBore, p.nozzleBore, p.airbrakeDiameter);
@@ -55,9 +55,9 @@
     for (let x = 20; x < 1100; x += 30) line(x, 62, x, 227, "rgba(154,187,204,.035)");
     ctx.setLineDash([3, 6]); line(30, axis, 1080, axis, "#36505b"); ctx.setLineDash([]);
     const steel = gradient(0, top, 0, bottom, [[0, "#80949f"], [.07, "#384955"], [.45, "#18272f"], [.9, "#455b67"], [1, "#9eafb4"]]);
-    rect(wall - 6, top - 5, head - wall + 12, bottom - top + 10, steel, "#597480");
+    rect(wall - 6, top - 5, rigidHead - wall + 12, bottom - top + 10, steel, "#597480");
     rect(wall, top + 5, head - wall, bottom - top - 10, "#0b141c", "#202f39");
-    line(wall, top - 2, head, top - 2, "#afccd266");
+    line(wall, top - 2, rigidHead, top - 2, "#afccd266");
     rect(wall - 9, top + 10, 12, 92, "#516670", "#8ba0aa");
     gas(face, top + 6, head - face, 100, cylinderGlow, amber, 34, f.flow);
     // Spring's dark/back and illuminated/front halves share the actual endpoints.
@@ -79,9 +79,21 @@
     rect(face - 32, top + 7, 32, 98, pistonMetal, "#bbd0d8");
     rect(face - 7, top + 6, 5, 100, "#182e31", "#78c6bd");
     for (let i = 0; i < 3; i++) line(face - 26 + i * 5, top + 16, face - 26 + i * 5, bottom - 16, "#142a394d");
-    // Stepped head and nozzle, preserving the same axial scale as the cylinder.
-    rect(head, axis - 35, passageEnd - head, 70, gradient(0, axis - 35, 0, axis + 35, [[0, "#abbbc3"], [.1, "#526675"], [.55, "#273d49"], [1, "#758d9a"]]), "#8199a5");
-    for (let x = head + 5; x < passageEnd; x += 7) line(x, axis - 34, x, axis - 26, "#a9bbc544");
+    // Stepped rigid head and nozzle. An installed bumper occupies the annular
+    // space ahead of the head; its opening is approximated by headBore.
+    rect(rigidHead, axis - 35, passageEnd - rigidHead, 70, gradient(0, axis - 35, 0, axis + 35, [[0, "#abbbc3"], [.1, "#526675"], [.55, "#273d49"], [1, "#758d9a"]]), "#8199a5");
+    for (let x = rigidHead + 5; x < passageEnd; x += 7) line(x, axis - 34, x, axis - 26, "#a9bbc544");
+    if (bumperWidth > 0) {
+      const hole = p.headBore * radial, touching = f.pistonHit && Math.abs(face - head) < Math.max(.8, scale * .03);
+      const bulge = touching ? Math.min(5, 1 + bumperWidth * .2) : 0;
+      const rubber = gradient(head, 0, rigidHead, 0, [[0, touching ? "#7ff4ce" : "#42bca0"], [.48, "#173f3b"], [1, "#0d2828"]]);
+      rect(head, top + 5 - bulge, bumperWidth, axis - hole / 2 - (top + 5) + bulge, rubber, "#72d7c3");
+      rect(head, axis + hole / 2, bumperWidth, bottom - 5 - (axis + hole / 2) + bulge, rubber, "#72d7c3");
+      if (touching) {
+        line(head + Math.min(bumperWidth * .35, 3), top + 9, head + Math.min(bumperWidth * .35, 3), axis - hole / 2 - 3, "#c7fff0", 2);
+        line(head + Math.min(bumperWidth * .35, 3), axis + hole / 2 + 3, head + Math.min(bumperWidth * .35, 3), bottom - 9, "#c7fff0", 2);
+      }
+    }
     for (const [x, width, height] of [[head, step - head, p.headBore * radial], [step, passageEnd - step, p.nozzleBore * radial]]) {
       rect(x, axis - height / 2, width, height, "#081119", "#738b97");
       gas(x, axis - height / 2, width, height, barrelGlow, cyan, 8, f.flow);
@@ -138,7 +150,7 @@
     ctx.font = `${Math.max(14, 12 * 1100 / w)}px system-ui`; ctx.fillStyle = "#bdced6";
     if (w >= 650) {
       ctx.fillText(t("SPRING / PISTON", "OPRUGA / PISTON"), 40, 36);
-      ctx.fillText(t("HEAD / NOZZLE", "GLAVA / MLAZNICA"), 425, 36);
+      ctx.fillText(p.bumperThickness > 0 ? t("BUMPER / HEAD / NOZZLE", "ODBOJNIK / GLAVA / MLAZNICA") : t("HEAD / NOZZLE", "GLAVA / MLAZNICA"), 425, 36);
       ctx.fillText(t("INNER BARREL", "UNUTARNJA CIJEV"), 760, 36);
       ctx.fillStyle = amber; ctx.fillText(`${t("Cylinder", "Cilindar")}  ${fmt((f.cylinderPressure - shot.ambientPressure) / 1e5, 2)} bar(g)`, 40, 266);
       ctx.fillStyle = cyan; ctx.fillText(`${t("Behind BB", "Iza BB-a")}  ${fmt((f.pressure - shot.ambientPressure) / 1e5, 2)} bar(g)`, 660, 266);
@@ -147,7 +159,7 @@
       ctx.fillStyle = "#99aeb9";
       ctx.fillText(`${t("Pin overlap", "Preklapanje pina")} ${fmt(f.insertion * 1000, 2)} mm  ·  ${t("Open area", "Otvor")} ${fmt(f.openArea * 1e6, 3)} mm²`, 40, 311);
     } else {
-      ctx.fillText(t("PISTON → HEAD → BB", "PISTON → GLAVA → BB"), 40, 36);
+      ctx.fillText(p.bumperThickness > 0 ? t("PISTON → BUMPER → BB", "PISTON → GUMICA → BB") : t("PISTON → HEAD → BB", "PISTON → GLAVA → BB"), 40, 36);
       ctx.fillText(`${t("Pin overlap", "Preklapanje pina")}: ${fmt(f.insertion * 1000, 2)} mm`, 40, 266);
       ctx.fillText(`${t("Open area", "Otvor")}: ${fmt(f.openArea * 1e6, 3)} mm²`, 40, 308);
     }

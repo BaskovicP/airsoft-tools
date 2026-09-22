@@ -1,7 +1,7 @@
 /* Pure, dependency-free conservative lumped model. See docs/MODEL.md. */
 (function (root) {
   "use strict";
-  const VERSION = "3.1.1";
+  const VERSION = "3.2.0";
   const R = 287.05, GAMMA = 1.4, CV = R / (GAMMA - 1), CP = CV + R;
   const area = d => Math.PI * (d / 2000) ** 2;
   const DEFAULTS = Object.freeze({
@@ -10,6 +10,9 @@
     // Start with an explicitly labelled no-pin reference, not an invented AMP brake fit.
     airbrakeLength: 0, airbrakeDiameter: 3.8, airbrakeTipDiameter: 2, airbrakeTaper: 0,
     headBore: 4, headLength: 12, nozzleBore: 4, nozzleLength: 15,
+    // Added annular pad ahead of the rigid head. Zero preserves the bare-head
+    // geometry. The central opening is approximated by headBore.
+    bumperThickness: 0,
     deadVolume: .55, breechVolume: .45, dischargeCoefficient: .75,
     pistonLeak: .005, nozzleLeak: .005, bbLeakCoefficient: .15,
     springStiffness: 550, springPreload: 50, springMass: 0, springCurve: [],
@@ -20,16 +23,25 @@
     usefulFraction: .95, decelThreshold: 1000, maxTime: 60
   });
   function normalize(raw = {}) { return { ...DEFAULTS, ...raw }; }
+  function contactStroke(raw) {
+    const p = normalize(raw);
+    return (p.strokeLength - p.bumperThickness) / 1000;
+  }
   // Lengths are axial mm, not wire length. Rate scaling is a uniform-coil estimate.
-  // Installed length is the seat separation at front contact, after any spacers.
+  // The entered front seat/preload refers to the rigid-head plane before an
+  // added bumper. A bumper moves piston contact rearward while leaving cocked
+  // compression unchanged for the same physical spring seats.
   function springState(p) {
     const lengths = p.springLengthMode === 1;
     const cut = lengths ? p.springCutLength : 0;
     const freeLength = lengths ? p.springFreeLength - cut : null;
-    const preload = lengths ? freeLength - p.springInstalledLength : p.springPreload;
+    const installedLength = lengths ? p.springInstalledLength - p.bumperThickness : null;
+    const preload = lengths ? freeLength - installedLength : p.springPreload + p.bumperThickness;
+    const travel = (p.strokeLength - p.bumperThickness);
     const rateRatio = cut > 0 ? p.springActiveCoils / (p.springActiveCoils - p.springRemovedCoils) : 1;
-    return { freeLength, preload, cockedCompression: preload + p.strokeLength,
-      cockedLength: lengths ? p.springInstalledLength - p.strokeLength : null,
+    return { freeLength, preload, contactTravel: travel, installedLength,
+      cockedCompression: preload + travel,
+      cockedLength: lengths ? installedLength - travel : null,
       stiffness: p.springStiffness * rateRatio, rateRatio,
       coilBindChecked: lengths && p.springSolidLength > 0 };
   }
@@ -38,11 +50,13 @@
     const positive = ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "headBore", "headLength", "nozzleBore", "nozzleLength", "deadVolume", "breechVolume", "ambientPressure", "maxTime"];
     for (const key of Object.keys(DEFAULTS)) if (key !== "springCurve" && !Number.isFinite(p[key])) errors.push(`${key}:finite`);
     for (const key of positive) if (!(p[key] > 0)) errors.push(`${key}:positive`);
-    for (const key of ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "springStiffness", "springPreload", "springMass", "pistonLeak", "nozzleLeak", "pistonFriction", "sealFriction", "rearDamping", "bbBreakaway", "barrelDrag", "heatTransfer", "decelThreshold"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
+    for (const key of ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "bumperThickness", "springStiffness", "springPreload", "springMass", "pistonLeak", "nozzleLeak", "pistonFriction", "sealFriction", "rearDamping", "bbBreakaway", "barrelDrag", "heatTransfer", "decelThreshold"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
     if (p.bbDiameter >= p.barrelDiameter) errors.push("bb:clearance");
     if (p.cylinderBore <= p.headBore || p.cylinderBore <= p.airbrakeDiameter) errors.push("cylinder:clearance");
-    if (p.airbrakeLength > 0 && (p.airbrakeDiameter >= p.headBore || (p.airbrakeLength > p.headLength && p.airbrakeDiameter >= p.nozzleBore))) errors.push("pin:clearance");
-    if (p.airbrakeLength > p.strokeLength || p.airbrakeLength > p.headLength + p.nozzleLength) errors.push("pin:length");
+    if (p.airbrakeLength > 0 && (p.airbrakeDiameter >= p.headBore || (p.airbrakeLength > p.bumperThickness + p.headLength && p.airbrakeDiameter >= p.nozzleBore))) errors.push("pin:clearance");
+    if (!(p.bumperThickness < p.strokeLength)) errors.push("bumper:thickness");
+    const travel = p.strokeLength - p.bumperThickness;
+    if (p.airbrakeLength > travel || p.airbrakeLength > p.bumperThickness + p.headLength + p.nozzleLength) errors.push("pin:length");
     if (p.airbrakeTipDiameter > p.airbrakeDiameter || p.airbrakeTaper > p.airbrakeLength && p.airbrakeLength > 0) errors.push("pin:profile");
     if (!(p.dischargeCoefficient > 0 && p.dischargeCoefficient <= 1) || !(p.bbLeakCoefficient >= 0 && p.bbLeakCoefficient <= 1) || !(p.restitution >= 0 && p.restitution <= 1)) errors.push("coefficient:range");
     if (!(p.usefulFraction > 0 && p.usefulFraction <= 1) || p.airTemperature <= -273.15 || p.maxTime > 250) errors.push("range:invalid");
@@ -63,7 +77,7 @@
       else if (p.springCurve[0][0] > spring.preload || p.springCurve.at(-1)[0] < spring.cockedCompression) errors.push("spring:coverage");
     }
     if (!errors.length) {
-      const g = geometry(p, p.strokeLength / 1000, 0);
+      const g = geometry(p, contactStroke(p), 0);
       if (g.vc <= 0 || g.vb <= 0) errors.push("volume:pin");
     }
     return [...new Set(errors)];
@@ -81,21 +95,24 @@
     return Math.PI / 4 * (d0 * d0 * c + d0 * slope * c * c + slope * slope * c ** 3 / 3) + area(p.airbrakeDiameter) * Math.max(0, l - taper);
   }
   function geometry(raw, x, y) {
-    const p = normalize(raw), ac = area(p.cylinderBore), ab = area(p.barrelDiameter), stroke = p.strokeLength / 1000;
+    const p = normalize(raw), ac = area(p.cylinderBore), ab = area(p.barrelDiameter), stroke = contactStroke(p);
+    const bumper = p.bumperThickness / 1000;
+    const bumperSolidVolume = Math.max(0, ac - area(p.headBore)) * bumper;
     const insertion = Math.max(0, p.airbrakeLength / 1000 - (stroke - x));
     const displaced = pinVolume(p, insertion), ap = area(pinDiameter(p, insertion));
     return {
       ac, ab, stroke, insertion, pinArea: ap,
-      vc: p.deadVolume * 1e-6 + ac * (stroke - x) - pinVolume(p, p.airbrakeLength / 1000) + displaced,
+      vc: p.deadVolume * 1e-6 + ac * (p.strokeLength / 1000 - x) - bumperSolidVolume - pinVolume(p, p.airbrakeLength / 1000) + displaced,
       vb: p.breechVolume * 1e-6 + ab * y - displaced,
       dvc: -ac + ap, dvb: -ap,
       sweptVolume: ac * stroke, barrelVolume: ab * p.barrelLength / 1000,
+      bumperSolidVolume,
       gap: (p.headBore - p.airbrakeDiameter) / 2,
       annulus: Math.PI / 4 * ((p.headBore / 1000) ** 2 - (p.airbrakeDiameter / 1000) ** 2)
     };
   }
   function springForce(p, x) {
-    const spring = springState(p), c = spring.preload + p.strokeLength - x * 1000;
+    const spring = springState(p), c = spring.preload + spring.contactTravel - x * 1000;
     if (!p.springCurve?.length) return spring.stiffness * Math.max(0, c) / 1000;
     const pairs = p.springCurve;
     for (let i = 1; i < pairs.length; i++) if (c <= pairs[i][0]) {
@@ -105,11 +122,11 @@
     return pairs.at(-1)[1];
   }
   function springEnergy(p, x) {
-    const end = p.strokeLength / 1000;
+    const end = contactStroke(p);
     const points = [x, end];
     const spring = springState(p);
     for (const pair of p.springCurve || []) {
-      const at = (spring.preload + p.strokeLength - pair[0]) / 1000;
+      const at = (spring.preload + spring.contactTravel - pair[0]) / 1000;
       if (at > x && at < end) points.push(at);
     }
     points.sort((a, b) => a - b);
@@ -131,7 +148,8 @@
   // Not a resolved nozzle/pressure-wave model: see model limitations.
   function passage(p, insertion, pc, tc, pb, tb) {
     const parts = [];
-    for (const [start, length, bore] of [[0, p.headLength / 1000, p.headBore], [p.headLength / 1000, p.nozzleLength / 1000, p.nozzleBore]]) {
+    const firstLength = (p.bumperThickness + p.headLength) / 1000;
+    for (const [start, length, bore] of [[0, firstLength, p.headBore], [firstLength, p.nozzleLength / 1000, p.nozzleBore]]) {
       const overlap = Math.min(length, Math.max(0, insertion - start));
       if (overlap > 0) {
         const d = pinDiameter(p, insertion - start);
@@ -290,7 +308,8 @@
     const exitEnergy = exitVelocity === null ? null : .5 * mbb * exitVelocity ** 2;
     const massResidual = s[4] + s[6] - initialMass - s[12];
     return { version: VERSION, params: p, valid: !numericalFailure, errors: numericalFailure ? ["solver:convergence"] : [], frames,
-      duration: t, stroke: g0.stroke, barrelLength: L, barrelVolume: g0.barrelVolume, cylinderVolume: g0.sweptVolume, ratio: g0.sweptVolume / g0.barrelVolume,
+      duration: t, stroke: g0.stroke, nominalStroke: p.strokeLength / 1000, bumperThickness: p.bumperThickness / 1000,
+      barrelLength: L, barrelVolume: g0.barrelVolume, cylinderVolume: g0.sweptVolume, ratio: g0.sweptVolume / g0.barrelVolume,
       ambientPressure: pa, engageTime, decelTime, strongBrakeTime, reboundTime, usefulTime, exitTime, pistonHitTime,
       preContactReversalTime, contactReboundTime, maxPistonRetreat, maxPreContactRetreat,
       exitVelocity, exitEnergy, exitPressure, exitGasMass, pistonImpactVelocity: impactVelocity,
@@ -304,7 +323,7 @@
       dischargeComplete: exited && Math.abs(final.pc - pa) < .01 * pa && Math.abs(final.pb - pa) < .01 * pa
     };
   }
-  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, geometry, pinVolume, pinDiameter, springState, springForce, springEnergy, massFlow, passage, simulate };
+  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, contactStroke, geometry, pinVolume, pinDiameter, springState, springForce, springEnergy, massFlow, passage, simulate };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PneumaticPhysics = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

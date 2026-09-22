@@ -38,9 +38,10 @@
     // A shared axial scale for stroke AND head passages prevents the pin from
     // entering a drawn head before the solver's actual geometric entry event.
     const face0 = 110, scale = 430 / (p.strokeLength + p.headLength + p.nozzleLength);
-    const head = face0 + p.strokeLength * scale, step = head + p.headLength * scale;
-    const passageEnd = step + p.nozzleLength * scale, face = face0 + pistonX * 1000 * scale;
-    return { wall: 40, face0, face, head, step, passageEnd, barrelStart: passageEnd + 20, end: 1040,
+    const contact = face0 + (p.strokeLength - p.bumperThickness) * scale;
+    const rigidHead = face0 + p.strokeLength * scale, step = rigidHead + p.headLength * scale;
+    const head = contact, passageEnd = step + p.nozzleLength * scale, face = face0 + pistonX * 1000 * scale;
+    return { wall: 40, face0, face, contact, rigidHead, bumperWidth: rigidHead - contact, head, step, passageEnd, barrelStart: passageEnd + 20, end: 1040,
       pinLength: p.airbrakeLength * scale, pinTip: face + p.airbrakeLength * scale, scale };
   }
   const api = { timeline, frameAt, mechanism };

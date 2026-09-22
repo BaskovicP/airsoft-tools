@@ -17,6 +17,11 @@ test('hardware allowlist never permits weather, calibration, losses or numerical
   for (const key of ['airTemperature','ambientPressure','dischargeCoefficient','pistonLeak','barrelDrag','restitution','maxTime','usefulFraction','springCurve']) assert.throws(() => O.searchSpace(P.DEFAULTS, { values: { [key]: [1] } }), /forbidden/);
   assert.throws(() => O.searchSpace(P.DEFAULTS, { locks: { weather: false } }), /unknown-group/);
 });
+test('bumper thickness is explicit head hardware while restitution remains a fixed unknown', () => {
+  const space=O.searchSpace(P.DEFAULTS,{locks:{head:false},values:{bumperThickness:[0,2,4]}});
+  assert.equal(space.total,3);assert.deepEqual(space.dimensions.map(v=>v.key),['bumperThickness']);
+  assert.deepEqual([...new Set([0,1,2].map(i=>O.candidateAt(space,i).restitution))],[P.DEFAULTS.restitution]);
+});
 test('frozen parts and all other inputs remain exactly unchanged', () => {
   const base = P.normalize({ airTemperature: 11, dischargeCoefficient: .61 });
   const space = O.searchSpace(base, { locks: { piston: false }, values: { pistonMass: [58,82], barrelLength: [300], cylinderBore: [30] } });

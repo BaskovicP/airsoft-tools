@@ -6,13 +6,13 @@
   const GROUPS = Object.freeze({
     cylinder: ["cylinderBore", "strokeLength", "deadVolume"],
     barrel: ["barrelLength", "barrelDiameter"],
-    head: ["headBore", "headLength", "nozzleBore", "nozzleLength", "breechVolume"],
+    head: ["headBore", "headLength", "nozzleBore", "nozzleLength", "bumperThickness", "breechVolume"],
     piston: ["pistonMass"],
     airbrake: ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper"],
     spring: ["springStiffness", "springPreload", "springMass", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils"],
     bb: ["bbMass", "bbDiameter"]
   });
-  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], springFreeLength: [0,500], springInstalledLength: [0,500], springCutLength: [0,400], springActiveCoils: [0,200], springRemovedCoils: [0,200], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
+  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], bumperThickness: [0,20], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], springFreeLength: [0,500], springInstalledLength: [0,500], springCutLength: [0,400], springActiveCoils: [0,200], springRemovedCoils: [0,200], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
   const WEIGHTS = Object.freeze({ balanced: [.35,.2,.15,.30], quiet: [.45,.25,.2,.10], efficient: [.15,.10,.05,.70] });
   const HORIZON_MS = 250;
   const clone = v => JSON.parse(JSON.stringify(v));

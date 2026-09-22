@@ -59,11 +59,12 @@ test('frame interpolation preserves signed motion and does not modify solver fra
   close(B.frameAt(s,-1).t,0);close(B.frameAt(s,100).t,s.duration);
 });
 test('drawing pin entry and full insertion agree with physical stroke/head geometry',()=>{
-  for(const setup of [{strokeLength:85,headLength:12,nozzleLength:15,airbrakeLength:20},{strokeLength:40,headLength:20,nozzleLength:15,airbrakeLength:10},{strokeLength:120,headLength:12,nozzleLength:15,airbrakeLength:27}]){
-    const p=P.normalize(setup),entry=(p.strokeLength-p.airbrakeLength)/1000;
-    const a=B.mechanism(p,entry),b=B.mechanism(p,entry-.001),end=B.mechanism(p,p.strokeLength/1000);
+  for(const setup of [{strokeLength:85,headLength:12,nozzleLength:15,airbrakeLength:20},{strokeLength:40,headLength:20,nozzleLength:15,airbrakeLength:10,bumperThickness:4},{strokeLength:120,headLength:12,nozzleLength:15,airbrakeLength:27}]){
+    const p=P.normalize(setup),contact=P.contactStroke(p),entry=contact-p.airbrakeLength/1000;
+    const a=B.mechanism(p,entry),b=B.mechanism(p,entry-.001),end=B.mechanism(p,contact);
     close(a.pinTip,a.head);assert.ok(b.pinTip<b.head);
     close(end.face,end.head);assert.ok(end.pinTip<=end.passageEnd+1e-10);
-    assert.ok(end.pinTip<end.barrelStart);close(end.step-end.head,p.headLength*end.scale);
+    assert.ok(end.pinTip<end.barrelStart);close(end.step-end.head,(p.bumperThickness+p.headLength)*end.scale);
+    close(end.rigidHead-end.head,p.bumperThickness*end.scale);
   }
 });

@@ -1102,6 +1102,8 @@
       .settings-section > summary { display:none; }
       .settings-page .control { margin-bottom:14px; }
       .settings-page .group-label { white-space:normal; }
+      .settings-page .bumper-controls { margin:12px 0 16px; padding:14px; border:1px solid color-mix(in srgb,var(--green) 45%,var(--line)); border-radius:10px; background:linear-gradient(135deg,color-mix(in srgb,var(--green) 7%,var(--panel)),var(--panel)); }
+      .settings-page .bumper-controls .group-label { color:var(--green); }
       .inline-help { border:1px solid var(--line); border-radius:8px; padding:10px; margin-top:12px; }
       .inline-help summary { font-size:.875rem; padding:0; color:var(--muted); }
       .inline-help p:last-child { margin-bottom:0; }
@@ -1226,7 +1228,7 @@
   <script>/* Pure, dependency-free conservative lumped model. See docs/MODEL.md. */
 (function (root) {
   "use strict";
-  const VERSION = "3.1.1";
+  const VERSION = "3.2.0";
   const R = 287.05, GAMMA = 1.4, CV = R / (GAMMA - 1), CP = CV + R;
   const area = d => Math.PI * (d / 2000) ** 2;
   const DEFAULTS = Object.freeze({
@@ -1235,6 +1237,9 @@
     // Start with an explicitly labelled no-pin reference, not an invented AMP brake fit.
     airbrakeLength: 0, airbrakeDiameter: 3.8, airbrakeTipDiameter: 2, airbrakeTaper: 0,
     headBore: 4, headLength: 12, nozzleBore: 4, nozzleLength: 15,
+    // Added annular pad ahead of the rigid head. Zero preserves the bare-head
+    // geometry. The central opening is approximated by headBore.
+    bumperThickness: 0,
     deadVolume: .55, breechVolume: .45, dischargeCoefficient: .75,
     pistonLeak: .005, nozzleLeak: .005, bbLeakCoefficient: .15,
     springStiffness: 550, springPreload: 50, springMass: 0, springCurve: [],
@@ -1245,16 +1250,25 @@
     usefulFraction: .95, decelThreshold: 1000, maxTime: 60
   });
   function normalize(raw = {}) { return { ...DEFAULTS, ...raw }; }
+  function contactStroke(raw) {
+    const p = normalize(raw);
+    return (p.strokeLength - p.bumperThickness) / 1000;
+  }
   // Lengths are axial mm, not wire length. Rate scaling is a uniform-coil estimate.
-  // Installed length is the seat separation at front contact, after any spacers.
+  // The entered front seat/preload refers to the rigid-head plane before an
+  // added bumper. A bumper moves piston contact rearward while leaving cocked
+  // compression unchanged for the same physical spring seats.
   function springState(p) {
     const lengths = p.springLengthMode === 1;
     const cut = lengths ? p.springCutLength : 0;
     const freeLength = lengths ? p.springFreeLength - cut : null;
-    const preload = lengths ? freeLength - p.springInstalledLength : p.springPreload;
+    const installedLength = lengths ? p.springInstalledLength - p.bumperThickness : null;
+    const preload = lengths ? freeLength - installedLength : p.springPreload + p.bumperThickness;
+    const travel = (p.strokeLength - p.bumperThickness);
     const rateRatio = cut > 0 ? p.springActiveCoils / (p.springActiveCoils - p.springRemovedCoils) : 1;
-    return { freeLength, preload, cockedCompression: preload + p.strokeLength,
-      cockedLength: lengths ? p.springInstalledLength - p.strokeLength : null,
+    return { freeLength, preload, contactTravel: travel, installedLength,
+      cockedCompression: preload + travel,
+      cockedLength: lengths ? installedLength - travel : null,
       stiffness: p.springStiffness * rateRatio, rateRatio,
       coilBindChecked: lengths && p.springSolidLength > 0 };
   }
@@ -1263,11 +1277,13 @@
     const positive = ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "headBore", "headLength", "nozzleBore", "nozzleLength", "deadVolume", "breechVolume", "ambientPressure", "maxTime"];
     for (const key of Object.keys(DEFAULTS)) if (key !== "springCurve" && !Number.isFinite(p[key])) errors.push(`${key}:finite`);
     for (const key of positive) if (!(p[key] > 0)) errors.push(`${key}:positive`);
-    for (const key of ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "springStiffness", "springPreload", "springMass", "pistonLeak", "nozzleLeak", "pistonFriction", "sealFriction", "rearDamping", "bbBreakaway", "barrelDrag", "heatTransfer", "decelThreshold"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
+    for (const key of ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "bumperThickness", "springStiffness", "springPreload", "springMass", "pistonLeak", "nozzleLeak", "pistonFriction", "sealFriction", "rearDamping", "bbBreakaway", "barrelDrag", "heatTransfer", "decelThreshold"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
     if (p.bbDiameter >= p.barrelDiameter) errors.push("bb:clearance");
     if (p.cylinderBore <= p.headBore || p.cylinderBore <= p.airbrakeDiameter) errors.push("cylinder:clearance");
-    if (p.airbrakeLength > 0 && (p.airbrakeDiameter >= p.headBore || (p.airbrakeLength > p.headLength && p.airbrakeDiameter >= p.nozzleBore))) errors.push("pin:clearance");
-    if (p.airbrakeLength > p.strokeLength || p.airbrakeLength > p.headLength + p.nozzleLength) errors.push("pin:length");
+    if (p.airbrakeLength > 0 && (p.airbrakeDiameter >= p.headBore || (p.airbrakeLength > p.bumperThickness + p.headLength && p.airbrakeDiameter >= p.nozzleBore))) errors.push("pin:clearance");
+    if (!(p.bumperThickness < p.strokeLength)) errors.push("bumper:thickness");
+    const travel = p.strokeLength - p.bumperThickness;
+    if (p.airbrakeLength > travel || p.airbrakeLength > p.bumperThickness + p.headLength + p.nozzleLength) errors.push("pin:length");
     if (p.airbrakeTipDiameter > p.airbrakeDiameter || p.airbrakeTaper > p.airbrakeLength && p.airbrakeLength > 0) errors.push("pin:profile");
     if (!(p.dischargeCoefficient > 0 && p.dischargeCoefficient <= 1) || !(p.bbLeakCoefficient >= 0 && p.bbLeakCoefficient <= 1) || !(p.restitution >= 0 && p.restitution <= 1)) errors.push("coefficient:range");
     if (!(p.usefulFraction > 0 && p.usefulFraction <= 1) || p.airTemperature <= -273.15 || p.maxTime > 250) errors.push("range:invalid");
@@ -1288,7 +1304,7 @@
       else if (p.springCurve[0][0] > spring.preload || p.springCurve.at(-1)[0] < spring.cockedCompression) errors.push("spring:coverage");
     }
     if (!errors.length) {
-      const g = geometry(p, p.strokeLength / 1000, 0);
+      const g = geometry(p, contactStroke(p), 0);
       if (g.vc <= 0 || g.vb <= 0) errors.push("volume:pin");
     }
     return [...new Set(errors)];
@@ -1306,21 +1322,24 @@
     return Math.PI / 4 * (d0 * d0 * c + d0 * slope * c * c + slope * slope * c ** 3 / 3) + area(p.airbrakeDiameter) * Math.max(0, l - taper);
   }
   function geometry(raw, x, y) {
-    const p = normalize(raw), ac = area(p.cylinderBore), ab = area(p.barrelDiameter), stroke = p.strokeLength / 1000;
+    const p = normalize(raw), ac = area(p.cylinderBore), ab = area(p.barrelDiameter), stroke = contactStroke(p);
+    const bumper = p.bumperThickness / 1000;
+    const bumperSolidVolume = Math.max(0, ac - area(p.headBore)) * bumper;
     const insertion = Math.max(0, p.airbrakeLength / 1000 - (stroke - x));
     const displaced = pinVolume(p, insertion), ap = area(pinDiameter(p, insertion));
     return {
       ac, ab, stroke, insertion, pinArea: ap,
-      vc: p.deadVolume * 1e-6 + ac * (stroke - x) - pinVolume(p, p.airbrakeLength / 1000) + displaced,
+      vc: p.deadVolume * 1e-6 + ac * (p.strokeLength / 1000 - x) - bumperSolidVolume - pinVolume(p, p.airbrakeLength / 1000) + displaced,
       vb: p.breechVolume * 1e-6 + ab * y - displaced,
       dvc: -ac + ap, dvb: -ap,
       sweptVolume: ac * stroke, barrelVolume: ab * p.barrelLength / 1000,
+      bumperSolidVolume,
       gap: (p.headBore - p.airbrakeDiameter) / 2,
       annulus: Math.PI / 4 * ((p.headBore / 1000) ** 2 - (p.airbrakeDiameter / 1000) ** 2)
     };
   }
   function springForce(p, x) {
-    const spring = springState(p), c = spring.preload + p.strokeLength - x * 1000;
+    const spring = springState(p), c = spring.preload + spring.contactTravel - x * 1000;
     if (!p.springCurve?.length) return spring.stiffness * Math.max(0, c) / 1000;
     const pairs = p.springCurve;
     for (let i = 1; i < pairs.length; i++) if (c <= pairs[i][0]) {
@@ -1330,11 +1349,11 @@
     return pairs.at(-1)[1];
   }
   function springEnergy(p, x) {
-    const end = p.strokeLength / 1000;
+    const end = contactStroke(p);
     const points = [x, end];
     const spring = springState(p);
     for (const pair of p.springCurve || []) {
-      const at = (spring.preload + p.strokeLength - pair[0]) / 1000;
+      const at = (spring.preload + spring.contactTravel - pair[0]) / 1000;
       if (at > x && at < end) points.push(at);
     }
     points.sort((a, b) => a - b);
@@ -1356,7 +1375,8 @@
   // Not a resolved nozzle/pressure-wave model: see model limitations.
   function passage(p, insertion, pc, tc, pb, tb) {
     const parts = [];
-    for (const [start, length, bore] of [[0, p.headLength / 1000, p.headBore], [p.headLength / 1000, p.nozzleLength / 1000, p.nozzleBore]]) {
+    const firstLength = (p.bumperThickness + p.headLength) / 1000;
+    for (const [start, length, bore] of [[0, firstLength, p.headBore], [firstLength, p.nozzleLength / 1000, p.nozzleBore]]) {
       const overlap = Math.min(length, Math.max(0, insertion - start));
       if (overlap > 0) {
         const d = pinDiameter(p, insertion - start);
@@ -1515,7 +1535,8 @@
     const exitEnergy = exitVelocity === null ? null : .5 * mbb * exitVelocity ** 2;
     const massResidual = s[4] + s[6] - initialMass - s[12];
     return { version: VERSION, params: p, valid: !numericalFailure, errors: numericalFailure ? ["solver:convergence"] : [], frames,
-      duration: t, stroke: g0.stroke, barrelLength: L, barrelVolume: g0.barrelVolume, cylinderVolume: g0.sweptVolume, ratio: g0.sweptVolume / g0.barrelVolume,
+      duration: t, stroke: g0.stroke, nominalStroke: p.strokeLength / 1000, bumperThickness: p.bumperThickness / 1000,
+      barrelLength: L, barrelVolume: g0.barrelVolume, cylinderVolume: g0.sweptVolume, ratio: g0.sweptVolume / g0.barrelVolume,
       ambientPressure: pa, engageTime, decelTime, strongBrakeTime, reboundTime, usefulTime, exitTime, pistonHitTime,
       preContactReversalTime, contactReboundTime, maxPistonRetreat, maxPreContactRetreat,
       exitVelocity, exitEnergy, exitPressure, exitGasMass, pistonImpactVelocity: impactVelocity,
@@ -1529,7 +1550,7 @@
       dischargeComplete: exited && Math.abs(final.pc - pa) < .01 * pa && Math.abs(final.pb - pa) < .01 * pa
     };
   }
-  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, geometry, pinVolume, pinDiameter, springState, springForce, springEnergy, massFlow, passage, simulate };
+  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, contactStroke, geometry, pinVolume, pinDiameter, springState, springForce, springEnergy, massFlow, passage, simulate };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PneumaticPhysics = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
@@ -1540,6 +1561,7 @@
   const P = typeof module !== "undefined" && module.exports ? require("./physics.js") : root.PneumaticPhysics;
   const SCHEMA = 3, KEY = "ssg10-pneumatic-lab-v3", OLD_KEY = "ssg10-pneumatic-lab-v2";
   const LENGTH_FIELDS = ["springLengthMode", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"];
+  const BUMPER_FIELDS = ["bumperThickness"];
   const fps = v => v / .3048;
   const energy = (mass, speed) => .5 * mass / 1000 * (speed * .3048) ** 2;
   function reference() {
@@ -1552,7 +1574,10 @@
     const sigma = Number(row.sigma ?? 1);
     // v3.0 had no length mode: only add inactive defaults to a complete old snapshot.
     // Preserve confirmation/role/version; the old solver version remains fit-ineligible.
-    const previousComplete = row.solverVersion === "3.0.0" && row.setup && LENGTH_FIELDS.every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => !LENGTH_FIELDS.includes(k)).every(k => Object.hasOwn(row.setup, k));
+    const previousComplete = row.setup && (
+      row.solverVersion === "3.0.0" && [...LENGTH_FIELDS, ...BUMPER_FIELDS].every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => ![...LENGTH_FIELDS, ...BUMPER_FIELDS].includes(k)).every(k => Object.hasOwn(row.setup, k)) ||
+      row.solverVersion === "3.1.1" && BUMPER_FIELDS.every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => !BUMPER_FIELDS.includes(k)).every(k => Object.hasOwn(row.setup, k))
+    );
     const setupComplete = row.setup && (previousComplete || Object.keys(P.DEFAULTS).every(k => Object.hasOwn(row.setup, k)));
     const setup = !legacy && setupComplete && P.validate(row.setup).length === 0 ? P.normalize(row.setup) : null;
     const provenance = Object.fromEntries(Object.entries(row.provenance || {}).filter(([k, v]) => ["geometry", "spring"].includes(k) && ["assumed", "measured"].includes(v)));
@@ -1647,13 +1672,13 @@
   const GROUPS = Object.freeze({
     cylinder: ["cylinderBore", "strokeLength", "deadVolume"],
     barrel: ["barrelLength", "barrelDiameter"],
-    head: ["headBore", "headLength", "nozzleBore", "nozzleLength", "breechVolume"],
+    head: ["headBore", "headLength", "nozzleBore", "nozzleLength", "bumperThickness", "breechVolume"],
     piston: ["pistonMass"],
     airbrake: ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper"],
     spring: ["springStiffness", "springPreload", "springMass", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils"],
     bb: ["bbMass", "bbDiameter"]
   });
-  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], springFreeLength: [0,500], springInstalledLength: [0,500], springCutLength: [0,400], springActiveCoils: [0,200], springRemovedCoils: [0,200], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
+  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], bumperThickness: [0,20], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], springFreeLength: [0,500], springInstalledLength: [0,500], springCutLength: [0,400], springActiveCoils: [0,200], springRemovedCoils: [0,200], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
   const WEIGHTS = Object.freeze({ balanced: [.35,.2,.15,.30], quiet: [.45,.25,.2,.10], efficient: [.15,.10,.05,.70] });
   const HORIZON_MS = 250;
   const clone = v => JSON.parse(JSON.stringify(v));
@@ -1830,9 +1855,10 @@
     // A shared axial scale for stroke AND head passages prevents the pin from
     // entering a drawn head before the solver's actual geometric entry event.
     const face0 = 110, scale = 430 / (p.strokeLength + p.headLength + p.nozzleLength);
-    const head = face0 + p.strokeLength * scale, step = head + p.headLength * scale;
-    const passageEnd = step + p.nozzleLength * scale, face = face0 + pistonX * 1000 * scale;
-    return { wall: 40, face0, face, head, step, passageEnd, barrelStart: passageEnd + 20, end: 1040,
+    const contact = face0 + (p.strokeLength - p.bumperThickness) * scale;
+    const rigidHead = face0 + p.strokeLength * scale, step = rigidHead + p.headLength * scale;
+    const head = contact, passageEnd = step + p.nozzleLength * scale, face = face0 + pistonX * 1000 * scale;
+    return { wall: 40, face0, face, contact, rigidHead, bumperWidth: rigidHead - contact, head, step, passageEnd, barrelStart: passageEnd + 20, end: 1040,
       pinLength: p.airbrakeLength * scale, pinTip: face + p.airbrakeLength * scale, scale };
   }
   const api = { timeline, frameAt, mechanism };
@@ -1892,7 +1918,7 @@
   "use strict";
   const CATEGORIES = [
     ["geometry", "Cylinder & barrel", "Cilindar i cijev"], ["masses", "Piston & BB", "Piston i BB"],
-    ["airbrake", "Airbrake & head", "Zračna kočnica i glava"], ["spring", "Spring", "Opruga"],
+    ["airbrake", "Airbrake, bumper & head", "Zračna kočnica, gumica i glava"], ["spring", "Spring", "Opruga"],
     ["losses", "Losses & environment", "Gubici i okoliš"], ["rifle", "Rifle presets", "Predlošci replika"],
     ["solver", "Timing & solver", "Vrijeme i rješavač"]
   ];
@@ -2110,8 +2136,8 @@
       <p class="sound-quantity">${t("Modeled energy at first contact · ½mv²", "Modelirana energija pri prvom kontaktu · ½mv²")}</p>
       ${comparisonMarkup(q.impactComparison, referenceImpact, "mJ", "impact", t, fmt)}
       <p><strong>${t("What it means:", "Što to znači:")}</strong> ${t("This is the piston energy that reaches the cylinder head—the source of the mechanical thump. More energy can feed a stronger strike, but the bumper determines how quickly it is absorbed. Energy alone does not give peak force or loudness.", "To je energija kojom piston dolazi do glave cilindra — izvor mehaničkog udarca. Više energije može doprinijeti jačem udaru, ali odbojnik određuje koliko se brzo apsorbira. Sama energija ne određuje vršnu silu ni glasnoću.")}</p>
-      <p>${t("Actual sound also depends on bumper material, spring vibration and receiver/stock resonance. No dB or durability prediction.", "Stvarni zvuk ovisi i o materijalu odbojnika, vibraciji opruge te rezonanciji kućišta i kundaka. Ovo nije predviđanje dB ni trajnosti.")}</p>
-      <p class="sound-measured">${t("First-contact speed", "Brzina pri prvom kontaktu")}: <strong>${fmt(q.impact === null ? null : s.pistonImpactVelocity, 2, "m/s")}</strong></p></article>
+      <p>${t("Actual sound also depends on bumper stiffness, damping, contact duration, spring vibration and receiver/stock resonance. Thickness changes geometry; restitution changes rebound. Neither value determines dB or durability.", "Stvarni zvuk ovisi i o krutosti gumice, prigušenju, trajanju kontakta, vibraciji opruge te rezonanciji kućišta i kundaka. Debljina mijenja geometriju, a koeficijent odskoka povrat. Nijedna vrijednost ne određuje dB ni trajnost.")}</p>
+      <p class="sound-measured">${t("First-contact speed", "Brzina pri prvom kontaktu")}: <strong>${fmt(q.impact === null ? null : s.pistonImpactVelocity, 2, "m/s")}</strong> · ${t("Added bumper", "Dodatna gumica")}: <strong>${fmt(s.params?.bumperThickness, 1, "mm")}</strong> · ${t("restitution", "odskok")}: <strong>${fmt(s.params?.restitution, 2)}</strong></p></article>
       <article class="intensity sound-explainer muzzle-primary" data-comparison="${q.flowComparison.status}"><div class="intensity-head"><strong>${t("Muzzle blast — escaping air", "Prasak na ustima — izlazak zraka")}</strong><output>${fmt(flow, 2, "g/s")}</output></div>
       <p class="sound-quantity">${t("Peak modeled muzzle outflow observed during this run", "Najveći modelirani protok na ustima opažen tijekom simulacije")}</p>
       ${comparisonMarkup(q.flowComparison, referenceFlow, "g/s", "flow", t, fmt)}
@@ -2134,7 +2160,7 @@
   const B = typeof module !== "undefined" && module.exports ? require("./playback.js") : root.PneumaticPlayback;
   const clamp = (v, low = 0, high = 1) => Math.max(low, Math.min(high, v));
   function draw(ctx, w, h, p, shot, f, t, fmt) {
-    const { wall, head, face, step, passageEnd, barrelStart, end, pinLength, scale } = B.mechanism(p, f.pistonX);
+    const { wall, head, rigidHead, bumperWidth, face, step, passageEnd, barrelStart, end, pinLength, scale } = B.mechanism(p, f.pistonX);
     const axis = 156, top = 100, bottom = 212;
     const bb = f.bbExited ? end + (f.t - shot.exitTime) * shot.exitVelocity * (end - barrelStart) / shot.barrelLength : barrelStart + f.bbX / shot.barrelLength * (end - barrelStart);
     const radial = 26 / Math.max(p.headBore, p.nozzleBore, p.airbrakeDiameter);
@@ -2184,9 +2210,9 @@
     for (let x = 20; x < 1100; x += 30) line(x, 62, x, 227, "rgba(154,187,204,.035)");
     ctx.setLineDash([3, 6]); line(30, axis, 1080, axis, "#36505b"); ctx.setLineDash([]);
     const steel = gradient(0, top, 0, bottom, [[0, "#80949f"], [.07, "#384955"], [.45, "#18272f"], [.9, "#455b67"], [1, "#9eafb4"]]);
-    rect(wall - 6, top - 5, head - wall + 12, bottom - top + 10, steel, "#597480");
+    rect(wall - 6, top - 5, rigidHead - wall + 12, bottom - top + 10, steel, "#597480");
     rect(wall, top + 5, head - wall, bottom - top - 10, "#0b141c", "#202f39");
-    line(wall, top - 2, head, top - 2, "#afccd266");
+    line(wall, top - 2, rigidHead, top - 2, "#afccd266");
     rect(wall - 9, top + 10, 12, 92, "#516670", "#8ba0aa");
     gas(face, top + 6, head - face, 100, cylinderGlow, amber, 34, f.flow);
     // Spring's dark/back and illuminated/front halves share the actual endpoints.
@@ -2208,9 +2234,21 @@
     rect(face - 32, top + 7, 32, 98, pistonMetal, "#bbd0d8");
     rect(face - 7, top + 6, 5, 100, "#182e31", "#78c6bd");
     for (let i = 0; i < 3; i++) line(face - 26 + i * 5, top + 16, face - 26 + i * 5, bottom - 16, "#142a394d");
-    // Stepped head and nozzle, preserving the same axial scale as the cylinder.
-    rect(head, axis - 35, passageEnd - head, 70, gradient(0, axis - 35, 0, axis + 35, [[0, "#abbbc3"], [.1, "#526675"], [.55, "#273d49"], [1, "#758d9a"]]), "#8199a5");
-    for (let x = head + 5; x < passageEnd; x += 7) line(x, axis - 34, x, axis - 26, "#a9bbc544");
+    // Stepped rigid head and nozzle. An installed bumper occupies the annular
+    // space ahead of the head; its opening is approximated by headBore.
+    rect(rigidHead, axis - 35, passageEnd - rigidHead, 70, gradient(0, axis - 35, 0, axis + 35, [[0, "#abbbc3"], [.1, "#526675"], [.55, "#273d49"], [1, "#758d9a"]]), "#8199a5");
+    for (let x = rigidHead + 5; x < passageEnd; x += 7) line(x, axis - 34, x, axis - 26, "#a9bbc544");
+    if (bumperWidth > 0) {
+      const hole = p.headBore * radial, touching = f.pistonHit && Math.abs(face - head) < Math.max(.8, scale * .03);
+      const bulge = touching ? Math.min(5, 1 + bumperWidth * .2) : 0;
+      const rubber = gradient(head, 0, rigidHead, 0, [[0, touching ? "#7ff4ce" : "#42bca0"], [.48, "#173f3b"], [1, "#0d2828"]]);
+      rect(head, top + 5 - bulge, bumperWidth, axis - hole / 2 - (top + 5) + bulge, rubber, "#72d7c3");
+      rect(head, axis + hole / 2, bumperWidth, bottom - 5 - (axis + hole / 2) + bulge, rubber, "#72d7c3");
+      if (touching) {
+        line(head + Math.min(bumperWidth * .35, 3), top + 9, head + Math.min(bumperWidth * .35, 3), axis - hole / 2 - 3, "#c7fff0", 2);
+        line(head + Math.min(bumperWidth * .35, 3), axis + hole / 2 + 3, head + Math.min(bumperWidth * .35, 3), bottom - 9, "#c7fff0", 2);
+      }
+    }
     for (const [x, width, height] of [[head, step - head, p.headBore * radial], [step, passageEnd - step, p.nozzleBore * radial]]) {
       rect(x, axis - height / 2, width, height, "#081119", "#738b97");
       gas(x, axis - height / 2, width, height, barrelGlow, cyan, 8, f.flow);
@@ -2267,7 +2305,7 @@
     ctx.font = `${Math.max(14, 12 * 1100 / w)}px system-ui`; ctx.fillStyle = "#bdced6";
     if (w >= 650) {
       ctx.fillText(t("SPRING / PISTON", "OPRUGA / PISTON"), 40, 36);
-      ctx.fillText(t("HEAD / NOZZLE", "GLAVA / MLAZNICA"), 425, 36);
+      ctx.fillText(p.bumperThickness > 0 ? t("BUMPER / HEAD / NOZZLE", "ODBOJNIK / GLAVA / MLAZNICA") : t("HEAD / NOZZLE", "GLAVA / MLAZNICA"), 425, 36);
       ctx.fillText(t("INNER BARREL", "UNUTARNJA CIJEV"), 760, 36);
       ctx.fillStyle = amber; ctx.fillText(`${t("Cylinder", "Cilindar")}  ${fmt((f.cylinderPressure - shot.ambientPressure) / 1e5, 2)} bar(g)`, 40, 266);
       ctx.fillStyle = cyan; ctx.fillText(`${t("Behind BB", "Iza BB-a")}  ${fmt((f.pressure - shot.ambientPressure) / 1e5, 2)} bar(g)`, 660, 266);
@@ -2276,7 +2314,7 @@
       ctx.fillStyle = "#99aeb9";
       ctx.fillText(`${t("Pin overlap", "Preklapanje pina")} ${fmt(f.insertion * 1000, 2)} mm  ·  ${t("Open area", "Otvor")} ${fmt(f.openArea * 1e6, 3)} mm²`, 40, 311);
     } else {
-      ctx.fillText(t("PISTON → HEAD → BB", "PISTON → GLAVA → BB"), 40, 36);
+      ctx.fillText(p.bumperThickness > 0 ? t("PISTON → BUMPER → BB", "PISTON → GUMICA → BB") : t("PISTON → HEAD → BB", "PISTON → GLAVA → BB"), 40, 36);
       ctx.fillText(`${t("Pin overlap", "Preklapanje pina")}: ${fmt(f.insertion * 1000, 2)} mm`, 40, 266);
       ctx.fillText(`${t("Open area", "Otvor")}: ${fmt(f.openArea * 1e6, 3)} mm²`, 40, 308);
     }
@@ -2312,7 +2350,7 @@
   let workspace = null;
   const fields = {
     cylinderBore: ["Cylinder internal diameter", "Unutarnji promjer cilindra", "mm", 15, 35, .01],
-    strokeLength: ["Actual piston stroke", "Stvarni hod pistona", "mm", 20, 150, .1],
+    strokeLength: ["Nominal piston stroke before added bumper", "Nominalni hod pistona prije dodatne gumice", "mm", 20, 150, .1],
     barrelLength: ["Inner-barrel length", "Duljina unutarnje cijevi", "mm", 100, 800, 1],
     barrelDiameter: ["Inner-barrel diameter", "Promjer unutarnje cijevi", "mm", 5.8, 6.5, .01],
     pistonMass: ["Assembled piston mass", "Masa sastavljenog pistona", "g", 5, 300, .1],
@@ -2322,6 +2360,7 @@
     headLength: ["Receiving-passage length", "Duljina ulaznog provrta", "mm", 1, 40, .1],
     nozzleBore: ["Downstream nozzle diameter", "Promjer izlaznog kanala mlaznice", "mm", 1, 10, .01],
     nozzleLength: ["Downstream nozzle length", "Duljina izlaznog kanala mlaznice", "mm", 1, 50, .1],
+    bumperThickness: ["Added head-bumper thickness (0 = none)", "Debljina dodatne odbojne gumice (0 = nema)", "mm", 0, 20, .1],
     airbrakeLength: ["Pin projection from piston face", "Izbočenje pina od čela pistona", "mm", 0, 40, .1],
     airbrakeDiameter: ["Airbrake maximum / shaft diameter", "Najveći promjer / promjer tijela pina", "mm", .5, 9, .01],
     airbrakeTipDiameter: ["Airbrake tip diameter", "Promjer vrha pina", "mm", 0, 9, .01],
@@ -2329,10 +2368,10 @@
     deadVolume: ["Cylinder-side residual cavity", "Preostali volumen na strani cilindra", "cm³", .05, 5, .01],
     breechVolume: ["Head / nozzle / breech storage", "Volumen glave, mlaznice i komore", "cm³", .05, 5, .01],
     springStiffness: ["Spring stiffness before any simulated cut", "Krutost opruge prije simuliranog skraćivanja", "N/m", 0, 4000, 10],
-    springPreload: ["Spring compression at front contact", "Stlačenje opruge pri prednjem kontaktu", "mm", 0, 150, .5],
+    springPreload: ["Spring compression at rigid-head plane before added bumper", "Stlačenje opruge na ravnini krute glave prije dodatne gumice", "mm", 0, 150, .5],
     springMass: ["Installed spring mass (after any cut)", "Masa ugrađene opruge (nakon skraćivanja)", "g", 0, 100, .1],
     springFreeLength: ["Unloaded spring length before simulated cut", "Slobodna duljina opruge prije simuliranog skraćivanja", "mm", 0, 500, .5],
-    springInstalledLength: ["Spring-seat distance at piston front contact", "Razmak oslonaca opruge pri prednjem kontaktu pistona", "mm", 0, 500, .5],
+    springInstalledLength: ["Spring-seat distance at rigid-head plane before added bumper", "Razmak oslonaca opruge na ravnini krute glave prije dodatne gumice", "mm", 0, 500, .5],
     springCutLength: ["Free length removed by cutting", "Smanjenje slobodne duljine rezanjem", "mm", 0, 400, .5],
     springActiveCoils: ["Active coils before cutting (0 = unknown)", "Aktivni zavoji prije rezanja (0 = nepoznato)", "turns", 0, 200, .25],
     springRemovedCoils: ["Active coils removed (0 = inactive ends only)", "Uklonjeni aktivni zavoji (0 = samo neaktivni krajevi)", "turns", 0, 200, .25],
@@ -2397,7 +2436,7 @@
   function springMarkup() {
     return `<details id="springDetails" ${p.springLengthMode ? "open" : ""}><summary>${t("Spring length, cutting & mechanical losses", "Duljina i skraćivanje opruge te mehanički gubici")}</summary>
       <label class="provenance"><input id="springLengthMode" type="checkbox" ${p.springLengthMode ? "checked" : ""}>${t("Calculate from spring lengths / simulate cutting", "Računaj iz duljina opruge / simuliraj skraćivanje")}</label>
-      <p class="field-help">${t("Off: enter compression directly. On: length measurements replace that input. Zero lengths mean unknown; no SSG10 dimensions are assumed. Measure the front-contact seat distance after spacers—do not subtract them again.", "Isključeno: izravno unesite stlačenje. Uključeno: zamjenjuju ga izmjerene duljine. Nulte duljine znače nepoznato; dimenzije SSG10 nisu pretpostavljene. Razmak oslonaca pri prednjem kontaktu mjerite s odstojnicima — ne oduzimajte ih ponovno.")}</p>
+      <p class="field-help">${t("Off: enter compression directly. On: length measurements replace that input. Zero lengths mean unknown; no SSG10 dimensions are assumed. The entered front seat/preload uses the rigid-head plane before the added bumper. If you measure at an installed pad, add its thickness back to the seat distance; the model then moves contact rearward once.", "Isključeno: izravno unesite stlačenje. Uključeno: zamjenjuju ga izmjerene duljine. Nulte duljine znače nepoznato; dimenzije SSG10 nisu pretpostavljene. Uneseni prednji razmak/prednaprezanje odnosi se na ravninu krute glave prije dodatne gumice. Ako mjerite na ugrađenoj gumici, njezinu debljinu dodajte natrag razmaku oslonaca; model zatim samo jednom pomiče kontakt unatrag.")}</p>
       <div id="springLengthFields" ${p.springLengthMode ? "" : "hidden"}>${["springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"].map(field).join("")}
       <p class="field-help">${t("Cut length is the reduction in unloaded axial length, not wire length. Count removed active coils separately; length alone cannot tell us the new stiffness. More active coils removed → higher estimated stiffness, but shorter free length → less installed compression. Actual output can go down despite higher stiffness.", "Duljina reza je smanjenje slobodne uzdužne duljine, ne duljina žice. Uklonjene aktivne zavoje unesite zasebno; sama duljina ne određuje novu krutost. Više uklonjenih aktivnih zavoja → veća procijenjena krutost, ali kraća opruga → manje ugrađeno stlačenje. Izlazna energija može pasti unatoč većoj krutosti.")}</p>
       <p class="field-help">${t("Cutting is an estimate for uniform linear coils with unchanged wire, diameter and effective end support. Progressive coils and changed ends need new force measurements. Solid height must describe the remaining spring; a positive clearance is not a certified safety margin. Slack/unseating is outside this model.", "Skraćivanje je procjena za jednolike linearne zavoje uz istu žicu, promjer i efektivni oslonac krajeva. Progresivni zavoji i promijenjeni krajevi traže novo mjerenje sile. Duljina potpuno stisnute opruge mora opisivati preostalu oprugu; pozitivan zazor nije potvrđena sigurnosna margina. Labava opruga i gubitak kontakta izvan su ovog modela.")}</p></div>
@@ -2406,7 +2445,7 @@
       <label for="springCurve">${t("Optional measured force curve: compression mm, force N (one pair per line)", "Neobavezna izmjerena krivulja: stlačenje mm, sila N (jedan par po retku)")}</label><textarea id="springCurve" rows="4" placeholder="50, 27.5&#10;100, 55&#10;140, 77">${p.springCurve.map(v => v.join(", ")).join("\n")}</textarea>
       <p class="field-help">${t("A curve replaces linear stiffness and must cover the installed compression range. It cannot be reused for a simulated cut. For an already cut, measured spring, enter its current free length and force curve with cut length and removed coils set to zero. Estimated cuts are excluded from calibration fitting.", "Krivulja zamjenjuje linearnu krutost i mora pokrivati raspon ugrađenog stlačenja. Ne može se ponovno koristiti za simulirani rez. Za već skraćenu i izmjerenu oprugu unesite trenutačnu slobodnu duljinu i krivulju sile, a rez i uklonjene zavoje postavite na nulu. Procijenjeni rezovi ne koriste se za kalibracijsku prilagodbu.")}</p>
       ${provenanceControl("spring", "I have measured the spring force and installed compression", "Izmjerio/la sam silu opruge i ugrađeno stlačenje")}
-      ${["pistonFriction", "sealFriction", "rearDamping", "restitution"].map(field).join("")}</details>`;
+      ${["pistonFriction", "sealFriction", "rearDamping"].map(field).join("")}</details>`;
   }
   function syncSpringControls() {
     if (!$("springLengthFields")) return;
@@ -2451,11 +2490,13 @@
         <label for="component">${t("Piston / head identity", "Piston / glava cilindra")}</label><select id="component"><option value="amp" ${component === "amp" ? "selected" : ""}>AMP / Tridos Ultimate SSG10</option><option value="scorpion" ${component === "scorpion" ? "selected" : ""}>Stalker Scorpion</option><option value="custom" ${component === "custom" ? "selected" : ""}>${t("Other / custom", "Drugo / prilagođeno")}</option></select>
         <p class="field-help">${t("Identity labels never apply hidden power multipliers. AMP: nominal 71 g at Tridos; manufacturer lists 69–72 g depending on pin. Weigh the complete assembly. Exact head and pin dimensions remain unknown until measured.", "Naziv dijela ne uvodi skrivene množitelje snage. AMP: Tridos navodi 71 g, proizvođač 69–72 g ovisno o pinu. Izvažite cijeli sklop. Točne dimenzije glave i pina nepoznate su do mjerenja.")}</p>
         <label for="springLabel">${t("Spring identity (label only)", "Oznaka opruge (samo naziv)")}</label><select id="springLabel">${["unspecified", "M110", "M120", "M130", "M140", "M150", "M160", "M170", "M180", "M190", "M220", "custom"].map(v => `<option value="${v}" ${springLabel === v ? "selected" : ""}>${v === "unspecified" ? t("Unknown / not recorded", "Nepoznato / nije zabilježeno") : v === "custom" ? t("Other measured spring", "Druga izmjerena opruga") : v}</option>`).join("")}</select><p class="field-help">${t("Use the force data below. An M-rating alone does not determine spring stiffness or preload.", "Koristite podatke o sili u nastavku. Oznaka M ne određuje krutost ni prednaprezanje opruge.")}</p></section>
-        ${group("Cylinder and barrel", "Cilindar i cijev", ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter"], t("Short stroke here moves the cocked piston forward while keeping bore, front contact and spring preload at contact fixed. A front spacer or changed piston needs its actual stroke, pin projection, residual volume and spring-seat measurements entered separately.", "Skraćeni hod ovdje pomiče zapeti piston naprijed uz nepromijenjen promjer, prednji kontakt i prednaprezanje pri kontaktu. Za prednji odstojnik ili drugi piston zasebno unesite stvarni hod, izbočenje pina, preostali volumen i geometriju opruge."))}
+        ${group("Cylinder and barrel", "Cilindar i cijev", ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter"], t("Short stroke changes the cocked position. Added bumper thickness below moves the front contact plane rearward instead; the app shows the resulting effective travel separately.", "Skraćeni hod mijenja zapeti položaj. Debljina dodatne gumice niže umjesto toga pomiče prednju ravninu kontakta unatrag; aplikacija zasebno prikazuje dobiveni efektivni hod."))}
         <p class="small-note" id="shortStrokeDynamic"></p>
         ${group("Moving masses", "Pomične mase", ["pistonMass", "bbMass", "bbDiameter"])}<div class="preset-row">${[58, 65, 68, 72, 76, 82].map(m => `<button class="preset" type="button" data-mass="${m}" aria-pressed="${p.pistonMass === m}">${m} g</button>`).join("")}</div>
-        <details open><summary>${t("Head and airbrake geometry", "Geometrija glave i zračne kočnice")}</summary><p class="field-help">${t("Pneumatic cushioning: the pin restricts airflow. Cylinder pressure rises relative to the air behind the BB, opposing piston motion. The rubber bumper then absorbs any remaining contact energy. These are separate effects.", "Pneumatsko ublažavanje: pin ograničava protok. Tlak u cilindru raste u odnosu na tlak iza BB-a i suprotstavlja se gibanju pistona. Gumeni odbojnik zatim apsorbira preostalu kontaktnu energiju. To su odvojeni učinci.")}</p><label for="pinLabel">${t("Installed AMP pin", "Ugrađeni AMP pin")}</label><select id="pinLabel">${[["custom", "Measured / custom", "Izmjeren / prilagođen"], ["plug", "Plug / no airbrake", "Čep / bez zračne kočnice"], ["short", "Short pin — enter measured size", "Kratki pin — unesite dimenzije"], ["medium", "Medium pin — enter measured size", "Srednji pin — unesite dimenzije"], ["long", "Long pin — enter measured size", "Dugi pin — unesite dimenzije"]].map(([v, en, hr]) => `<option value="${v}" ${pinLabel === v ? "selected" : ""}>${t(en, hr)}</option>`).join("")}</select>
-        ${["headBore", "headLength", "nozzleBore", "nozzleLength", "airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "deadVolume", "breechVolume"].map(field).join("")}<p class="small-note" id="clearanceNote"></p><p class="field-help">${t("Internal diameters—not the outer head diameter. Model: straight shaft with tapered tip and two stepped head passages. Storage volumes are total cavity volumes, before subtracting the pin; count each cavity once. Bumper thickness affects the entered contact plane/stroke.", "Unutarnji promjeri — ne vanjski promjer glave. Model: ravno tijelo pina s konusnim vrhom i dva provrta glave. Volumeni su ukupni volumeni šupljina prije oduzimanja pina; svaku šupljinu računajte jednom. Debljina odbojnika utječe na unesenu ravninu kontakta / hod.")}</p>${provenanceControl("geometry", "I have measured the geometry and assembled masses", "Izmjerio/la sam geometriju i mase sklopova")}</details>
+        <details open><summary>${t("Head, bumper and airbrake geometry", "Geometrija glave, odbojne gumice i zračne kočnice")}</summary><p class="field-help">${t("Pneumatic cushioning: the pin restricts airflow before contact. The rubber bumper acts only when the piston reaches it. These are separate effects.", "Pneumatsko ublažavanje: pin ograničava protok prije kontakta. Odbojna gumica djeluje tek kad je piston dotakne. To su odvojeni učinci.")}</p>
+        <section class="control-group bumper-controls"><p class="group-label">${t("Added cylinder-head bumper", "Dodatna odbojna gumica glave cilindra")}</p>${["bumperThickness", "restitution"].map(field).join("")}<p class="field-help">${t("Thickness 0 mm means no added pad. A thicker annular pad reduces piston travel and swept volume, starts its central passage earlier and leaves more spring compression at contact. The opening is approximated by the head bore. Restitution controls post-contact rebound only; it is not rubber hardness, absorbed sound, peak force or dB. Enter measured thickness and treat restitution as an unknown until tested.", "Debljina 0 mm znači da nema dodatne gumice. Deblja prstenasta gumica smanjuje hod pistona i radni volumen, ranije započinje središnji kanal te ostavlja veću stlačenost opruge pri kontaktu. Otvor se aproksimira promjerom provrta glave. Koeficijent odskoka određuje samo povrat nakon kontakta; nije tvrdoća gume, apsorbirani zvuk, vršna sila ni dB. Unesite izmjerenu debljinu, a koeficijent smatrajte nepoznatim dok ga ne ispitate.")}</p></section>
+        <label for="pinLabel">${t("Installed AMP pin", "Ugrađeni AMP pin")}</label><select id="pinLabel">${[["custom", "Measured / custom", "Izmjeren / prilagođen"], ["plug", "Plug / no airbrake", "Čep / bez zračne kočnice"], ["short", "Short pin — enter measured size", "Kratki pin — unesite dimenzije"], ["medium", "Medium pin — enter measured size", "Srednji pin — unesite dimenzije"], ["long", "Long pin — enter measured size", "Dugi pin — unesite dimenzije"]].map(([v, en, hr]) => `<option value="${v}" ${pinLabel === v ? "selected" : ""}>${t(en, hr)}</option>`).join("")}</select>
+        ${["headBore", "headLength", "nozzleBore", "nozzleLength", "airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "deadVolume", "breechVolume"].map(field).join("")}<p class="small-note" id="clearanceNote"></p><p class="field-help">${t("Internal diameters—not the outer head diameter. Model: straight shaft with tapered tip, an annular bumper using the head-bore opening and two stepped passages. Dead volume is the bare rigid-head cavity; the pad's annular solid volume is subtracted automatically. Measure real installed geometry because pad holes and deformation vary.", "Unutarnji promjeri — ne vanjski promjer glave. Model: ravno tijelo pina s konusnim vrhom, prstenasta gumica s otvorom jednakim provrtu glave i dva stepenasta kanala. Preostali volumen predstavlja šupljinu gole krute glave; puni prstenasti volumen gumice oduzima se automatski. Izmjerite stvarnu ugrađenu geometriju jer se otvori i deformacija gumica razlikuju.")}</p>${provenanceControl("geometry", "I have measured the geometry and assembled masses", "Izmjerio/la sam geometriju i mase sklopova")}</details>
         ${springMarkup()}
         <details><summary>${t("Airflow, friction and environment", "Protok, trenje i okoliš")}</summary>${["dischargeCoefficient", "pistonLeak", "nozzleLeak", "bbLeakCoefficient", "bbBreakaway", "barrelDrag", "heatTransfer", "ambientPressure", "airTemperature"].map(field).join("")}<p class="field-help">${t("Leak areas include their discharge coefficient. Zero heat conductance is an adiabatic starting approximation. All loss coefficients need evidence; they are not efficiency percentages.", "Površine curenja uključuju koeficijent protoka. Nulta toplinska vodljivost početna je adijabatska aproksimacija. Svi koeficijenti gubitaka zahtijevaju potvrdu; nisu postoci učinkovitosti.")}</p></details>
         <details><summary>${t("Timing criteria and solver", "Vremenski kriteriji i rješavač")}</summary>${["usefulFraction", "decelThreshold", "maxTime"].map(field).join("")}<p class="field-help">${t("Adaptive midpoint integration, maximum step 0.01 ms. Thresholds are user conventions, not physical switches. The model can end before contact or complete discharge.", "Adaptivna integracija metodom srednje točke, najveći korak 0,01 ms. Pragovi su dogovoreni kriteriji, a ne fizikalne sklopke. Model može završiti prije kontakta ili potpunog pražnjenja.")}</p></details>
@@ -2486,7 +2527,7 @@
   }
   function optimizerMarkup() {
     ensureOptimizer();
-    const labels = { cylinder: ["Cylinder", "Cilindar"], barrel: ["Barrel", "Cijev"], head: ["Head / nozzle", "Glava / mlaznica"], piston: ["Piston", "Piston"], airbrake: ["Airbrake", "Zračna kočnica"], spring: ["Spring", "Opruga"], bb: ["BB", "BB"] };
+    const labels = { cylinder: ["Cylinder", "Cilindar"], barrel: ["Barrel", "Cijev"], head: ["Head / bumper / nozzle", "Glava / gumica / mlaznica"], piston: ["Piston", "Piston"], airbrake: ["Airbrake", "Zračna kočnica"], spring: ["Spring", "Opruga"], bb: ["BB", "BB"] };
     return `<section class="panel optimizer"><div class="optimizer-heading"><div><h2>${t("Find a quieter, efficient setup", "Pronađi tišu i učinkovitiju konfiguraciju")}</h2><p class="small-note">${t("Freeze the parts you want to keep. Search only the hardware choices you can change.", "Zamrznite dijelove koje želite zadržati. Pretražujte samo zamjenjive dijelove.")}</p></div><button class="primary-button" type="button" id="toggleOptimizer" aria-expanded="${optimizer.open}" aria-controls="optimizerBody">${t("Freeze parts & optimize", "Zamrzni dijelove i optimiziraj")}</button></div>
       <div id="optimizerBody" ${optimizer.open ? "" : "hidden"}><p class="optimizer-target">${t("Performance constraint: keep 95–105% of this setup’s predicted BB exit energy.", "Uvjet performansi: zadrži 95–105% predviđene izlazne energije BB-a trenutačne konfiguracije.")}</p>
       <p class="small-note">${t("Checked = frozen. Enter actual available choices separated by commas; use a dot for decimals. The current value is always included. Example piston masses and pin lengths are hypothetical—not verified compatible AMP parts. Changing geometry can require new sealing/friction measurements.", "Označeno = zamrznuto. Unesite stvarno dostupne vrijednosti odvojene zarezima; decimalni znak je točka. Trenutačna vrijednost uvijek je uključena. Primjeri masa pistona i duljina pina hipotetski su — nisu potvrđeni kompatibilni AMP dijelovi. Promjena geometrije može zahtijevati novo mjerenje brtvljenja i trenja.")}</p>
@@ -2608,7 +2649,7 @@
       ${p.springLengthMode ? `<p>${t("Resulting free length", "Dobivena slobodna duljina")}: <strong>${fmt(s.freeLength, 1, "mm")}</strong></p><p>${t("Cocked seat distance", "Razmak oslonaca pri zapinjanju")}: <strong>${fmt(s.cockedLength, 1, "mm")}</strong></p>` : ""}
       <p>${t("Compression · front / cocked", "Stlačenje · prednji kontakt / zapeto")}: <strong>${fmt(s.preload, 1)} / ${fmt(s.cockedCompression, 1)} mm</strong></p>
       <p>${p.springCurve.length ? t("Measured force curve active", "Aktivna izmjerena krivulja sile") : `${t("Effective stiffness", "Efektivna krutost")}: <strong>${fmt(s.stiffness, 1, "N/m")}</strong>${p.springLengthMode && p.springCutLength > 0 ? ` · ${t("cut estimate", "procjena reza")}` : ""}`}</p>
-      <p>${t("Force · front / cocked", "Sila · prednji kontakt / zapeto")}: <strong>${fmt(P.springForce(p, p.strokeLength / 1000), 2)} / ${fmt(P.springForce(p, 0), 2)} N</strong></p>
+      <p>${t("Force · bumper contact / cocked", "Sila · kontakt s gumicom / zapeto")}: <strong>${fmt(P.springForce(p, P.contactStroke(p)), 2)} / ${fmt(P.springForce(p, 0), 2)} N</strong></p>
       <p>${t("Available spring work", "Raspoloživi rad opruge")}: <strong>${fmt(P.springEnergy(p, 0), 3, "J")}</strong> · ${t("not BB exit energy", "nije izlazna energija BB-a")}</p>
       <p>${s.coilBindChecked ? `${t("Cocked clearance above solid height", "Zazor zapete opruge iznad potpuno stisnute duljine")}: ${fmt(s.cockedLength - p.springSolidLength, 1, "mm")}` : t("Coil bind not checked — solid height / seat geometry unknown.", "Potpuno stiskanje zavoja nije provjereno — nepoznata duljina / geometrija oslonaca.")}</p></div>`;
   }
@@ -2630,9 +2671,9 @@
   function updateResults() {
     if (!$("results")) return;
     updateSpringSummary();
-    const g = P.geometry(p, 0, 0), before = Math.max(0, p.strokeLength - p.airbrakeLength);
-    $("shortStrokeDynamic").textContent = t(`Swept volume: ${(g.sweptVolume * 1e6).toFixed(2)} cm³. Before pin entry: ${before.toFixed(1)} mm / ${(g.ac * before * 1000).toFixed(2)} cm³.`, `Radni volumen: ${(g.sweptVolume * 1e6).toFixed(2)} cm³. Prije ulaska pina: ${before.toFixed(1)} mm / ${(g.ac * before * 1000).toFixed(2)} cm³.`);
-    $("clearanceNote").textContent = t(`Full-shaft radial clearance: ${g.gap.toFixed(3)} mm; annular area: ${(g.annulus * 1e6).toFixed(3)} mm². This is geometry, not a flow rate.`, `Radijalni zazor uz tijelo pina: ${g.gap.toFixed(3)} mm; prstenasta površina: ${(g.annulus * 1e6).toFixed(3)} mm². To je geometrija, a ne protok.`);
+    const g = P.geometry(p, 0, 0), effectiveStroke = g.stroke * 1000, before = Math.max(0, effectiveStroke - p.airbrakeLength);
+    $("shortStrokeDynamic").textContent = t(`Effective piston travel: ${effectiveStroke.toFixed(1)} mm (${p.bumperThickness.toFixed(1)} mm added bumper). Swept volume: ${(g.sweptVolume * 1e6).toFixed(2)} cm³. Before pin entry: ${before.toFixed(1)} mm / ${(g.ac * before * 1000).toFixed(2)} cm³.`, `Efektivni hod pistona: ${effectiveStroke.toFixed(1)} mm (${p.bumperThickness.toFixed(1)} mm dodatne gumice). Radni volumen: ${(g.sweptVolume * 1e6).toFixed(2)} cm³. Prije ulaska pina: ${before.toFixed(1)} mm / ${(g.ac * before * 1000).toFixed(2)} cm³.`);
+    $("clearanceNote").textContent = t(`Full-shaft radial clearance: ${g.gap.toFixed(3)} mm; annular area: ${(g.annulus * 1e6).toFixed(3)} mm². Added bumper solid volume: ${(g.bumperSolidVolume * 1e6).toFixed(3)} cm³. Geometry only—not flow or sound.`, `Radijalni zazor uz tijelo pina: ${g.gap.toFixed(3)} mm; prstenasta površina: ${(g.annulus * 1e6).toFixed(3)} mm². Puni volumen dodatne gumice: ${(g.bumperSolidVolume * 1e6).toFixed(3)} cm³. Samo geometrija — nije protok ni zvuk.`);
     if (!shot?.valid) {
       setResultState("invalid");
       $("resultError").textContent = t("Cannot simulate this setup. Check dimensions, clearances, residual volumes and spring data. Previous results are hidden: ", "Ovu konfiguraciju nije moguće simulirati. Provjerite dimenzije, zazore, preostale volumene i oprugu. Prethodni rezultati su skriveni: ") + (shot?.errors || []).join(" · "); return;
@@ -2645,6 +2686,7 @@
     next.innerHTML = `<div class="readout-grid">
       ${metric(t("Cylinder / barrel volumes", "Volumeni cilindra / cijevi"), `${fmt(s.cylinderVolume * 1e6, 2)} / ${fmt(s.barrelVolume * 1e6, 2)}`, "cm³", "geometry")}
       ${metric(t("Cylinder / barrel ratio", "Omjer cilindra / cijevi"), fmt(s.ratio, 2, ": 1"), t("Swept volume / barrel volume", "Radni volumen / volumen cijevi"), "geometry")}
+      ${metric(t("Bumper / effective contact travel", "Gumica / efektivni hod do kontakta"), `${fmt(p.bumperThickness, 1)} / ${fmt(s.stroke * 1000, 1)}`, "mm", "geometry")}
       ${metric(t("Predicted muzzle speed", "Predviđena izlazna brzina"), fmt(fps(s.exitVelocity), 1, "fps"), s.exitEnergy === null ? t("BB did not exit within the run", "BB nije izašao tijekom simulacije") : `${fmt(s.exitEnergy, 3, "J")} · ${t("conditional, not chrono", "uvjetno, nije kronograf")}`)}
       ${metric(t("Energy gained at slowing event", "Energija pri događaju usporavanja"), fmt(s.preBrakeShare === null ? null : s.preBrakeShare * 100, 1, "%"), t("Relative to exit energy; can exceed 100%", "U odnosu na izlaznu energiju; može prijeći 100%"))}
       ${metric(t("Peak cylinder / BB pressure", "Vršni tlak cilindra / iza BB-a"), `${fmt((s.peakCylinderPressure - s.ambientPressure) / 1e5, 2)} / ${fmt((s.peakPressure - s.ambientPressure) / 1e5, 2)}`, t("bar above atmosphere", "bar iznad atmosferskog tlaka"))}
@@ -2654,7 +2696,7 @@
       </div>
       ${!s.complete ? `<div class="lab-warning">${t("Run ended with missing events:", "Simulacija je završila bez događaja:")} ${s.exitTime === null ? t("BB exit. ", "Izlazak BB-a. ") : ""}${s.pistonHitTime === null ? t("Piston contact. ", "Kontakt pistona. ") : ""}${t("Missing contact is not a predicted soft landing. Increase modeled time if appropriate.", "Izostanak kontakta ne znači predviđen mekan udar. Po potrebi povećajte vrijeme simulacije.")}</div>` : ""}
       <section class="panel timing-card"><div class="timing-head"><strong>${verdict}</strong><span>${fmt(delta, 2, "ms")}</span></div><p class="small-note">${t("The amber event is measured from the modeled acceleration after entry—not proof that all slowing is caused by the pin. Compression can slow a piston without an airbrake. Green marks a chosen share of maximum BB energy before exit, not a universal optimum.", "Jantarni događaj temelji se na modeliranom ubrzanju nakon ulaska — nije dokaz da je sve usporavanje uzrokovano pinom. Kompresija može usporiti piston i bez kočnice. Zelena označuje odabrani udio najveće energije BB-a prije izlaska, ne univerzalni optimum.")}</p><div class="event-list">${events().map(([key, label, cls]) => `<button type="button" data-event="${key}" class="${cls}" ${s[key] === null ? "disabled" : ""}>${label}<br><span class="mono">${stamp(s[key])}</span></button>`).join("")}</div></section>
-      <section class="panel stage"><div class="stage-toolbar"><button class="primary-button" type="button" id="playButton">${t("Fire / play", "Opali / pokreni")}</button><button class="secondary-button" id="resetButton" type="button">${t("Reset", "Početak")}</button><input id="scrubber" aria-label="${t("Shot time", "Vrijeme opaljenja")}" type="range" min="0" max="1000" value="${fraction * 1000}"><span id="clock" class="clock mono"></span></div><canvas id="mechanism" role="img" aria-label="${t("Schematic piston, airbrake and BB positions; live numeric values below", "Shematski položaji pistona, pina i BB-a; brojčane vrijednosti ispod")}"></canvas><div id="phaseText" class="stage-status" aria-live="off"></div><div id="liveStrip" class="live-strip"></div><p class="results-note">${t("Schematic cutaway. Glow indicates modeled pressure; particles and trails illustrate flow and motion, not resolved gas dynamics or sound. Every cue pauses with model time. Signed arrows preserve reverse motion.", "Shematski presjek. Sjaj označuje modelirani tlak; čestice i tragovi ilustriraju protok i gibanje, ne detaljnu dinamiku plina ni zvuk. Sve se pauzira s vremenom modela. Strelice prikazuju i povratno gibanje.")}</p></section>
+      <section class="panel stage"><div class="stage-toolbar"><button class="primary-button" type="button" id="playButton">${t("Fire / play", "Opali / pokreni")}</button><button class="secondary-button" id="resetButton" type="button">${t("Reset", "Početak")}</button><input id="scrubber" aria-label="${t("Shot time", "Vrijeme opaljenja")}" type="range" min="0" max="1000" value="${fraction * 1000}"><span id="clock" class="clock mono"></span></div><canvas id="mechanism" role="img" aria-label="${t("Schematic piston, bumper, airbrake and BB positions; live numeric values below", "Shematski položaji pistona, odbojne gumice, pina i BB-a; brojčane vrijednosti ispod")}"></canvas><div id="phaseText" class="stage-status" aria-live="off"></div><div id="liveStrip" class="live-strip"></div><p class="results-note">${t("Schematic cutaway. The green pad is the entered bumper; its contact highlight is symbolic because rubber deformation is not resolved. Glow indicates modeled pressure; particles and trails illustrate flow and motion, not gas dynamics or sound. Every cue pauses with model time.", "Shematski presjek. Zelena gumica prikazuje uneseni odbojnik; isticanje pri kontaktu simbolično je jer deformacija gume nije razriješena. Sjaj označuje modelirani tlak; čestice i tragovi ilustriraju protok i gibanje, ne dinamiku plina ni zvuk. Sve se pauzira s vremenom modela.")}</p></section>
       <section class="panel graphs"><div class="graphs-header"><div><h2>${t("Shot traces", "Krivulje opaljenja")}</h2><p>${t("Pressure: amber cylinder, cyan behind BB. Events: green energy threshold, dashed amber slowing, cyan exit. Negative values remain visible.", "Tlak: jantarni cilindar, cijan iza BB-a. Događaji: zeleni prag energije, isprekidano jantarno usporavanje, cijan izlazak. Negativne vrijednosti ostaju vidljive.")}</p></div></div><div class="chart-grid">${[["pressureChart", t("Pressure vs time", "Tlak kroz vrijeme"), "bar(g)"], ["pistonChart", t("Piston velocity vs time", "Brzina pistona kroz vrijeme"), "m/s"], ["bbChart", t("BB velocity vs time", "Brzina BB-a kroz vrijeme"), "m/s"]].map(([id, label, units]) => `<div class="chart"><div class="chart-title"><span>${label}</span><span>${units} / ms</span></div><canvas id="${id}" role="img" aria-label="${label}; ${t("numeric values in live readouts; export full trace below", "brojčane vrijednosti u prikazu uživo; izvoz cijele krivulje ispod")}"></canvas></div>`).join("")}</div></section>
       ${I.soundMarkup(s, baseline, t, fmt)}
       <section class="panel insight"><div class="panel-heading"><h2>${t("Energy, verification and uncertainty", "Energija, provjera i nesigurnost")}</h2><span class="tag unknown">${t("not experimentally validated", "nije eksperimentalno potvrđeno")}</span></div><div class="assumption-grid"><span>${t("Maximum BB energy observed", "Najveća opažena energija BB-a")}</span><strong>${fmt(s.maxBbEnergy, 3, "J")}</strong><span>${t("Energy lost before exit", "Energija izgubljena prije izlaska")}</span><strong>${fmt(s.bbEnergyLoss, 3, "J")}</strong><span>${t("Positive / negative net BB work", "Pozitivan / negativan neto rad na BB-u")}</span><strong>${fmt(s.positiveBbWork, 3)} / ${fmt(s.negativeBbWork, 3, "J")}</strong><span>${t("Energy balance residual", "Odstupanje energetske bilance")}</span><strong>${fmt(s.energyResidual * 1000, 4, "mJ")}</strong><span>${t("Gas mass residual", "Odstupanje bilance mase plina")}</span><strong>${s.massResidual.toExponential(2)} kg</strong><span>${t("Ambient barrel sound-crossing scale", "Vrijeme prolaza zvuka kroz cijev pri okolišnim uvjetima")}</span><strong>${stamp(s.soundCrossingTime)}</strong></div>
@@ -2736,13 +2778,13 @@
       const key = input.dataset.number || input.dataset.range;
       const previous = p[key];
       p[key] = input.value === "" ? NaN : Number(input.value);
-      if (optimizer && key.startsWith("spring") && optimizer.values[key] === String(previous)) optimizer.values[key] = String(p[key]);
+      if (optimizer && optimizer.values[key] === String(previous)) optimizer.values[key] = String(p[key]);
       const pair = input.dataset.number ? document.querySelector(`[data-range="${key}"]`) : $(key);
       pair.value = input.value;
       selectedPlatform = "custom"; $("platformPreset").value = "custom";
       if (key.startsWith("airbrake")) { pinLabel = p.airbrakeLength > 0 ? "custom" : "plug"; $("pinLabel").value = pinLabel; }
       if (key.startsWith("spring")) { provenance.spring = "assumed"; invalidateFit(); }
-      else if (["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "headBore", "headLength", "nozzleBore", "nozzleLength", "airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "deadVolume", "breechVolume"].includes(key)) provenance.geometry = "assumed";
+      else if (["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "headBore", "headLength", "nozzleBore", "nozzleLength", "bumperThickness", "restitution", "airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "deadVolume", "breechVolume"].includes(key)) provenance.geometry = "assumed";
       document.querySelectorAll("[data-provenance]").forEach(box => { box.checked = provenance[box.dataset.provenance] === "measured"; });
       $("measurementConfirm").checked = false;
       document.querySelectorAll("[data-mass]").forEach(button => button.setAttribute("aria-pressed", Number(button.dataset.mass) === p.pistonMass));
@@ -2938,13 +2980,13 @@
       if (f.bbExited) parts.push(t("BB has exited; gas continues to flow through the muzzle.", "BB je izašao; plin se nastavlja prazniti kroz usta cijevi."));
       else if (Math.abs(f.bbV) < .01) parts.push(t("BB held or stalled.", "BB zadržan ili zaustavljen."));
       else parts.push(f.bbA >= 0 ? t("BB gaining speed in the barrel.", "BB ubrzava u cijevi.") : t("BB losing speed in the barrel.", "BB usporava u cijevi."));
-      if (f.pistonHit) parts.push(t("First head contact has occurred.", "Prvi kontakt s glavom se dogodio."));
+      if (f.pistonHit) parts.push(p.bumperThickness > 0 ? t("The piston has contacted the added head bumper.", "Piston je dotaknuo dodatnu odbojnu gumicu glave.") : t("First rigid-head contact has occurred.", "Dogodio se prvi kontakt s krutom glavom."));
     }
     $("phaseText").textContent = parts.join(" ");
     const liveValues = [
       [t("Cylinder / BB pressure", "Tlak cilindra / iza BB-a"), `${fmt((f.cylinderPressure - shot.ambientPressure) / 1e5, 2)} / ${fmt((f.pressure - shot.ambientPressure) / 1e5, 2, "bar(g)")}`],
       [t("Piston velocity", "Brzina pistona"), fmt(f.pistonV, 2, "m/s")],
-      [t("Piston travel / full stroke", "Pomak pistona / puni hod"), `${fmt(f.pistonX * 1000, 2)} / ${fmt(p.strokeLength, 1, "mm")}`],
+      [t("Piston travel / bumper contact", "Pomak pistona / kontakt s gumicom"), `${fmt(f.pistonX * 1000, 2)} / ${fmt(shot.stroke * 1000, 1, "mm")}`],
       [t("Piston momentum", "Količina gibanja pistona"), fmt(f.pistonV * p.pistonMass / 1000, 3, "kg·m/s")],
       [t("BB velocity", "Brzina BB-a"), fmt(f.bbV, 2, "m/s")],
       [t("BB acceleration", "Ubrzanje BB-a"), fmt(f.bbA, 0, "m/s²")],

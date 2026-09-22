@@ -13,6 +13,18 @@ test('fixed bore, stroke and cylinder/barrel geometry', () => {
   close(P.geometry({ strokeLength: 65 }, 0, 0).sweptVolume * 1e6, 27.3764705882, 1e-7);
   close(g.barrelVolume * 1e6, 12.1985238867, 1e-8);
 });
+test('added annular bumper moves contact, occupies volume and preserves explicit geometry', () => {
+  const bare = P.normalize(), p = P.normalize({ bumperThickness: 4 }), a = P.geometry(bare, 0, 0), g = P.geometry(p, 0, 0);
+  close(P.contactStroke(p) * 1000, 81);
+  close((a.sweptVolume - g.sweptVolume), g.ac * .004, 1e-15);
+  close(g.bumperSolidVolume, (g.ac - Math.PI * (.004 / 2) ** 2) * .004, 1e-15);
+  close(a.vc - g.vc, g.bumperSolidVolume, 1e-15);
+  const s = P.simulate(p);
+  assert.equal(s.valid, true); close(s.stroke, P.contactStroke(p)); close(s.bumperThickness, .004);
+  assert.ok(s.pistonHitTime > 0); close(s.frames.filter(f => f.t === s.pistonHitTime).at(-1).pistonX, s.stroke);
+  assert.ok(P.validate({ bumperThickness: 85 }).includes('bumper:thickness'));
+  assert.ok(P.validate({ bumperThickness: -1 }).includes('bumperThickness:nonnegative'));
+});
 test('pin clearance fixtures and profile volume', () => {
   close(P.geometry({ airbrakeDiameter: 3.8 }, 0, 0).annulus * 1e6, 1.2252211349, 1e-9);
   close(P.geometry({ airbrakeDiameter: 3.9 }, 0, 0).annulus * 1e6, .6204645491, 1e-9);

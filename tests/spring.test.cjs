@@ -50,6 +50,14 @@ test('cutting and short stroke affect different terms, without altering cylinder
   assert.ok(P.springEnergy(q,0)<P.springEnergy(p,0));
   close(P.geometry(p,0,0).ac,P.geometry(q,0,0).ac);
 });
+test('added bumper leaves cocked compression fixed but raises contact preload and shortens travel', () => {
+  const bare=P.normalize(),p=P.normalize({bumperThickness:4}),a=P.springState(bare),b=P.springState(p);
+  close(b.contactTravel,81);close(b.preload,54);close(b.cockedCompression,a.cockedCompression);
+  close(P.springForce(p,0),P.springForce(bare,0));
+  assert.ok(P.springEnergy(p,0)<P.springEnergy(bare,0));
+  const measured=lengths({bumperThickness:4}),state=P.springState(measured);
+  close(state.installedLength,146);close(state.preload,54);close(state.cockedLength,65);close(state.cockedCompression,135);
+});
 test('zero preload is valid; slack/unseating is rejected', () => {
   const p=lengths({springFreeLength:150});
   assert.deepEqual(P.validate(p),[]);close(P.springForce(p,.085),0);
@@ -111,12 +119,19 @@ test('hypothetical cut estimates never masquerade as measured calibration inputs
 });
 test('older complete snapshots migrate inactive defaults without losing metadata or reusing fits', () => {
   const old={...P.DEFAULTS};
-  for(const key of ['springLengthMode','springFreeLength','springInstalledLength','springCutLength','springActiveCoils','springRemovedCoils','springSolidLength']) delete old[key];
+  for(const key of ['springLengthMode','springFreeLength','springInstalledLength','springCutLength','springActiveCoils','springRemovedCoils','springSolidLength','bumperThickness']) delete old[key];
   const row={...C.reference(),setup:old,confirmed:true,role:'train',solverVersion:'3.0.0'};
   const imported=C.decode({schemaVersion:3,measurements:[row]}).measurements[0];
   assert.deepEqual(imported.setup,P.normalize(old));assert.deepEqual(imported.legacySetup,old);assert.equal(imported.fps,330);assert.equal(imported.role,'train');assert.equal(imported.confirmed,true);
   assert.equal(imported.solverVersion,'3.0.0');assert.equal(C.eligible(imported),false);
   assert.deepEqual(C.decode(C.encode([imported])).measurements[0].legacySetup,old);
+});
+test('v3.1 snapshots gain an explicit zero bumper without becoming current calibration data', () => {
+  const old={...P.DEFAULTS};delete old.bumperThickness;
+  const row={...C.reference(),setup:old,confirmed:true,role:'train',solverVersion:'3.1.1'};
+  const imported=C.decode({schemaVersion:3,measurements:[row]}).measurements[0];
+  assert.equal(imported.setup.bumperThickness,0);assert.deepEqual(imported.legacySetup,old);
+  assert.equal(imported.confirmed,true);assert.equal(imported.role,'train');assert.equal(C.eligible(imported),false);
 });
 test('inactive spring inputs do not manufacture independent calibration conditions', () => {
   const setups=[P.normalize(),P.normalize({springFreeLength:400,springInstalledLength:300,springActiveCoils:50}),lengths({springPreload:100})];

@@ -2,7 +2,7 @@
 
 Standalone English/Croatian tools for exploring spring-airsoft pneumatic timing. Open `index.html` directly—no server, account, network access or runtime dependencies are required. The first screen is a tool menu; the pneumatic timing lab is its first tool.
 
-## Physics model v3.1
+## Physics model v3.2
 
 The lab now solves connected cylinder and behind-BB gas volumes with mass/energy accounting, compressible reversible flow, head/airbrake restriction, spring force, signed piston/BB motion, leakage and post-exit discharge. It exposes integration/conservation diagnostics, step-refinement checks and explicit input-sensitivity scenarios.
 
@@ -10,14 +10,15 @@ The lab now solves connected cylinder and behind-BB gas volumes with mass/energy
 
 ### Geometry and mechanics
 
-- Fixed cylinder bore; stroke changes swept volume without resizing the cylinder.
+- Fixed cylinder bore; nominal stroke changes swept volume without resizing the cylinder.
+- Optional annular cylinder-head bumper thickness. It moves the contact plane rearward, reduces effective piston travel/swept volume, occupies modeled gas volume and extends the head-bore passage. The opening is approximated by the entered head bore.
 - Head receiving-bore and downstream nozzle diameters/lengths.
 - Airbrake projection, shaft diameter, tip diameter and taper; dynamic overlap, clearance and pin displacement.
 - Cylinder residual and downstream storage volumes (each cavity counted once).
 - Any piston mass from 5–300 g; quick buttons for 58, 65, 68, 72, 76 and 82 g.
 - Spring stiffness/preload or a user-entered force/compression curve. M110–M220 are identity labels only, not hidden power multipliers.
 - Optional spring free/installed lengths and a cut-spring estimate; derived preload, active-coil rate adjustment and known-solid-height checks.
-- Seal and nozzle leakage, BB clearance leakage, hop release/moving resistance, seal friction, approximate bumper restitution, optional spring effective mass, heat exchange, air temperature and pressure.
+- Seal and nozzle leakage, BB clearance leakage, hop release/moving resistance, seal friction, approximate bumper restitution, optional spring effective mass, heat exchange, air temperature and pressure. Bumper restitution controls rebound only; it is not hardness, sound reduction, peak force or dB.
 
 AMP / Tridos Ultimate is the user's identified assembly; Scorpion remains a separate identity option. AMP pin selections do not invent dimensions. The Tridos listing says nominal 71 g, while AMP lists 69 g without a brake / 72 g with its longest pin. Weigh the actual assembly. The **default is a clearly labeled no-airbrake reference** (zero pin projection), not a verified model of the installed rifle. Enter measured pin geometry to enable an airbrake. The 4 mm passage and inactive 3.8 mm pin-diameter starting values are **not verified AMP specifications**.
 
@@ -25,7 +26,7 @@ Platform starting points include SSG10, a forward-cocked-position −20 mm short
 
 ### Spring length and cutting
 
-Open **Spring length, cutting & mechanical losses** and enable **Calculate from spring lengths / simulate cutting**. Enter unloaded length, the distance between the spring seats with the piston at front contact (already including spacers), and the axial free-length reduction from cutting. Length mode replaces direct preload; it does not add a second preload. No real spring lengths are supplied as defaults.
+Open **Spring length, cutting & mechanical losses** and enable **Calculate from spring lengths / simulate cutting**. Enter unloaded length, the distance between the spring seats at the rigid-head plane before an added bumper, and the axial free-length reduction from cutting. If the seat distance is measured at an installed bumper, add that bumper thickness back once; the model then moves the contact plane rearward. Length mode replaces direct preload; it does not add a second preload. No real spring lengths are supplied as defaults.
 
 For a hypothetical cut, also enter original and removed **active** coils. The model reduces free length while estimating the higher rate of the shorter active section; it does not assume that output energy scales with spring length. The panel shows resulting length, front/cocked compression and force, stiffness and available spring work. Live force/compression appear beneath the animation, and the new force law feeds the existing pressure, velocity, impact and discharge calculations.
 
@@ -35,7 +36,7 @@ A pre-cut measured curve cannot be reused for a hypothetical cut. For an already
 
 ### Tuning workspace
 
-On laptop/desktop-sized viewports, settings and results have independent scroll areas. Choose **Cylinder & barrel**, **Piston & BB**, **Airbrake & head**, **Spring**, **Losses & environment**, **Rifle presets**, or **Timing & solver** from the settings selector; changing categories keeps the preview in place and remembers each category's scroll position. Inputs are moved once, never duplicated or reset.
+On laptop/desktop-sized viewports, settings and results have independent scroll areas. Choose **Cylinder & barrel**, **Piston & BB**, **Airbrake, bumper & head**, **Spring**, **Losses & environment**, **Rifle presets**, or **Timing & solver** from the settings selector; changing categories keeps the preview in place and remembers each category's scroll position. Inputs are moved once, never duplicated or reset.
 
 Use **Shot**, **Graphs**, **Results**, **Optimize**, and **Chrono** to switch views directly. The compact Shot view shows the cutaway plus predicted exit energy, volume ratio, piston-contact energy, muzzle pressure/flow and useful-energy timing. Full telemetry and playback/model notes expand on demand. Playback and scrubbing remain available in Shot, Graphs and Results. Applying an optimizer choice opens Shot, selects the relevant settings category and replays it.
 
@@ -47,7 +48,7 @@ Short/narrow screens use normal page flow rather than a fixed-height workspace. 
 
 ### Animation and outputs
 
-The animation and three graphs have dedicated views next to the settings. They use solver states, independent cylinder/BB pressure colors and signed arrows. Cylinder stroke, pin and both head passages share one axial drawing scale, so visible pin entry matches the calculated event; the barrel has its own scale. Exact pre/post-contact samples prevent interpolation from showing a reverse velocity before impact.
+The animation and three graphs have dedicated views next to the settings. They use solver states, independent cylinder/BB pressure colors and signed arrows. Cylinder stroke, bumper, pin and both head passages share one axial drawing scale, so visible pad contact and pin entry match the calculated geometry; the barrel has its own scale. An installed bumper is drawn as a green annular pad and receives a symbolic contact-deformation highlight. Exact pre/post-contact samples prevent interpolation from showing a reverse velocity before impact.
 
 Parameter edits update the existing panels, canvases and readouts in place. Playback pauses at the same model time (clamped to a shorter run if necessary), with a small updating indicator; it does not reset to the beginning. Presets, the no-pin option and optimizer application preserve open sections and unfinished chrono notes. Invalid inputs hide stale results without collapsing their layout. Stale optimizer tables stay visibly marked and cannot be applied or exported until another search.
 

@@ -19,7 +19,7 @@ function context() {
 const format = (v, digits = 2) => Number.isFinite(v) ? v.toFixed(digits) : "—";
 
 test("rich cutaway uses finite canvas geometry at every sampled default and airbrake frame", () => {
-  for (const setup of [{}, { airbrakeLength: 20, airbrakeTaper: 2 }, { strokeLength: 60, barrelLength: 200 }]) {
+  for (const setup of [{}, { airbrakeLength: 20, airbrakeTaper: 2 }, { strokeLength: 60, barrelLength: 200 }, { bumperThickness: 4, restitution: 0 }]) {
     const p = P.normalize(setup), shot = P.simulate(p); assert.ok(shot.valid);
     const before = JSON.stringify(shot);
     for (const [w, h] of [[950, 330], [310, 265]]) {
@@ -29,6 +29,16 @@ test("rich cutaway uses finite canvas geometry at every sampled default and airb
     }
     assert.equal(JSON.stringify(shot), before, "drawing must never mutate the simulation");
   }
+});
+
+test("installed bumper is visible and gets a contact-state deformation cue", () => {
+  const p = P.normalize({ bumperThickness: 4, restitution: 0 }), shot = P.simulate(p), layout = B.mechanism(p, 0);
+  assert.ok(shot.valid && shot.pistonHitTime !== null && layout.bumperWidth > 0);
+  const before = context(); A.draw(before, 950, 330, p, shot, shot.frames[0], en => en, format);
+  const atContact = context(); A.draw(atContact, 950, 330, p, shot, B.frameAt(shot, shot.pistonHitTime), en => en, format);
+  const padRects = ctx => ctx.calls.filter(([method, x, , width]) => method === "fillRect" && Math.abs(x - layout.head) < 1e-9 && Math.abs(width - layout.bumperWidth) < 1e-9);
+  assert.equal(padRects(before).length, 2); assert.equal(padRects(atContact).length, 2);
+  assert.ok(padRects(atContact)[0][2] < padRects(before)[0][2], "contact cue should bulge the pad radially");
 });
 
 test("piston front face uses solver position even on pressure-driven reverse travel", () => {
