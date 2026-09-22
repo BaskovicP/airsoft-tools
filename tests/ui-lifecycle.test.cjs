@@ -15,7 +15,7 @@ function harness() {
   const timers = new Map(), nodes = {}, context = {
     p: {}, optimizer: null, shot: { valid: true, duration: .06 }, baseline: {}, fraction: .3, playheadTime: .018,
     lastValidShot: null, changeComparison: null, I: { comparisonSnapshot: () => null },
-    diagnostic: null, calculationPending: false, debounce: null, busy: false, playing: true,
+    diagnostic: null, calculationPending: false, debounce: null, busy: false, playing: true, fitSelection: ["dischargeCoefficient"],
     chartCache: new Map(), workspace: null, location: { hash: "#pneumatic-timing" },
     P: { simulate: () => context.nextShot }, nextShot: { valid: true, duration: .06 },
     stop: () => { context.playing = false; }, invalidateOptimizer: () => {},
@@ -91,7 +91,7 @@ test("immediate Fit flushes debounce before busy state, preserving unavailable-e
   const { context: c, nodes, timers } = harness();
   nodes.missingEvent = { disabled: true, dataset: {} };
   nodes.fitButton = { disabled: false, dataset: {}, addEventListener(type, callback) { this.callback = callback; } };
-  c.C = { fitLoss: async () => { throw new Error("No training shots"); } };
+  c.C = { fitParameters: async () => { throw new Error("No training shots"); } };
   c.updateResults = () => { assert.equal(c.busy, false, "Pending render must finish before controls are disabled"); };
   const start = source.indexOf('    $("fitButton").addEventListener("click", async () => {');
   const end = source.indexOf("\n  }\n  function renderMeasurements", start);

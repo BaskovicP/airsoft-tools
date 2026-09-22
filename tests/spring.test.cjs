@@ -5,6 +5,7 @@ const O = require('../src/optimizer.js');
 const C = require('../src/calibration.js');
 const close = (a,b,tolerance=1e-9) => assert.ok(Math.abs(a-b)<=tolerance, `${a} != ${b}`);
 const MODEL_34_FIELDS=['bumperStiffness','bumperDamping','bumperMaxCompression','muzzleDischargeCoefficient'];
+const MODEL_40_FIELDS=['frontDeadVolume','bumperCurve'];
 const lengths = (extra={}) => P.normalize({springLengthMode:1,springFreeLength:200,springInstalledLength:150,...extra});
 const cut = (extra={}) => lengths({springCutLength:20,springActiveCoils:30,springRemovedCoils:3,...extra});
 
@@ -122,7 +123,7 @@ test('hypothetical cut estimates never masquerade as measured calibration inputs
 });
 test('older complete snapshots migrate inactive defaults without losing metadata or reusing fits', () => {
   const old={...P.DEFAULTS};
-  for(const key of ['springLengthMode','springFreeLength','springInstalledLength','springCutLength','springActiveCoils','springRemovedCoils','springSolidLength','bumperThickness','bumperBore',...MODEL_34_FIELDS]) delete old[key];
+  for(const key of ['springLengthMode','springFreeLength','springInstalledLength','springCutLength','springActiveCoils','springRemovedCoils','springSolidLength','bumperThickness','bumperBore',...MODEL_34_FIELDS,...MODEL_40_FIELDS]) delete old[key];
   const row={...C.reference(),setup:old,confirmed:true,role:'train',solverVersion:'3.0.0'};
   const imported=C.decode({schemaVersion:3,measurements:[row]}).measurements[0];
   assert.deepEqual(imported.setup,P.normalize(old));assert.deepEqual(imported.legacySetup,old);assert.equal(imported.fps,330);assert.equal(imported.role,'train');assert.equal(imported.confirmed,true);
@@ -130,25 +131,32 @@ test('older complete snapshots migrate inactive defaults without losing metadata
   assert.deepEqual(C.decode(C.encode([imported])).measurements[0].legacySetup,old);
 });
 test('v3.1 snapshots gain an explicit zero bumper without becoming current calibration data', () => {
-  const old={...P.DEFAULTS};delete old.bumperThickness;delete old.bumperBore;for(const key of MODEL_34_FIELDS)delete old[key];
+  const old={...P.DEFAULTS};delete old.bumperThickness;delete old.bumperBore;for(const key of [...MODEL_34_FIELDS,...MODEL_40_FIELDS])delete old[key];
   const row={...C.reference(),setup:old,confirmed:true,role:'train',solverVersion:'3.1.1'};
   const imported=C.decode({schemaVersion:3,measurements:[row]}).measurements[0];
   assert.equal(imported.setup.bumperThickness,0);assert.deepEqual(imported.legacySetup,old);
   assert.equal(imported.confirmed,true);assert.equal(imported.role,'train');assert.equal(C.eligible(imported),false);
 });
 test('v3.2 snapshots preserve their implicit head-bore-sized bumper opening', () => {
-  const old={...P.DEFAULTS,headBore:4.7,bumperThickness:3};delete old.bumperBore;for(const key of MODEL_34_FIELDS)delete old[key];
+  const old={...P.DEFAULTS,headBore:4.7,bumperThickness:3};delete old.bumperBore;for(const key of [...MODEL_34_FIELDS,...MODEL_40_FIELDS])delete old[key];
   const row={...C.reference(),setup:old,confirmed:true,role:'train',solverVersion:'3.2.0'};
   const imported=C.decode({schemaVersion:3,measurements:[row]}).measurements[0];
   assert.equal(imported.setup.bumperBore,4.7);assert.equal(imported.setup.bumperThickness,3);
   assert.deepEqual(imported.legacySetup,old);assert.equal(imported.confirmed,true);assert.equal(C.eligible(imported),false);
 });
 test('v3.3 snapshots gain explicit contact and muzzle-flow defaults without reusing fits', () => {
-  const old={...P.DEFAULTS};for(const key of MODEL_34_FIELDS)delete old[key];
+  const old={...P.DEFAULTS};for(const key of [...MODEL_34_FIELDS,...MODEL_40_FIELDS])delete old[key];
   const row={...C.reference(),setup:old,confirmed:true,role:'train',solverVersion:'3.3.0'};
   const imported=C.decode({schemaVersion:3,measurements:[row]}).measurements[0];
   for(const key of MODEL_34_FIELDS)assert.equal(imported.setup[key],P.DEFAULTS[key]);
   assert.deepEqual(imported.legacySetup,old);assert.equal(imported.confirmed,true);assert.equal(imported.role,'train');assert.equal(C.eligible(imported),false);
+});
+test('v3.4 snapshots gain only v4 front-gas and bumper-curve fields', () => {
+  const old={...P.DEFAULTS};for(const key of MODEL_40_FIELDS)delete old[key];
+  const row={...C.reference(),setup:old,confirmed:true,role:'train',solverVersion:'3.4.0'};
+  const imported=C.decode({schemaVersion:3,measurements:[row]}).measurements[0];
+  assert.equal(imported.setup.frontDeadVolume,P.DEFAULTS.frontDeadVolume);assert.deepEqual(imported.setup.bumperCurve,[]);
+  assert.deepEqual(imported.legacySetup,old);assert.equal(imported.confirmed,true);assert.equal(C.eligible(imported),false);
 });
 test('inactive spring inputs do not manufacture independent calibration conditions', () => {
   const setups=[P.normalize(),P.normalize({springFreeLength:400,springInstalledLength:300,springActiveCoils:50}),lengths({springPreload:100})];
@@ -158,4 +166,5 @@ test('inactive spring inputs do not manufacture independent calibration conditio
   const a=lengths({springCurve:curve,springStiffness:400}), b=lengths({springCurve:curve,springStiffness:800,springActiveCoils:42,springSolidLength:30});
   assert.equal(C.groups([{...C.reference(),setup:a},{...C.reference(),setup:b}]).length,1);
   assert.equal(C.groups([...rows,{...C.reference(),setup:lengths({springFreeLength:210})}]).length,2);
+  assert.equal(C.groups([{...C.reference(),setup:P.normalize({springStiffness:400})},{...C.reference(),setup:P.normalize({springStiffness:800})}],['springStiffness']).length,1);
 });

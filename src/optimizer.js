@@ -1,23 +1,24 @@
 /* Bounded hardware-only search. Rankings are engineering preferences, not acoustics. */
 (function (root) {
   "use strict";
-  const VERSION = "1.0.0";
+  const VERSION = "2.0.0";
   const P = typeof module !== "undefined" && module.exports ? require("./physics.js") : root.PneumaticPhysics;
   const GROUPS = Object.freeze({
     cylinder: ["cylinderBore", "strokeLength", "deadVolume"],
-    barrel: ["barrelLength", "barrelDiameter"],
+    barrel: ["barrelLength", "barrelDiameter", "frontDeadVolume"],
     head: ["headBore", "headLength", "nozzleBore", "nozzleLength", "bumperThickness", "bumperBore", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "breechVolume"],
     piston: ["pistonMass"],
     airbrake: ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper"],
     spring: ["springStiffness", "springPreload", "springMass", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils"],
     bb: ["bbMass", "bbDiameter"]
   });
-  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], bumperThickness: [0,20], bumperBore: [.5,30], bumperStiffness: [0,5000], bumperDamping: [0,1000], bumperMaxCompression: [0,10], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], springFreeLength: [0,500], springInstalledLength: [0,500], springCutLength: [0,400], springActiveCoils: [0,200], springRemovedCoils: [0,200], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
-  const WEIGHTS = Object.freeze({ balanced: [.35,.2,.15,.30], quiet: [.45,.25,.2,.10], efficient: [.15,.10,.05,.70] });
+  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], frontDeadVolume: [.001,2], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], bumperThickness: [0,20], bumperBore: [.5,30], bumperStiffness: [0,5000], bumperDamping: [0,1000], bumperMaxCompression: [0,10], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], springFreeLength: [0,500], springInstalledLength: [0,500], springCutLength: [0,400], springActiveCoils: [0,200], springRemovedCoils: [0,200], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
+  const WEIGHTS = Object.freeze({ balanced: [.30,.17,.13,.25,.15], quiet: [.38,.20,.17,.10,.15], efficient: [.12,.08,.05,.60,.15] });
   const HORIZON_MS = 250;
   const clone = v => JSON.parse(JSON.stringify(v));
   function fixedReason(p, key) {
     if (p.springCurve.length && ["springStiffness", "springMass", "springFreeLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"].includes(key)) return "measured-spring";
+    if (p.bumperCurve.length && key === "bumperStiffness") return "measured-bumper";
     if (p.springLengthMode === 1 && key === "springPreload" || p.springLengthMode !== 1 && ["springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"].includes(key)) return "spring-mode";
     return null;
   }
@@ -78,15 +79,21 @@
     if (!Number.isFinite(shot.exitEnergy) || !Number.isFinite(shot.exitTime) || !Number.isFinite(shot.exitVelocity)) return { reason: "noExit" };
     if (bounds && (shot.exitEnergy < bounds.min - 1e-10 || shot.exitEnergy > bounds.max + 1e-10)) return { reason: "energy" };
     if (!Number.isFinite(shot.pistonHitTime) || !Number.isFinite(shot.impactEnergy) || shot.dischargeComplete !== true) return { reason: "unfinished" };
+    const contacts = Array.isArray(shot.pistonImpacts) ? shot.pistonImpacts : [];
+    if (contacts.some(event => event.complete === false)) return { reason: "unfinished" };
     const springWork = P.springEnergy(params, 0);
     if (!(springWork > 0) || !Number.isFinite(shot.peakOutflow) || !Number.isFinite(shot.exitPressure) || !Number.isFinite(shot.energyResidual) || Math.abs(shot.energyResidual) > .001 * springWork) return { reason: "numerical" };
     const efficiency = shot.exitEnergy / springWork;
     if (!(efficiency > 0 && efficiency <= 1.001) || shot.impactEnergy < 0 || shot.peakOutflow < 0) return { reason: "numerical" };
+    const contactDissipation = contacts.length ? contacts.reduce((sum, event) => sum + Math.max(0, Number.isFinite(event.dissipatedEnergy) ? event.dissipatedEnergy : event.pistonEnergy || 0), 0) : shot.impactEnergy;
+    const timingRisk = shot.waveDiagnostics?.timingRatio === null || shot.waveDiagnostics?.timingRatio === undefined ? 0 : Math.min(2, shot.waveDiagnostics.timingRatio);
+    const uncertainty = (shot.waveDiagnostics?.relativePressureSpan || 0) + timingRisk;
     const metrics = { energy: shot.exitEnergy, velocity: shot.exitVelocity, efficiency, springWork,
-      impact: shot.impactEnergy, outflow: shot.peakOutflow, exitGauge: Math.max(0, shot.exitPressure - shot.ambientPressure),
+      impact: contactDissipation, firstImpact: shot.impactEnergy, contactCount: contacts.length || 1,
+      outflow: shot.peakOutflow, exitGauge: Math.max(0, shot.exitPressure - shot.ambientPressure), uncertainty,
       timingMargin: shot.strongBrakeTime !== null && shot.usefulTime !== null ? shot.strongBrakeTime - shot.usefulTime : null,
       contactTime: shot.pistonHitTime, duration: shot.duration, energyResidual: shot.energyResidual };
-    return { reason: null, metrics, vector: [metrics.impact, metrics.outflow, metrics.exitGauge, -metrics.efficiency] };
+    return { reason: null, metrics, vector: [metrics.impact, metrics.outflow, metrics.exitGauge, -metrics.efficiency, metrics.uncertainty] };
   }
   function dominates(a, b) {
     return a.vector.every((v, i) => v <= b.vector[i]) && a.vector.some((v, i) => v < b.vector[i]);
@@ -111,7 +118,7 @@
     for (const key of Object.keys(P.DEFAULTS)) {
       if (JSON.stringify(candidate.params[key]) !== JSON.stringify(next[key])) {
         if (!allowed.has(key)) throw new Error("optimizer:locked-change");
-        if (fixedReason(next, key)) throw new Error("optimizer:fixed-spring");
+        if (fixedReason(next, key)) throw new Error("optimizer:fixed-input-law");
         next[key] = clone(candidate.params[key]);
       }
     }

@@ -9,10 +9,11 @@
     const axis = 156, top = 100, bottom = 212;
     const bb = f.bbExited ? end + (f.t - shot.exitTime) * shot.exitVelocity * (end - barrelStart) / shot.barrelLength : barrelStart + f.bbX / shot.barrelLength * (end - barrelStart);
     const radial = 26 / Math.max(p.bumperBore, p.headBore, p.nozzleBore, p.airbrakeDiameter);
-    const peak = Math.max(1, shot.peakCylinderPressure - shot.ambientPressure, shot.peakPressure - shot.ambientPressure);
+    const peak = Math.max(1, shot.peakCylinderPressure - shot.ambientPressure, shot.peakPressure - shot.ambientPressure, shot.peakFrontPressure - shot.ambientPressure);
     const cylinderGlow = clamp((f.cylinderPressure - shot.ambientPressure) / peak);
     const barrelGlow = clamp((f.pressure - shot.ambientPressure) / peak);
-    const amber = "#ffbf69", cyan = "#5de4e7";
+    const frontGlow = clamp((f.frontPressure - shot.ambientPressure) / peak);
+    const amber = "#ffbf69", cyan = "#5de4e7", violet = "#b99cff";
     const gradient = (x1, y1, x2, y2, stops) => {
       const g = ctx.createLinearGradient(x1, y1, x2, y2);
       stops.forEach(([at, color]) => g.addColorStop(at, color)); return g;
@@ -121,6 +122,7 @@
     rect(barrelStart, axis - 22, end - barrelStart, 44, gradient(0, axis - 22, 0, axis + 22, [[0, "#a08c69"], [.12, "#544d40"], [.5, "#182830"], [1, "#a69067"]]), "#998667");
     rect(barrelStart, axis - 13, end - barrelStart, 26, "#09141c", "#526a72");
     gas(barrelStart, axis - 12, Math.max(0, Math.min(bb, end) - barrelStart), 24, barrelGlow, cyan, 30, f.flow);
+    if (!f.bbExited) gas(Math.max(barrelStart, bb), axis - 12, Math.max(0, end - Math.max(barrelStart, bb)), 24, frontGlow, violet, 24, f.frontOutflow);
     line(end, axis - 23, end, axis + 23, "#c8d9dd", 3);
     const plume = f.bbExited ? clamp(f.outflow / Math.max(shot.peakOutflow, 1e-10)) : 0;
     if (plume > .001) {
@@ -156,9 +158,9 @@
       ctx.fillText(p.bumperThickness > 0 ? t("BUMPER / HEAD / NOZZLE", "ODBOJNIK / GLAVA / MLAZNICA") : t("HEAD / NOZZLE", "GLAVA / MLAZNICA"), 425, 36);
       ctx.fillText(t("INNER BARREL", "UNUTARNJA CIJEV"), 760, 36);
       ctx.fillStyle = amber; ctx.fillText(`${t("Cylinder", "Cilindar")}  ${fmt((f.cylinderPressure - shot.ambientPressure) / 1e5, 2)} bar(g)`, 40, 266);
-      ctx.fillStyle = cyan; ctx.fillText(`${t("Behind BB", "Iza BB-a")}  ${fmt((f.pressure - shot.ambientPressure) / 1e5, 2)} bar(g)`, 660, 266);
+      ctx.fillStyle = cyan; ctx.fillText(`${t("Behind / ahead BB", "Iza / ispred BB-a")}  ${fmt((f.pressure - shot.ambientPressure) / 1e5, 2)} / ${fmt((f.frontPressure - shot.ambientPressure) / 1e5, 2)} bar(g)`, 620, 266);
       rect(40, 279, 270, 3, "#2c363b"); rect(40, 279, cylinderGlow * 270, 3, amber);
-      rect(660, 279, 350, 3, "#2c363b"); rect(660, 279, barrelGlow * 350, 3, cyan);
+      rect(620, 279, 390, 3, "#2c363b"); rect(620, 279, barrelGlow * 390, 3, cyan); rect(620, 284, frontGlow * 390, 2, violet);
       ctx.fillStyle = "#99aeb9";
       ctx.fillText(`${t("Pin overlap", "Preklapanje pina")} ${fmt(f.insertion * 1000, 2)} mm  ·  ${t("Open area", "Otvor")} ${fmt(f.openArea * 1e6, 3)} mm²`, 40, 311);
     } else {

@@ -1524,8 +1524,9 @@
   <script>/* Pure, dependency-free conservative lumped model. See docs/MODEL.md. */
 (function (root) {
   "use strict";
-  const VERSION = "3.4.0";
+  const VERSION = "4.0.0";
   const R = 287.05, GAMMA = 1.4, CV = R / (GAMMA - 1), CP = CV + R;
+  const STICK_SPEED = 1e-5;
   const area = d => Math.PI * (d / 2000) ** 2;
   const DEFAULTS = Object.freeze({
     cylinderBore: 23.157256696, strokeLength: 85, barrelLength: 430, barrelDiameter: 6.01,
@@ -1539,7 +1540,8 @@
     // Kelvin-Voigt loading model. These values are illustrative until measured;
     // with a zero-thickness bumper they are inactive and the rigid stop remains.
     bumperStiffness: 250, bumperDamping: 160, bumperMaxCompression: 1,
-    deadVolume: .55, breechVolume: .45, dischargeCoefficient: .75, muzzleDischargeCoefficient: .85,
+    bumperCurve: [],
+    deadVolume: .55, breechVolume: .45, frontDeadVolume: .05, dischargeCoefficient: .75, muzzleDischargeCoefficient: .85,
     pistonLeak: .005, nozzleLeak: .005, bbLeakCoefficient: .15,
     springStiffness: 550, springPreload: 50, springMass: 0, springCurve: [],
     springLengthMode: 0, springFreeLength: 0, springInstalledLength: 0, springCutLength: 0,
@@ -1577,20 +1579,23 @@
   }
   function validate(raw) {
     const p = normalize(raw), errors = [];
-    const positive = ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "bumperBore", "headBore", "headLength", "nozzleBore", "nozzleLength", "deadVolume", "breechVolume", "ambientPressure", "maxTime"];
-    for (const key of Object.keys(DEFAULTS)) if (key !== "springCurve" && !Number.isFinite(p[key])) errors.push(`${key}:finite`);
+    const positive = ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "bumperBore", "headBore", "headLength", "nozzleBore", "nozzleLength", "deadVolume", "breechVolume", "frontDeadVolume", "ambientPressure", "maxTime"];
+    for (const key of Object.keys(DEFAULTS)) if (!["springCurve", "bumperCurve"].includes(key) && !Number.isFinite(p[key])) errors.push(`${key}:finite`);
     for (const key of positive) if (!(p[key] > 0)) errors.push(`${key}:positive`);
     for (const key of ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "bumperThickness", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "springStiffness", "springPreload", "springMass", "pistonLeak", "nozzleLeak", "pistonFriction", "sealFriction", "rearDamping", "bbBreakaway", "barrelDrag", "heatTransfer", "decelThreshold"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
     if (p.bbDiameter >= p.barrelDiameter) errors.push("bb:clearance");
     if ((p.bumperThickness > 0 && p.cylinderBore <= p.bumperBore) || p.cylinderBore <= p.headBore || p.cylinderBore <= p.airbrakeDiameter) errors.push("cylinder:clearance");
     const maximumPinReach = p.airbrakeLength + Math.min(p.bumperThickness, p.bumperMaxCompression);
+    const reachedPinDiameter = start => maximumPinReach > start
+      ? pinDiameter(p, Math.min(p.airbrakeLength, maximumPinReach - start) / 1000)
+      : 0;
     if (p.airbrakeLength > 0 && (
-      (p.bumperThickness > 0 && p.airbrakeDiameter >= p.bumperBore) ||
-      (maximumPinReach > p.bumperThickness && p.airbrakeDiameter >= p.headBore) ||
-      (maximumPinReach > p.bumperThickness + p.headLength && p.airbrakeDiameter >= p.nozzleBore)
+      (p.bumperThickness > 0 && reachedPinDiameter(0) >= p.bumperBore) ||
+      (maximumPinReach > p.bumperThickness && reachedPinDiameter(p.bumperThickness) >= p.headBore) ||
+      (maximumPinReach > p.bumperThickness + p.headLength && reachedPinDiameter(p.bumperThickness + p.headLength) >= p.nozzleBore)
     )) errors.push("pin:clearance");
     if (!(p.bumperThickness < p.strokeLength)) errors.push("bumper:thickness");
-    if (p.bumperThickness > 0 && p.bumperMaxCompression > 0 && !(p.bumperStiffness > 0)) errors.push("bumper:stiffness");
+    if (p.bumperThickness > 0 && p.bumperMaxCompression > 0 && !p.bumperCurve?.length && !(p.bumperStiffness > 0)) errors.push("bumper:stiffness");
     const travel = p.strokeLength - p.bumperThickness;
     if (p.airbrakeLength > travel || maximumPinReach > p.bumperThickness + p.headLength + p.nozzleLength) errors.push("pin:length");
     if (p.airbrakeTipDiameter > p.airbrakeDiameter || p.airbrakeTaper > p.airbrakeLength && p.airbrakeLength > 0) errors.push("pin:profile");
@@ -1611,6 +1616,12 @@
     else if (p.springCurve.length) {
       if (p.springCurve.length < 2 || p.springCurve.some((v, i, a) => !Array.isArray(v) || v.length !== 2 || !v.every(Number.isFinite) || v[0] < 0 || v[1] < 0 || i > 0 && v[0] <= a[i - 1][0])) errors.push("spring:curve");
       else if (p.springCurve[0][0] > spring.preload - bumperLimit(p) * 1000 || p.springCurve.at(-1)[0] < spring.cockedCompression) errors.push("spring:coverage");
+    }
+    if (!Array.isArray(p.bumperCurve)) errors.push("bumper:curve");
+    else if (p.bumperCurve.length) {
+      const limit = Math.min(p.bumperThickness, p.bumperMaxCompression);
+      if (p.bumperCurve.length < 2 || p.bumperCurve.some((v, i, a) => !Array.isArray(v) || v.length !== 2 || !v.every(Number.isFinite) || v[0] < 0 || v[1] < 0 || i > 0 && (v[0] <= a[i - 1][0] || v[1] < a[i - 1][1]))) errors.push("bumper:curve");
+      else if (p.bumperCurve[0][0] !== 0 || p.bumperCurve[0][1] !== 0 || p.bumperCurve.at(-1)[0] < limit) errors.push("bumper:coverage");
     }
     if (!errors.length) {
       const g = geometry(p, contactStroke(p) + bumperLimit(p), 0);
@@ -1645,7 +1656,8 @@
       ac, ab, stroke, hardStop, insertion, inserted, pinArea: ap,
       vc: p.deadVolume * 1e-6 + ac * (p.strokeLength / 1000 - x) - bumperSolidVolume - pinVolume(p, p.airbrakeLength / 1000) + displaced,
       vb: p.breechVolume * 1e-6 + ab * y - displaced,
-      dvc: -ac + ap, dvb: -ap,
+      vf: p.frontDeadVolume * 1e-6 + ab * Math.max(0, p.barrelLength / 1000 - y),
+      dvc: -ac + ap, dvb: -ap, dvf: y < p.barrelLength / 1000 ? -ab : 0,
       sweptVolume: ac * stroke, barrelVolume: ab * p.barrelLength / 1000,
       bumperSolidVolume,
       bumperGap: (p.bumperBore - p.airbrakeDiameter) / 2,
@@ -1678,9 +1690,29 @@
     for (let i = 1; i < points.length; i++) sum += (springForce(p, points[i - 1]) + springForce(p, points[i])) / 2 * (points[i] - points[i - 1]);
     return direction * sum;
   }
+  function bumperElasticForce(p, compression) {
+    const mm = Math.max(0, compression * 1000), pairs = p.bumperCurve || [];
+    if (!pairs.length) return p.bumperStiffness * mm;
+    for (let i = 1; i < pairs.length; i++) if (mm <= pairs[i][0]) {
+      const a = pairs[i - 1], b = pairs[i];
+      return a[1] + (b[1] - a[1]) * (mm - a[0]) / (b[0] - a[0]);
+    }
+    return pairs.at(-1)[1];
+  }
+  function bumperPotential(p, compression) {
+    const mm = Math.max(0, compression * 1000), pairs = p.bumperCurve || [];
+    if (!pairs.length) return .5 * p.bumperStiffness * mm * mm / 1000;
+    const points = [[0, 0], ...pairs.filter(pair => pair[0] > 0 && pair[0] < mm), [mm, bumperElasticForce(p, compression)]];
+    let energy = 0;
+    for (let i = 1; i < points.length; i++) energy += (points[i - 1][1] + points[i][1]) / 2 * (points[i][0] - points[i - 1][0]) / 1000;
+    return energy;
+  }
   // Isentropic reservoir-to-reservoir short restriction; signed, including choking.
   function massFlow(pa, ta, pb, tb, effectiveArea) {
-    if (pa === pb || effectiveArea <= 0) return 0;
+    // Treat machine-scale pressure equality as equilibrium. The analytic
+    // unchoked expression loses significance when its pressure ratio rounds
+    // around one and can otherwise seed artificial flow in a static shot.
+    if (Math.abs(pa - pb) <= 1e-12 * Math.max(pa, pb) || effectiveArea <= 0) return 0;
     const forward = pa > pb, pu = forward ? pa : pb, pd = forward ? pb : pa, temp = forward ? ta : tb;
     const r = pd / pu, critical = (2 / (GAMMA + 1)) ** (GAMMA / (GAMMA - 1));
     const f = r <= critical
@@ -1748,8 +1780,8 @@
     return { mdot: Math.sign(flux) * (lo + hi) / 2, minArea };
   }
   function frictionForce(force, velocity, friction) {
-    if (Math.abs(velocity) < 1e-8 && Math.abs(force) <= friction) return force;
-    return friction * Math.sign(Math.abs(velocity) < 1e-8 ? force : velocity);
+    if (Math.abs(velocity) < STICK_SPEED && Math.abs(force) <= friction) return force;
+    return friction * Math.sign(Math.abs(velocity) < STICK_SPEED ? force : velocity);
   }
   function simulate(raw = {}, options = {}) {
     const p = normalize(raw), errors = validate(p);
@@ -1759,9 +1791,10 @@
     // x,v,y,w,mc,Uc,mb,Ub, friction dissipation, external enthalpy,
     // wall heat, ambient boundary work, external mass, BB positive/negative net
     // work, and energy dissipated by the compliant bumper.
-    let s = [0, 0, 0, 0, pa * g0.vc / (R * ta), pa * g0.vc / (GAMMA - 1), pa * g0.vb / (R * ta), pa * g0.vb / (GAMMA - 1), 0, 0, 0, 0, 0, 0, 0, 0];
-    let t = 0, exited = false, hit = false, contactLoss = 0, rigidContactLoss = 0, muzzleMass = 0, peakOutflow = 0, peakPressure = pa;
-    let exitTime = null, exitVelocity = null, exitPressure = null, exitGasMass = null, pistonHitTime = null, impactVelocity = null;
+    let s = [0, 0, 0, 0, pa * g0.vc / (R * ta), pa * g0.vc / (GAMMA - 1), pa * g0.vb / (R * ta), pa * g0.vb / (GAMMA - 1), 0, 0, 0, 0, 0, 0, 0, 0,
+      pa * g0.vf / (R * ta), pa * g0.vf / (GAMMA - 1)];
+    let t = 0, exited = false, hit = false, contactLoss = 0, rigidContactLoss = 0, muzzleMass = 0, peakOutflow = 0, peakPressure = pa, peakFrontPressure = pa;
+    let exitTime = null, exitVelocity = null, exitPressure = null, exitFrontPressure = null, exitGasMass = null, pistonHitTime = null, impactVelocity = null;
     let engageTime = null, decelTime = null, strongBrakeTime = null, momentumAtEngage = null, brakeEnergy = null, reboundTime = null;
     let preContactReversalTime = null, contactReboundTime = null, peakPistonX = 0, maxPistonRetreat = 0, maxPreContactRetreat = 0;
     const pistonImpacts = [];
@@ -1770,54 +1803,111 @@
     const frames = [], history = [], maxTime = (options.maxTime ?? p.maxTime) / 1000;
     const maxDt = options.dt ?? 1e-5, tolerance = options.tolerance ?? 2e-5;
     let dt = maxDt;
-    const initialEnergy = s[5] + s[7] + springEnergy(p, 0), initialMass = s[4] + s[6];
+    const initialEnergy = s[5] + s[7] + s[17] + springEnergy(p, 0), initialMass = s[4] + s[6] + s[16];
     function evaluate(v) {
       const g = geometry(p, v[0], exited ? L : v[2]);
-      const pc = (GAMMA - 1) * v[5] / g.vc, pb = (GAMMA - 1) * v[7] / g.vb;
-      const tc = v[5] / (v[4] * CV), tb = v[7] / (v[6] * CV);
+      const pc = (GAMMA - 1) * v[5] / g.vc, pb = (GAMMA - 1) * v[7] / g.vb, pf = (GAMMA - 1) * v[17] / g.vf;
+      const tc = v[5] / (v[4] * CV), tb = v[7] / (v[6] * CV), tf = v[17] / (v[16] * CV);
       const pass = passage(p, g.insertion, pc, tc, pb, tb);
       const lc = massFlow(pc, tc, pa, ta, p.pistonLeak * 1e-6);
       const gap = Math.max(0, g.ab - area(p.bbDiameter));
       const nozzleLeak = massFlow(pb, tb, pa, ta, p.nozzleLeak * 1e-6);
-      const bbFlow = massFlow(pb, tb, pa, ta, exited ? g.ab * p.muzzleDischargeCoefficient : gap * p.bbLeakCoefficient);
-      const lb = nozzleLeak + bbFlow;
-      const hc = lc * CP * (lc >= 0 ? tc : ta), hb = lb * CP * (lb >= 0 ? tb : ta);
+      const bbBypass = exited ? 0 : massFlow(pb, tb, pf, tf, gap * p.bbLeakCoefficient);
+      const behindMuzzle = exited ? massFlow(pb, tb, pa, ta, g.ab * p.muzzleDischargeCoefficient) : 0;
+      const frontMuzzle = exited ? 0 : massFlow(pf, tf, pa, ta, g.ab * p.muzzleDischargeCoefficient);
+      const hc = lc * CP * (lc >= 0 ? tc : ta);
+      const hn = nozzleLeak * CP * (nozzleLeak >= 0 ? tb : ta);
+      const hbb = bbBypass * CP * (bbBypass >= 0 ? tb : tf);
+      const hbm = behindMuzzle * CP * (behindMuzzle >= 0 ? tb : ta);
+      const hfm = frontMuzzle * CP * (frontMuzzle >= 0 ? tf : ta);
       const h = pass.mdot * CP * (pass.mdot >= 0 ? tc : tb);
       const fs = springForce(p, v[0]), gasForce = pa * g.ac + pc * g.dvc + pb * g.dvb;
-      const fp = frictionForce(fs + gasForce, v[1], p.pistonFriction + p.sealFriction * Math.max(0, pc - pa) * g.ac);
       const rear = p.rearDamping * v[1];
       const bumperCompression = Math.max(0, v[0] - g.stroke);
-      const bumperElasticForce = p.bumperStiffness * 1000 * bumperCompression;
+      const bumperElastic = bumperElasticForce(p, bumperCompression);
       // Kelvin-Voigt damping is capped on unloading so the pad can push but
       // never pull the piston. The corresponding loss term keeps the energy
       // ledger closed while the deformed pad relaxes.
-      const bumperEffectiveDamping = bumperCompression <= 0 ? 0 : v[1] >= 0 ? p.bumperDamping : Math.min(p.bumperDamping, bumperElasticForce / Math.max(1e-12, -v[1]));
+      const bumperEffectiveDamping = bumperCompression <= 0 ? 0 : v[1] >= 0 ? p.bumperDamping : Math.min(p.bumperDamping, bumperElastic / Math.max(1e-12, -v[1]));
       const bumperDampingForce = bumperEffectiveDamping * v[1];
-      const bumperForce = bumperElasticForce + bumperDampingForce;
-      let ap = (fs + gasForce - fp - rear - bumperForce) / mp;
+      const bumperForce = bumperElastic + bumperDampingForce;
+      const pistonDrive = fs + gasForce - rear - bumperForce;
+      const fp = frictionForce(pistonDrive, v[1], p.pistonFriction + p.sealFriction * Math.max(0, pc - pa) * g.ac);
+      let ap = (pistonDrive - fp) / mp;
       if (v[0] <= 0 && v[1] <= 0 && ap < 0 || v[0] >= g.hardStop && v[1] >= 0 && ap > 0) ap = 0;
-      const thrust = (pb - pa) * g.ab;
+      const thrust = (pb - pf) * g.ab;
       const fb = exited ? 0 : frictionForce(thrust, v[3], v[2] <= 1e-10 ? p.bbBreakaway : p.barrelDrag);
       let ab = exited ? 0 : (thrust - fb) / mbb;
       if (v[2] <= 0 && v[3] <= 0 && ab < 0) ab = 0;
       const vx = v[1], vy = exited ? 0 : v[3];
-      const qc = p.heatTransfer * (ta - tc), qb = p.heatTransfer * (ta - tb);
+      const qc = p.heatTransfer * (ta - tc), qb = p.heatTransfer * (ta - tb), qf = p.heatTransfer * (ta - tf);
       const power = exited ? 0 : (thrust - fb) * vy;
       return {
         d: [vx, ap, vy, ab, -pass.mdot - lc, -pc * g.dvc * vx - h - hc + qc,
-          pass.mdot - lb, -pb * (g.dvb * vx + g.ab * vy) + h - hb + qb,
-          fp * vx + rear * vx + fb * vy, -hc - hb, qc + qb, pa * g.ac * vx - pa * g.ab * vy, -lc - lb, Math.max(0, power), Math.max(0, -power),
-          bumperEffectiveDamping * vx ** 2],
-        pc, pb, tc, tb, g, fs, ap, ab, bumperCompression, bumperForce,
-        flow: pass.mdot, outflow: exited ? bbFlow : 0, minArea: pass.minArea
+          pass.mdot - nozzleLeak - bbBypass - behindMuzzle, -pb * (g.dvb * vx + g.ab * vy) + h - hn - hbb - hbm + qb,
+          fp * vx + rear * vx + fb * vy, -hc - hn - hbm - hfm, qc + qb + qf, pa * g.ac * vx, -lc - nozzleLeak - behindMuzzle - frontMuzzle, Math.max(0, power), Math.max(0, -power),
+          bumperEffectiveDamping * vx ** 2,
+          bbBypass - frontMuzzle, -pf * g.dvf * vy + hbb - hfm + qf],
+        pc, pb, pf, tc, tb, tf, g, fs, ap, ab, bumperCompression, bumperForce,
+        flow: pass.mdot, bbBypass, hbb, hfm, qf, frontOutflow: frontMuzzle,
+        outflow: exited ? behindMuzzle + frontMuzzle : 0, minArea: pass.minArea
       };
     }
-    const validState = v => v.every(Number.isFinite) && v[4] > 0 && v[5] > 0 && v[6] > 0 && v[7] > 0 && geometry(p, v[0], exited ? L : v[2]).vc > 0 && geometry(p, v[0], exited ? L : v[2]).vb > 0;
-    const bumperEnergy = v => .5 * p.bumperStiffness * 1000 * Math.max(0, v[0] - g0.stroke) ** 2;
-    const totalEnergy = v => v[5] + v[7] + springEnergy(p, v[0]) + .5 * mp * v[1] ** 2 + .5 * mbb * v[3] ** 2 + bumperEnergy(v);
+    // The small gas pocket in front of the BB becomes numerically stiff near
+    // the muzzle. Advance its mass/internal energy with a local implicit solve
+    // while the coupled piston/BB states retain the adaptive midpoint method.
+    function advanceFront(start, target, h, workPressure) {
+      if (exited) return { mass: start[16], energy: start[17], bypassMass: 0, muzzleMass: 0, bypassEnergy: 0, muzzleEnergy: 0, heatEnergy: 0 };
+      const gStart = geometry(p, start[0], exited ? L : start[2]);
+      const gEnd = geometry(p, target[0], exited ? L : target[2]);
+      const pb = (GAMMA - 1) * target[7] / gEnd.vb, tb = target[7] / (target[6] * CV);
+      const gap = Math.max(0, gEnd.ab - area(p.bbDiameter));
+      const dVolume = gEnd.vf - gStart.vf;
+      const m0 = start[16], u0 = start[17];
+      const transport = (m, u) => {
+        const pf = (GAMMA - 1) * u / gEnd.vf, tf = u / (m * CV);
+        const bypass = exited ? 0 : massFlow(pb, tb, pf, tf, gap * p.bbLeakCoefficient);
+        const muzzle = massFlow(pf, tf, pa, ta, gEnd.ab * p.muzzleDischargeCoefficient);
+        const hb = bypass * CP * (bypass >= 0 ? tb : tf);
+        const hm = muzzle * CP * (muzzle >= 0 ? tf : ta);
+        const q = p.heatTransfer * (ta - tf);
+        return { pf, bypass, muzzle, hb, hm, q };
+      };
+      const residual = (m, u) => {
+        const transfer = transport(m, u);
+        return [m - m0 - h * (transfer.bypass - transfer.muzzle), u - u0 + workPressure * dVolume - h * (transfer.hb - transfer.hm + transfer.q)];
+      };
+      let m = Math.max(1e-14, m0), u = Math.max(1e-9, u0 * (gStart.vf / gEnd.vf) ** (GAMMA - 1));
+      for (let iteration = 0; iteration < 24; iteration++) {
+        const f = residual(m, u), norm = Math.max(Math.abs(f[0]) / Math.max(m0, 1e-12), Math.abs(f[1]) / Math.max(u0, 1e-8));
+        if (norm < 1e-9) {
+          const transfer = transport(m, u);
+          return { mass: m, energy: u, bypassMass: h * transfer.bypass, muzzleMass: h * transfer.muzzle,
+            bypassEnergy: h * transfer.hb, muzzleEnergy: h * transfer.hm, heatEnergy: h * transfer.q };
+        }
+        const dm = Math.max(1e-13, Math.abs(m) * 1e-6), du = Math.max(1e-9, Math.abs(u) * 1e-6);
+        const fm = residual(m + dm, u), fu = residual(m, u + du);
+        const a = (fm[0] - f[0]) / dm, b = (fu[0] - f[0]) / du;
+        const c = (fm[1] - f[1]) / dm, d = (fu[1] - f[1]) / du, det = a * d - b * c;
+        if (!Number.isFinite(det) || Math.abs(det) < 1e-24) return null;
+        const stepM = (-f[0] * d + b * f[1]) / det, stepU = (c * f[0] - a * f[1]) / det;
+        let damping = 1;
+        while (damping > 1 / 1024 && (m + damping * stepM <= 1e-14 || u + damping * stepU <= 1e-9)) damping /= 2;
+        m += damping * stepM; u += damping * stepU;
+        if (!Number.isFinite(m) || !Number.isFinite(u) || m <= 0 || u <= 0) return null;
+      }
+      const f = residual(m, u);
+      if (Math.max(Math.abs(f[0]) / Math.max(m0, 1e-12), Math.abs(f[1]) / Math.max(u0, 1e-8)) >= 1e-9) return null;
+      const transfer = transport(m, u);
+      return { mass: m, energy: u, bypassMass: h * transfer.bypass, muzzleMass: h * transfer.muzzle,
+        bypassEnergy: h * transfer.hb, muzzleEnergy: h * transfer.hm, heatEnergy: h * transfer.q };
+    }
+    const validState = v => v.every(Number.isFinite) && v[4] > 0 && v[5] > 0 && v[6] > 0 && v[7] > 0 && v[16] > 0 && v[17] > 0 && geometry(p, v[0], exited ? L : v[2]).vc > 0 && geometry(p, v[0], exited ? L : v[2]).vb > 0 && geometry(p, v[0], exited ? L : v[2]).vf > 0;
+    const bumperEnergy = v => bumperPotential(p, Math.max(0, v[0] - g0.stroke));
+    const totalEnergy = v => v[5] + v[7] + v[17] + springEnergy(p, v[0]) + .5 * mp * v[1] ** 2 + .5 * mbb * v[3] ** 2 + bumperEnergy(v);
     function frame(e) {
-      return { t, pistonX: s[0], pistonV: s[1], pistonA: e.ap, bbX: s[2], bbV: s[3], bbA: e.ab, pressure: e.pb, cylinderPressure: e.pc, cylinderTemperature: e.tc, bbTemperature: e.tb,
-        insertion: e.g.insertion, flow: e.flow, outflow: e.outflow, openArea: e.minArea,
+      return { t, pistonX: s[0], pistonV: s[1], pistonA: e.ap, bbX: s[2], bbV: s[3], bbA: e.ab, pressure: e.pb, frontPressure: e.pf, cylinderPressure: e.pc, cylinderTemperature: e.tc, bbTemperature: e.tb, frontTemperature: e.tf,
+        insertion: e.g.insertion, flow: e.flow, frontOutflow: e.frontOutflow, outflow: e.outflow, openArea: e.minArea,
         bumperCompression: e.bumperCompression, bumperForce: e.bumperForce, pistonHit: hit, bbExited: exited,
         energyResidual: totalEnergy(s) + s[8] + contactLoss + s[15] - initialEnergy - s[9] - s[10] - s[11] };
     }
@@ -1842,16 +1932,19 @@
       maxBumperCompression = Math.max(maxBumperCompression, contactState.bumperCompression);
       peakBumperForce = Math.max(peakBumperForce, contactState.bumperForce);
     }
-    function finishContact(reboundVelocity, endTime = t) {
+    function finishContact(reboundVelocity, endTime = t, settled = false) {
       if (!activeContact) return;
       activeContact.reboundVelocity = reboundVelocity;
       activeContact.duration = Math.max(0, endTime - activeContact.time);
-      activeContact.settledInContact = reboundVelocity === null;
+      activeContact.settledInContact = settled;
+      activeContact.complete = reboundVelocity !== null || settled;
       activeContact.dissipatedEnergy = s[15] - activeContact._dampingStart + rigidContactLoss - activeContact._hardLossStart;
       delete activeContact._dampingStart; delete activeContact._hardLossStart;
       activeContact = null;
     }
-    while (t < maxTime && steps < 300000) {
+    const maxSteps = options.maxSteps ?? 300000;
+    let convergenceFailure = false, terminationReason = "max-time", settledSince = null;
+    while (t < maxTime && steps < maxSteps) {
       let e = evaluate(s), h = Math.min(dt, maxTime - t);
       // Limit steps at geometric transitions and approximate event crossings.
       for (const [at, pos, vel] of [[g0.stroke - p.airbrakeLength / 1000, s[0], s[1]], [g0.stroke, s[0], s[1]], [g0.hardStop, s[0], s[1]], [0, s[0], s[1]], [L, s[2], exited ? 0 : s[3]], [0, s[2], exited ? 0 : s[3]]]) {
@@ -1859,13 +1952,27 @@
         if (eta > 1e-9 && eta < h) h = eta;
       }
       if (t >= nextStore || t === 0) { frames.push(frame(e)); nextStore = t + (options.sampleInterval ?? .00005); }
-      const mid = s.map((v, i) => v + e.d[i] * h / 2);
-      if (!validState(mid)) { dt = h / 2; rejectedSteps++; if (dt < 1e-10) break; continue; }
+      const mid = s.map((v, i) => v + e.d[i] * h / 2), frontMid = advanceFront(s, mid, h / 2, e.pf);
+      if (frontMid) { mid[16] = frontMid.mass; mid[17] = frontMid.energy; }
+      if (!frontMid || !validState(mid)) { dt = h / 2; rejectedSteps++; if (dt < 1e-10) { convergenceFailure = true; terminationReason = "minimum-step"; break; } continue; }
       const em = evaluate(mid), next = s.map((v, i) => v + em.d[i] * h);
-      const scales = [g0.hardStop, 10, L, 100, initialMass, initialEnergy, initialMass, initialEnergy, 1, 1, 1, 1, initialMass, 1, 1, 1];
+      const frontFull = advanceFront(s, next, h, em.pf);
+      if (frontFull) {
+        // Replace only the stiff front-volume update, then distribute its
+        // transport corrections to the actual connected reservoirs. This
+        // preserves mass/energy without disguising solver correction as an
+        // arbitrary external source.
+        next[6] -= frontFull.bypassMass - h * em.bbBypass;
+        next[7] -= frontFull.bypassEnergy - h * em.hbb;
+        next[12] -= frontFull.muzzleMass - h * em.frontOutflow;
+        next[9] -= frontFull.muzzleEnergy - h * em.hfm;
+        next[10] += frontFull.heatEnergy - h * em.qf;
+        next[16] = frontFull.mass; next[17] = frontFull.energy;
+      }
+      const scales = [g0.hardStop, 10, L, 100, initialMass, initialEnergy, initialMass, initialEnergy, 1, 1, 1, 1, initialMass, 1, 1, 1, initialMass, initialEnergy];
       let error = 0;
       for (let i = 0; i < 8; i++) error = Math.max(error, Math.abs((em.d[i] - e.d[i]) * h) / Math.max(scales[i] * .01, Math.abs(s[i]), Math.abs(next[i])));
-      if (!validState(next) || error > tolerance && h > 1e-9) { dt = h * Math.max(.15, .8 * Math.sqrt(tolerance / Math.max(error, tolerance))); rejectedSteps++; if (dt < 1e-10) break; continue; }
+      if (!frontFull || !validState(next) || error > tolerance && h > 1e-9) { dt = h * Math.max(.15, .8 * Math.sqrt(tolerance / Math.max(error, tolerance))); rejectedSteps++; if (dt < 1e-10) { convergenceFailure = true; terminationReason = "minimum-step"; break; } continue; }
       const prev = s;
       s = next; t += h; steps++;
       dt = Math.min(maxDt, h * Math.max(1.02, Math.min(2, .9 * Math.sqrt(tolerance / Math.max(error, 1e-14)))));
@@ -1874,6 +1981,14 @@
         if (pos === 2 && exited) continue;
         if (prev[vel] * s[vel] < 0 && Math.abs(s[vel]) < .001) { contactLoss += .5 * mass * s[vel] ** 2; s[vel] = 0; }
         if (s[pos] < 0) { s[pos] = 0; contactLoss += .5 * mass * s[vel] ** 2; s[vel] = 0; }
+      }
+      // Capture the static-friction branch after finite-step roundoff has left
+      // an otherwise force-balanced body with a microscopic residual speed.
+      const sticking = evaluate(s);
+      for (const [vel, mass, acceleration] of [[1, mp, sticking.ap], [3, mbb, exited ? 0 : sticking.ab]]) {
+        if (Math.abs(s[vel]) < STICK_SPEED && Math.abs(acceleration) < 1e-12) {
+          contactLoss += .5 * mass * s[vel] ** 2; s[vel] = 0;
+        }
       }
       // Compliant pads begin a finite contact episode at the undeformed face.
       // A zero-compression pad retains the exact rigid-boundary event model.
@@ -1905,7 +2020,14 @@
         s[0] = g0.stroke; e = evaluate(s); updateContact(e); finishContact(s[1]); frames.push(frame(e));
       }
       if (!exited && s[2] >= L - 1e-11 && s[3] > 0) {
-        s[2] = L; exited = true; exitTime = t; exitVelocity = s[3]; exitPressure = e.pb; exitGasMass = s[4] + s[6];
+        s[2] = L; exited = true; exitTime = t; exitVelocity = s[3]; exitPressure = e.pb; exitFrontPressure = e.pf; exitGasMass = s[4] + s[6] + s[16];
+        // Once the BB clears the crown, the tiny front pocket is no longer a
+        // bounded control volume. Replace it with ambient gas and book the
+        // exact mass/energy exchange before continuing the post-exit solution.
+        const exitGeometry = geometry(p, s[0], L);
+        const ambientFrontMass = pa * exitGeometry.vf / (R * ta), ambientFrontEnergy = pa * exitGeometry.vf / (GAMMA - 1);
+        s[12] += ambientFrontMass - s[16]; s[9] += ambientFrontEnergy - s[17];
+        s[16] = ambientFrontMass; s[17] = ambientFrontEnergy;
         e = evaluate(s);
       }
       if (p.airbrakeLength > 0 && engageTime === null && e.g.insertion > 0) { engageTime = t; momentumAtEngage = p.pistonMass / 1000 * s[1]; }
@@ -1919,12 +2041,19 @@
       if (!hit) maxPreContactRetreat = Math.max(maxPreContactRetreat, peakPistonX - s[0]);
       const ke = .5 * mbb * s[3] ** 2;
       if (!exited || exitTime === t) { history.push([t, ke]); if (ke > maxBbEnergy) { maxBbEnergy = ke; maxBbTime = t; } }
-      peakPressure = Math.max(peakPressure, e.pb); peakCylinderPressure = Math.max(peakCylinderPressure, e.pc); peakPistonV = Math.max(peakPistonV, s[1]);
+      peakPressure = Math.max(peakPressure, e.pb); peakFrontPressure = Math.max(peakFrontPressure, e.pf); peakCylinderPressure = Math.max(peakCylinderPressure, e.pc); peakPistonV = Math.max(peakPistonV, s[1]);
       peakOutflow = Math.max(peakOutflow, e.outflow); muzzleMass += Math.max(0, em.outflow) * h;
-      if (exited && hit && t > Math.max(exitTime, pistonHitTime) + .004 && Math.abs(e.pc - pa) < .002 * pa && Math.abs(e.pb - pa) < .002 * pa && Math.abs(s[1]) < .005) break;
+      const quietGas = exited && hit && t > Math.max(exitTime, pistonHitTime) + .004 && Math.abs(e.pc - pa) < .002 * pa && Math.abs(e.pb - pa) < .002 * pa;
+      const stablePiston = Math.abs(s[1]) < .005 && Math.abs(e.ap) < 1;
+      if (quietGas && stablePiston) {
+        if (settledSince === null) settledSince = t;
+        if (t - settledSince >= .00025) { terminationReason = "settled"; break; }
+      } else settledSince = null;
     }
-    const final = evaluate(s); updateContact(final); finishContact(null); frames.push(frame(final));
-    const numericalFailure = t < maxTime - 1e-9 && !(exited && hit && Math.abs(final.pc - pa) < .002 * pa && Math.abs(final.pb - pa) < .002 * pa && Math.abs(s[1]) < .005);
+    if (steps >= maxSteps && t < maxTime - 1e-12) { convergenceFailure = true; terminationReason = "step-limit"; }
+    const final = evaluate(s), pistonSettled = Math.abs(s[1]) < .005 && Math.abs(final.ap) < 1;
+    updateContact(final); finishContact(null, t, pistonSettled && terminationReason === "settled"); frames.push(frame(final));
+    const numericalFailure = convergenceFailure;
     let usefulTime = null;
     if (exitTime !== null && maxBbEnergy > 1e-9) {
       const i = history.findIndex(v => v[1] >= p.usefulFraction * maxBbEnergy);
@@ -1934,25 +2063,64 @@
       }
     }
     const exitEnergy = exitVelocity === null ? null : .5 * mbb * exitVelocity ** 2;
-    const massResidual = s[4] + s[6] - initialMass - s[12];
+    const massResidual = s[4] + s[6] + s[16] - initialMass - s[12];
+    for (const value of frames) { value.waveTransit = 0; value.wavePressureEstimate = value.pressure; }
+    const waveFrames = frames.filter(value => exitTime === null || value.t <= exitTime + 1e-12);
+    const interpolatePressure = time => {
+      if (time <= waveFrames[0].t) return waveFrames[0].pressure;
+      let lo = 0, hi = waveFrames.length;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (waveFrames[mid].t <= time) lo = mid + 1; else hi = mid; }
+      const a = waveFrames[Math.max(0, lo - 1)], b = waveFrames[Math.min(lo, waveFrames.length - 1)];
+      return b.t === a.t ? b.pressure : a.pressure + (b.pressure - a.pressure) * (time - a.t) / (b.t - a.t);
+    };
+    let maxWaveTransit = 0, maxWavePressureDelta = 0, exitWavePressure = null;
+    const breechEquivalentLength = p.breechVolume * 1e-6 / g0.ab;
+    for (const value of waveFrames) {
+      const soundSpeed = Math.sqrt(GAMMA * R * Math.max(1, value.bbTemperature));
+      const transit = Math.min(L, breechEquivalentLength + Math.max(0, value.bbX)) / soundSpeed;
+      const delayed = interpolatePressure(Math.max(0, value.t - transit));
+      value.waveTransit = transit; value.wavePressureEstimate = delayed;
+      maxWaveTransit = Math.max(maxWaveTransit, transit);
+      maxWavePressureDelta = Math.max(maxWavePressureDelta, Math.abs(delayed - value.pressure));
+    }
+    const timingGap = strongBrakeTime !== null && usefulTime !== null ? Math.abs(strongBrakeTime - usefulTime)
+      : engageTime !== null && exitTime !== null ? Math.abs(exitTime - engageTime)
+        : usefulTime !== null && exitTime !== null ? Math.abs(exitTime - usefulTime) : null;
+    if (exitTime !== null && waveFrames.length) {
+      const last = waveFrames.at(-1), soundSpeed = Math.sqrt(GAMMA * R * Math.max(1, last.bbTemperature));
+      const transit = Math.min(L, breechEquivalentLength + L) / soundSpeed;
+      exitWavePressure = interpolatePressure(Math.max(0, exitTime - transit));
+    }
+    const pressureScale = Math.max(10000, peakPressure - pa);
+    const waveDiagnostics = {
+      // This is a causal travel-time comparison against the lumped trace. The
+      // 24-cell value is only a reference resolution for a future 1D model; it
+      // must not be presented as though 24 conservation cells were solved here.
+      method: "causal-travel-envelope", referenceCellCount: 24, maxTransit: maxWaveTransit, referenceCellTransit: maxWaveTransit / 24,
+      maxPressureDelta: maxWavePressureDelta, relativePressureSpan: maxWavePressureDelta / pressureScale,
+      exitPressureEstimate: exitWavePressure, timingGap, timingRatio: timingGap > 0 ? maxWaveTransit / timingGap : null
+    };
+    waveDiagnostics.risk = waveDiagnostics.relativePressureSpan < .1 && (waveDiagnostics.timingRatio === null || waveDiagnostics.timingRatio < .1) ? "low"
+      : waveDiagnostics.relativePressureSpan < .35 && (waveDiagnostics.timingRatio === null || waveDiagnostics.timingRatio < .5) ? "moderate" : "high";
     return { version: VERSION, params: p, valid: !numericalFailure, errors: numericalFailure ? ["solver:convergence"] : [], frames,
       duration: t, stroke: g0.stroke, hardStop: g0.hardStop, nominalStroke: p.strokeLength / 1000, bumperThickness: p.bumperThickness / 1000,
       barrelLength: L, barrelVolume: g0.barrelVolume, cylinderVolume: g0.sweptVolume, ratio: g0.sweptVolume / g0.barrelVolume,
       ambientPressure: pa, engageTime, decelTime, strongBrakeTime, reboundTime, usefulTime, exitTime, pistonHitTime,
       preContactReversalTime, contactReboundTime, maxPistonRetreat, maxPreContactRetreat,
       pistonImpacts, maxBumperCompression, peakBumperForce, bumperDissipatedEnergy: s[15],
-      exitVelocity, exitEnergy, exitPressure, exitGasMass, pistonImpactVelocity: impactVelocity,
+      exitVelocity, exitEnergy, exitPressure, exitFrontPressure, exitGasMass, pistonImpactVelocity: impactVelocity,
       impactEnergy: impactVelocity === null ? null : .5 * p.pistonMass / 1000 * impactVelocity ** 2,
       momentumAtEngage, preBrakeShare: brakeEnergy === null || !exitEnergy ? null : brakeEnergy / exitEnergy,
       maxBbEnergy, maxBbTime, bbEnergyLoss: exitEnergy === null ? null : Math.max(0, maxBbEnergy - exitEnergy),
-      positiveBbWork: s[13], negativeBbWork: s[14], peakPressure, peakCylinderPressure, peakPistonV, peakOutflow, muzzleMass,
+      positiveBbWork: s[13], negativeBbWork: s[14], peakPressure, peakFrontPressure, peakCylinderPressure, peakPistonV, peakOutflow, muzzleMass,
       energyResidual: frame(final).energyResidual, massResidual, releasedSpringEnergy: springEnergy(p, 0) - springEnergy(p, s[0]),
       energyScale: Math.max(.01, springEnergy(p, 0)), steps, rejectedSteps,
       soundCrossingTime: L / Math.sqrt(GAMMA * R * ta), complete: exited && hit,
+      terminationReason, pistonSettled, waveDiagnostics,
       dischargeComplete: exited && Math.abs(final.pc - pa) < .01 * pa && Math.abs(final.pb - pa) < .01 * pa
     };
   }
-  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, contactStroke, bumperLimit, geometry, pinVolume, pinDiameter, springState, springForce, springEnergy, massFlow, passage, simulate };
+  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, contactStroke, bumperLimit, geometry, pinVolume, pinDiameter, springState, springForce, springEnergy, bumperElasticForce, bumperPotential, massFlow, passage, simulate };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PneumaticPhysics = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
@@ -1965,6 +2133,14 @@
   const LENGTH_FIELDS = ["springLengthMode", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"];
   const BUMPER_FIELDS = ["bumperThickness", "bumperBore"];
   const MODEL_34_FIELDS = ["bumperStiffness", "bumperDamping", "bumperMaxCompression", "muzzleDischargeCoefficient"];
+  const MODEL_40_FIELDS = ["frontDeadVolume", "bumperCurve"];
+  const PARAMETER_SPECS = Object.freeze({
+    dischargeCoefficient: { min: .1, max: 1 }, muzzleDischargeCoefficient: { min: .1, max: 1 },
+    bbLeakCoefficient: { min: 0, max: 1 }, barrelDrag: { min: 0, max: 2 },
+    pistonFriction: { min: 0, max: 20 }, sealFriction: { min: 0, max: .2 },
+    bumperStiffness: { min: 10, max: 5000 }, bumperDamping: { min: 0, max: 1000 },
+    springStiffness: { min: 100, max: 4000 }
+  });
   const fps = v => v / .3048;
   const energy = (mass, speed) => .5 * mass / 1000 * (speed * .3048) ** 2;
   function reference() {
@@ -1979,10 +2155,11 @@
     // snapshot. v3.2 used headBore as the implicit bumper opening, so preserve
     // that geometry explicitly instead of inventing the new default.
     const missingByVersion = {
-      "3.0.0": [...LENGTH_FIELDS, ...BUMPER_FIELDS, ...MODEL_34_FIELDS],
-      "3.1.1": [...BUMPER_FIELDS, ...MODEL_34_FIELDS],
-      "3.2.0": ["bumperBore", ...MODEL_34_FIELDS],
-      "3.3.0": MODEL_34_FIELDS
+      "3.4.0": MODEL_40_FIELDS,
+      "3.0.0": [...LENGTH_FIELDS, ...BUMPER_FIELDS, ...MODEL_34_FIELDS, ...MODEL_40_FIELDS],
+      "3.1.1": [...BUMPER_FIELDS, ...MODEL_34_FIELDS, ...MODEL_40_FIELDS],
+      "3.2.0": ["bumperBore", ...MODEL_34_FIELDS, ...MODEL_40_FIELDS],
+      "3.3.0": [...MODEL_34_FIELDS, ...MODEL_40_FIELDS]
     };
     const expectedMissing = missingByVersion[row.solverVersion];
     const previousComplete = row.setup && expectedMissing && expectedMissing.every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => !expectedMissing.includes(k)).every(k => Object.hasOwn(row.setup, k));
@@ -1990,13 +2167,17 @@
     const migratedSetup = previousComplete ? { ...row.setup,
       ...(!Object.hasOwn(row.setup, "bumperThickness") ? { bumperThickness: 0 } : {}),
       ...(!Object.hasOwn(row.setup, "bumperBore") ? { bumperBore: row.setup.headBore } : {}),
-      ...Object.fromEntries(MODEL_34_FIELDS.filter(key => !Object.hasOwn(row.setup, key)).map(key => [key, P.DEFAULTS[key]]))
+      ...Object.fromEntries([...MODEL_34_FIELDS, ...MODEL_40_FIELDS].filter(key => !Object.hasOwn(row.setup, key)).map(key => [key, P.DEFAULTS[key]]))
     } : row.setup;
     const setup = !legacy && setupComplete && P.validate(migratedSetup).length === 0 ? P.normalize(migratedSetup) : null;
     const provenance = Object.fromEntries(Object.entries(row.provenance || {}).filter(([k, v]) => ["geometry", "spring"].includes(k) && ["assumed", "measured"].includes(v)));
     const confirmed = row.confirmed === true && Boolean(setup);
     const role = confirmed && ["train", "validation"].includes(row.role) ? row.role : "reference";
+    const optional = (value, low, high) => { if (value === "" || value === null || value === undefined) return null; const number = Number(value); return Number.isFinite(number) && number >= low && number <= high ? number : null; };
     return { id: String(row.id || `measurement-${Math.random().toString(36).slice(2)}`).slice(0, 100), bbMass: mass, fps: speed, sigma: sigma > 0 && sigma <= 100 ? sigma : 1,
+      pistonHitMs: optional(row.pistonHitMs, 0, 1000), pistonHitSigmaMs: optional(row.pistonHitSigmaMs, .001, 100) || .1,
+      peakCylinderBarG: optional(row.peakCylinderBarG, 0, 100), peakCylinderSigmaBar: optional(row.peakCylinderSigmaBar, .001, 20) || .05,
+      peakBumperForceN: optional(row.peakBumperForceN, 0, 100000), peakBumperForceSigmaN: optional(row.peakBumperForceSigmaN, .01, 10000) || 5,
       role, setup, confirmed, provenance, notes: String(row.notes || "").slice(0, 2000), solverVersion: legacy ? null : String(row.solverVersion || ""),
       legacySetup: legacy || !setup || previousComplete ? row.setup || row.legacySetup || null : row.legacySetup || null };
   }
@@ -2010,17 +2191,17 @@
   }
   function encode(rows) { return { schemaVersion: SCHEMA, solverVersion: P.VERSION, measurements: rows }; }
   function eligible(row) { return row.confirmed && row.setup && !(row.setup.springLengthMode === 1 && row.setup.springCutLength > 0) && row.solverVersion === P.VERSION && row.provenance?.geometry === "measured" && row.provenance?.spring === "measured" && ["train", "validation"].includes(row.role); }
-  function groups(rows) {
+  function groups(rows, fitted = ["dischargeCoefficient"]) {
     const map = new Map();
     for (const r of rows) {
       const setup = { ...r.setup, bbMass: r.bbMass };
-      const identity = Object.fromEntries(Object.entries(setup).filter(([k]) => !["dischargeCoefficient", "muzzleDischargeCoefficient", "maxTime", "decelThreshold", "usefulFraction", ...LENGTH_FIELDS].includes(k)));
+      const identity = Object.fromEntries(Object.entries(setup).filter(([k]) => ![...fitted, "maxTime", "decelThreshold", "usefulFraction", ...LENGTH_FIELDS].includes(k)));
       // Only the force/compression law enters the ODE. Hidden inputs and alternate
       // ways of entering that same law cannot manufacture independent conditions.
       const spring = P.springState(setup);
       identity.springPreload = spring.preload;
       if (setup.springCurve.length) delete identity.springStiffness;
-      else identity.springStiffness = spring.stiffness;
+      else if (!fitted.includes("springStiffness")) identity.springStiffness = spring.stiffness;
       const key = JSON.stringify(identity);
       if (!map.has(key)) map.set(key, { setup, rows: [] });
       map.get(key).setup.maxTime = Math.max(map.get(key).setup.maxTime, setup.maxTime);
@@ -2028,51 +2209,87 @@
     }
     return [...map.values()];
   }
-  async function fitLoss(rows, onProgress = () => {}) {
-    const training = groups(rows.filter(r => eligible(r) && r.role === "train"));
-    const validation = groups(rows.filter(r => eligible(r) && r.role === "validation"));
+  function residualTerms(shot, row) {
+    if (!shot.valid || shot.exitVelocity === null) return null;
+    const terms = [{ kind: "fps", raw: fps(shot.exitVelocity) - row.fps, sigma: row.sigma }];
+    if (Number.isFinite(row.pistonHitMs)) {
+      if (shot.pistonHitTime === null) return null;
+      terms.push({ kind: "pistonHitMs", raw: shot.pistonHitTime * 1000 - row.pistonHitMs, sigma: row.pistonHitSigmaMs });
+    }
+    if (Number.isFinite(row.peakCylinderBarG)) terms.push({ kind: "peakCylinderBarG", raw: (shot.peakCylinderPressure - shot.ambientPressure) / 1e5 - row.peakCylinderBarG, sigma: row.peakCylinderSigmaBar });
+    if (Number.isFinite(row.peakBumperForceN)) {
+      if (!Number.isFinite(shot.peakBumperForce)) return null;
+      terms.push({ kind: "peakBumperForceN", raw: shot.peakBumperForce - row.peakBumperForceN, sigma: row.peakBumperForceSigmaN });
+    }
+    return terms;
+  }
+  async function fitParameters(rows, names = ["dischargeCoefficient"], onProgress = () => {}, simulate = P.simulate) {
+    const parameters = [...new Set(names)];
+    if (!parameters.length || parameters.length > 3 || parameters.some(name => !PARAMETER_SPECS[name])) throw new Error("fit:parameters");
+    const training = groups(rows.filter(r => eligible(r) && r.role === "train"), parameters);
+    const validation = groups(rows.filter(r => eligible(r) && r.role === "validation"), parameters);
     if (!training.length) throw new Error("fit:no-eligible-data");
     if (training.length + validation.length > 32) throw new Error("fit:too-many-configurations");
+    if (training.length < parameters.length) throw new Error("fit:not-identifiable");
+    if (parameters.includes("springStiffness") && training.some(group => group.setup.springCurve.length)) throw new Error("fit:measured-spring");
+    if (parameters.includes("bumperStiffness") && training.some(group => group.setup.bumperCurve.length)) throw new Error("fit:measured-bumper");
     const profile = [];
-    async function loss(cd) {
+    async function loss(values) {
       let weighted = 0, n = 0;
       for (const group of training) {
-        const s = P.simulate({ ...group.setup, dischargeCoefficient: cd }, { sampleInterval: 1 });
-        if (!s.valid || s.exitVelocity === null) return Infinity;
-        for (const r of group.rows) { weighted += ((fps(s.exitVelocity) - r.fps) / r.sigma) ** 2; n++; }
+        const s = simulate({ ...group.setup, ...values }, { sampleInterval: 1 });
+        for (const r of group.rows) {
+          const terms = residualTerms(s, r); if (!terms) return Infinity;
+          for (const term of terms) { weighted += (term.raw / term.sigma) ** 2; n++; }
+        }
         await new Promise(resolve => setTimeout(resolve, 0));
       }
       const value = weighted / n;
-      profile.push({ coefficient: cd, weightedMSE: value });
+      profile.push({ parameters: { ...values }, weightedMSE: value });
       onProgress(profile.length);
       await new Promise(resolve => setTimeout(resolve, 0));
       return value;
     }
-    const grid = [];
-    for (let i = 0; i <= 12; i++) { const cd = .1 + .9 * i / 12; grid.push({ cd, loss: await loss(cd) }); }
-    grid.sort((a, b) => a.loss - b.loss);
-    if (!Number.isFinite(grid[0].loss)) throw new Error("fit:no-valid-exit");
-    let lo = Math.max(.1, grid[0].cd - .075), hi = Math.min(1, grid[0].cd + .075);
-    for (let i = 0; i < 14; i++) {
-      const a = lo + (hi - lo) / 3, b = hi - (hi - lo) / 3;
-      if (await loss(a) < await loss(b)) hi = b; else lo = a;
+    let bestValues = Object.fromEntries(parameters.map(name => [name, training[0].setup[name]]));
+    let bestLoss = await loss(bestValues);
+    const cycles = parameters.length === 1 ? 1 : 2, iterations = parameters.length === 1 ? 16 : 7;
+    for (let cycle = 0; cycle < cycles; cycle++) for (const name of parameters) {
+      const spec = PARAMETER_SPECS[name]; let lo = spec.min, hi = spec.max;
+      if (cycle > 0) { const radius = (spec.max - spec.min) / 6 ** cycle; lo = Math.max(spec.min, bestValues[name] - radius); hi = Math.min(spec.max, bestValues[name] + radius); }
+      for (let iteration = 0; iteration < iterations; iteration++) {
+        const a = lo + (hi - lo) / 3, b = hi - (hi - lo) / 3;
+        const va = { ...bestValues, [name]: a }, vb = { ...bestValues, [name]: b };
+        const la = await loss(va), lb = await loss(vb);
+        if (la < lb) { hi = b; if (la < bestLoss) { bestLoss = la; bestValues = va; } }
+        else { lo = a; if (lb < bestLoss) { bestLoss = lb; bestValues = vb; } }
+      }
     }
     const best = profile.filter(v => Number.isFinite(v.weightedMSE)).sort((a, b) => a.weightedMSE - b.weightedMSE)[0];
+    if (!best) throw new Error("fit:no-valid-exit");
+    bestValues = best.parameters;
     function report(gs) {
-      let squared = 0, count = 0, failures = 0;
+      let squared = 0, count = 0, failures = 0, weightedSquared = 0, observations = 0;
       const residuals = [];
       for (const group of gs) {
-        const s = P.simulate({ ...group.setup, dischargeCoefficient: best.coefficient }, { sampleInterval: 1 });
+        const s = simulate({ ...group.setup, ...bestValues }, { sampleInterval: 1 });
         if (!s.valid || s.exitVelocity === null) { failures += group.rows.length; continue; }
-        for (const r of group.rows) { const error = fps(s.exitVelocity) - r.fps; squared += error ** 2; count++; residuals.push({ id: r.id, predictedFps: fps(s.exitVelocity), measuredFps: r.fps, residualFps: error }); }
+        for (const r of group.rows) {
+          const terms = residualTerms(s, r); if (!terms) { failures++; continue; }
+          const error = fps(s.exitVelocity) - r.fps; squared += error ** 2; count++;
+          for (const term of terms) { weightedSquared += (term.raw / term.sigma) ** 2; observations++; }
+          residuals.push({ id: r.id, predictedFps: fps(s.exitVelocity), measuredFps: r.fps, residualFps: error, terms });
+        }
       }
-      return { rmse: count ? Math.sqrt(squared / count) : null, count, failures, residuals };
+      return { rmse: count ? Math.sqrt(squared / count) : null, weightedRMSE: observations ? Math.sqrt(weightedSquared / observations) : null, count, observations, failures, residuals };
     }
-    return { coefficient: best.coefficient, training: report(training), validation: report(validation), profile, distinctTrainingSetups: training.length,
-      boundReached: best.coefficient < .101 || best.coefficient > .999,
-      weaklyConstrained: profile.filter(v => v.weightedMSE <= best.weightedMSE + 1).some(v => Math.abs(v.coefficient - best.coefficient) > .15) };
+    const boundReached = parameters.some(name => { const spec = PARAMETER_SPECS[name], value = bestValues[name]; return value <= spec.min + (spec.max - spec.min) * .002 || value >= spec.max - (spec.max - spec.min) * .002; });
+    return { coefficient: bestValues.dischargeCoefficient ?? null, parameters: bestValues, fittedParameters: parameters,
+      training: report(training), validation: report(validation), profile, distinctTrainingSetups: training.length,
+      boundReached, weaklyConstrained: training.length <= parameters.length || best.weightedMSE > 4,
+      identifiability: training.length > parameters.length ? "screened" : "minimum-data" };
   }
-  const api = { SCHEMA, KEY, OLD_KEY, reference, cleanRecord, decode, encode, eligible, energy, groups, fitLoss };
+  async function fitLoss(rows, onProgress = () => {}) { return fitParameters(rows, ["dischargeCoefficient"], onProgress); }
+  const api = { SCHEMA, KEY, OLD_KEY, PARAMETER_SPECS, reference, cleanRecord, decode, encode, eligible, energy, groups, residualTerms, fitParameters, fitLoss };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.PneumaticCalibration = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
 
@@ -2080,23 +2297,24 @@
 /* Bounded hardware-only search. Rankings are engineering preferences, not acoustics. */
 (function (root) {
   "use strict";
-  const VERSION = "1.0.0";
+  const VERSION = "2.0.0";
   const P = typeof module !== "undefined" && module.exports ? require("./physics.js") : root.PneumaticPhysics;
   const GROUPS = Object.freeze({
     cylinder: ["cylinderBore", "strokeLength", "deadVolume"],
-    barrel: ["barrelLength", "barrelDiameter"],
+    barrel: ["barrelLength", "barrelDiameter", "frontDeadVolume"],
     head: ["headBore", "headLength", "nozzleBore", "nozzleLength", "bumperThickness", "bumperBore", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "breechVolume"],
     piston: ["pistonMass"],
     airbrake: ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper"],
     spring: ["springStiffness", "springPreload", "springMass", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils"],
     bb: ["bbMass", "bbDiameter"]
   });
-  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], bumperThickness: [0,20], bumperBore: [.5,30], bumperStiffness: [0,5000], bumperDamping: [0,1000], bumperMaxCompression: [0,10], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], springFreeLength: [0,500], springInstalledLength: [0,500], springCutLength: [0,400], springActiveCoils: [0,200], springRemovedCoils: [0,200], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
-  const WEIGHTS = Object.freeze({ balanced: [.35,.2,.15,.30], quiet: [.45,.25,.2,.10], efficient: [.15,.10,.05,.70] });
+  const LIMITS = Object.freeze({ cylinderBore: [15,35], strokeLength: [20,150], deadVolume: [.05,5], barrelLength: [100,800], barrelDiameter: [5.8,6.5], frontDeadVolume: [.001,2], headBore: [1,10], headLength: [1,40], nozzleBore: [1,10], nozzleLength: [1,50], bumperThickness: [0,20], bumperBore: [.5,30], bumperStiffness: [0,5000], bumperDamping: [0,1000], bumperMaxCompression: [0,10], breechVolume: [.05,5], pistonMass: [5,300], airbrakeLength: [0,40], airbrakeDiameter: [.5,9], airbrakeTipDiameter: [0,9], airbrakeTaper: [0,10], springStiffness: [0,4000], springPreload: [0,150], springMass: [0,100], springFreeLength: [0,500], springInstalledLength: [0,500], springCutLength: [0,400], springActiveCoils: [0,200], springRemovedCoils: [0,200], bbMass: [.1,1], bbDiameter: [5.5,6.4] });
+  const WEIGHTS = Object.freeze({ balanced: [.30,.17,.13,.25,.15], quiet: [.38,.20,.17,.10,.15], efficient: [.12,.08,.05,.60,.15] });
   const HORIZON_MS = 250;
   const clone = v => JSON.parse(JSON.stringify(v));
   function fixedReason(p, key) {
     if (p.springCurve.length && ["springStiffness", "springMass", "springFreeLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"].includes(key)) return "measured-spring";
+    if (p.bumperCurve.length && key === "bumperStiffness") return "measured-bumper";
     if (p.springLengthMode === 1 && key === "springPreload" || p.springLengthMode !== 1 && ["springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"].includes(key)) return "spring-mode";
     return null;
   }
@@ -2157,15 +2375,21 @@
     if (!Number.isFinite(shot.exitEnergy) || !Number.isFinite(shot.exitTime) || !Number.isFinite(shot.exitVelocity)) return { reason: "noExit" };
     if (bounds && (shot.exitEnergy < bounds.min - 1e-10 || shot.exitEnergy > bounds.max + 1e-10)) return { reason: "energy" };
     if (!Number.isFinite(shot.pistonHitTime) || !Number.isFinite(shot.impactEnergy) || shot.dischargeComplete !== true) return { reason: "unfinished" };
+    const contacts = Array.isArray(shot.pistonImpacts) ? shot.pistonImpacts : [];
+    if (contacts.some(event => event.complete === false)) return { reason: "unfinished" };
     const springWork = P.springEnergy(params, 0);
     if (!(springWork > 0) || !Number.isFinite(shot.peakOutflow) || !Number.isFinite(shot.exitPressure) || !Number.isFinite(shot.energyResidual) || Math.abs(shot.energyResidual) > .001 * springWork) return { reason: "numerical" };
     const efficiency = shot.exitEnergy / springWork;
     if (!(efficiency > 0 && efficiency <= 1.001) || shot.impactEnergy < 0 || shot.peakOutflow < 0) return { reason: "numerical" };
+    const contactDissipation = contacts.length ? contacts.reduce((sum, event) => sum + Math.max(0, Number.isFinite(event.dissipatedEnergy) ? event.dissipatedEnergy : event.pistonEnergy || 0), 0) : shot.impactEnergy;
+    const timingRisk = shot.waveDiagnostics?.timingRatio === null || shot.waveDiagnostics?.timingRatio === undefined ? 0 : Math.min(2, shot.waveDiagnostics.timingRatio);
+    const uncertainty = (shot.waveDiagnostics?.relativePressureSpan || 0) + timingRisk;
     const metrics = { energy: shot.exitEnergy, velocity: shot.exitVelocity, efficiency, springWork,
-      impact: shot.impactEnergy, outflow: shot.peakOutflow, exitGauge: Math.max(0, shot.exitPressure - shot.ambientPressure),
+      impact: contactDissipation, firstImpact: shot.impactEnergy, contactCount: contacts.length || 1,
+      outflow: shot.peakOutflow, exitGauge: Math.max(0, shot.exitPressure - shot.ambientPressure), uncertainty,
       timingMargin: shot.strongBrakeTime !== null && shot.usefulTime !== null ? shot.strongBrakeTime - shot.usefulTime : null,
       contactTime: shot.pistonHitTime, duration: shot.duration, energyResidual: shot.energyResidual };
-    return { reason: null, metrics, vector: [metrics.impact, metrics.outflow, metrics.exitGauge, -metrics.efficiency] };
+    return { reason: null, metrics, vector: [metrics.impact, metrics.outflow, metrics.exitGauge, -metrics.efficiency, metrics.uncertainty] };
   }
   function dominates(a, b) {
     return a.vector.every((v, i) => v <= b.vector[i]) && a.vector.some((v, i) => v < b.vector[i]);
@@ -2190,7 +2414,7 @@
     for (const key of Object.keys(P.DEFAULTS)) {
       if (JSON.stringify(candidate.params[key]) !== JSON.stringify(next[key])) {
         if (!allowed.has(key)) throw new Error("optimizer:locked-change");
-        if (fixedReason(next, key)) throw new Error("optimizer:fixed-spring");
+        if (fixedReason(next, key)) throw new Error("optimizer:fixed-input-law");
         next[key] = clone(candidate.params[key]);
       }
     }
@@ -2586,7 +2810,7 @@
       <p class="sound-quantity">${t("Peak modeled muzzle outflow observed during this run", "Najveći modelirani protok na ustima opažen tijekom simulacije")}</p>
       ${comparisonMarkup(q.flowComparison, referenceFlow, "g/s", "flow", t, fmt)}
       <p><strong>${t("What it means:", "Što to znači:")}</strong> ${t("After the BB exits, compressed air escapes from the barrel and contributes a separate air blast. Pressure, gas inventory and discharge rate describe that release. A higher outflow is not the same as a measured increase in sound.", "Nakon izlaska BB-a stlačeni zrak izlazi iz cijevi i doprinosi zasebnom zračnom prasku. Tlak, masa plina i brzina istjecanja opisuju to pražnjenje. Veći protok nije isto što i izmjeren porast glasnoće.")}</p>
-      <p>${t("This is separate from the piston strike—not dB and not a suppressor prediction. The muzzle Cd is an independent unknown that acts only after BB exit.", "To je odvojeno od udara pistona — nisu dB niti predviđanje učinka prigušivača. Cd usta cijevi zasebna je nepoznanica koja djeluje tek nakon izlaska BB-a.")}</p>
+      <p>${t("This is separate from the piston strike—not dB and not a suppressor prediction. The muzzle Cd is an independent unknown: before BB exit it controls venting of the air ahead of the BB; after exit it controls discharge from the barrel.", "To je odvojeno od udara pistona — nisu dB niti predviđanje učinka prigušivača. Cd usta cijevi zasebna je nepoznanica: prije izlaska BB-a određuje odzračivanje zraka ispred BB-a, a nakon izlaska pražnjenje cijevi.")}</p>
       <p class="sound-measured">${t("Pressure at BB exit", "Tlak pri izlasku BB-a")}: <strong>${fmt(s.exitTime === null ? null : (s.exitPressure - s.ambientPressure) / 1e5, 2, "bar(g)")}</strong> · ${t("Gas at exit", "Plin pri izlasku")}: <strong>${fmt(s.exitGasMass === null ? null : s.exitGasMass * 1e6, 1, "mg")}</strong> · ${t("Discharged in run", "Ispušteno tijekom simulacije")}: <strong>${fmt(s.exitTime === null ? null : s.muzzleMass * 1e6, 1, "mg")}</strong>.</p>
       <p>${s.dischargeComplete && baseline?.dischargeComplete ? t("Both runs relaxed to within 1% of atmospheric pressure.", "Obje simulacije približile su se atmosferskom tlaku unutar 1%.") : t("Discharge remains unresolved in one or both runs. Later outflow may change the observed comparison; unfinished discharge is not silence.", "Pražnjenje nije završeno u jednoj ili obje simulacije. Kasniji protok može promijeniti opaženu usporedbu; nezavršeno pražnjenje ne znači tišinu.")}</p></article>
       </div></section>`;
@@ -2702,7 +2926,7 @@
     cylinderBore: "mm", strokeLength: "mm", pistonMass: "g", deadVolume: "cm³",
     bumperThickness: "mm", bumperBore: "mm", airbrakeLength: "mm", airbrakeDiameter: "mm",
     airbrakeTipDiameter: "mm", airbrakeTaper: "mm", headBore: "mm", headLength: "mm",
-    nozzleBore: "mm", nozzleLength: "mm", breechVolume: "cm³", barrelLength: "mm",
+    nozzleBore: "mm", nozzleLength: "mm", breechVolume: "cm³", frontDeadVolume: "cm³", barrelLength: "mm",
     barrelDiameter: "mm", bbDiameter: "mm", bbMass: "g", springFreeLength: "mm",
     springInstalledLength: "mm", springCutLength: "mm", springActiveCoils: "turns",
     springRemovedCoils: "turns", springSolidLength: "mm", springStiffness: "N/m",
@@ -2716,7 +2940,7 @@
   const DIGITS = {
     cylinderBore: 2, barrelDiameter: 2, bbDiameter: 2, bumperBore: 2,
     airbrakeDiameter: 2, airbrakeTipDiameter: 2, headBore: 2, nozzleBore: 2,
-    deadVolume: 2, breechVolume: 2, pistonLeak: 3, nozzleLeak: 3,
+    deadVolume: 2, breechVolume: 2, frontDeadVolume: 3, pistonLeak: 3, nozzleLeak: 3,
     sealFriction: 3, bbLeakCoefficient: 2, restitution: 2, dischargeCoefficient: 2, muzzleDischargeCoefficient: 2,
     heatTransfer: 3, usefulFraction: 3
   };
@@ -2747,7 +2971,8 @@
         ["headLength", ["Receiving-passage length", "Duljina ulaznog provrta"], ["Depth rod", "Dubinomjer"], ["Axial length of the receiving bore before the passage changes into the downstream nozzle section.", "Uzdužna duljina ulaznog provrta prije prijelaza u izlazni kanal mlaznice."]],
         ["nozzleBore", ["Downstream nozzle diameter", "Promjer izlaznog kanala mlaznice"], ["Pin gauges", "Mjerni trnovi"], ["Smallest effective internal diameter after the receiving passage and before the hop chamber.", "Najmanji efektivni unutarnji promjer nakon ulaznog provrta i prije hop komore."]],
         ["nozzleLength", ["Downstream nozzle length", "Duljina izlaznog kanala mlaznice"], ["Depth rod", "Dubinomjer"], ["Axial length assigned to the smaller downstream passage.", "Uzdužna duljina pripisana manjem izlaznom kanalu."]],
-        ["breechVolume", ["Head / nozzle / breech storage", "Volumen glave, mlaznice i komore"], ["Derived volume", "Izvedeni volumen"], ["Derive from the connected cavity geometry behind the seated BB. Keep it separate from cylinder-side dead volume.", "Izvedite iz spojene geometrije šupljine iza postavljenog BB-a. Držite ga odvojeno od preostalog volumena cilindra."]]
+        ["breechVolume", ["Head / nozzle / breech storage", "Volumen glave, mlaznice i komore"], ["Derived volume", "Izvedeni volumen"], ["Derive from the connected cavity geometry behind the seated BB. Keep it separate from cylinder-side dead volume.", "Izvedite iz spojene geometrije šupljine iza postavljenog BB-a. Držite ga odvojeno od preostalog volumena cilindra."]],
+        ["frontDeadVolume", ["Front-gas terminal volume", "Završni volumen zraka ispred BB-a"], ["Muzzle geometry / model input", "Geometrija usta / ulaz modela"], ["Small residual volume retained when the BB reaches the crown so the front-gas control volume never becomes mathematically zero. It is not the complete barrel volume.", "Mali preostali volumen kada BB dosegne usta kako prednji plinski volumen ne bi matematički postao nula. To nije cijeli volumen cijevi."]]
       ]
     },
     {
@@ -2782,11 +3007,12 @@
     ["sealFriction", ["Pressure-dependent seal friction", "Trenje brtve ovisno o tlaku"], ["Fit / instrumented test", "Prilagodba / instrumentirano ispitivanje"], ["Additional seal drag that grows with cylinder gauge pressure in this model. It is a fitted factor, not a directly measured force or an O-ring hardness value.", "Dodatni otpor brtve koji u ovom modelu raste s relativnim tlakom u cilindru. To je prilagodbeni faktor, ne izravno izmjerena sila ni tvrdoća O-prstena."]],
     ["rearDamping", ["Rear vent / mechanical drag", "Stražnji otvor / mehanički otpor"], ["Fit / coast-down evidence", "Prilagodba / mjerenje usporavanja"], ["Velocity-proportional resistance representing air displaced behind the piston and other distributed mechanical losses. It is expressed in N·s/m and needs dynamic evidence.", "Otpor razmjeran brzini koji predstavlja zrak istisnut iza pistona i druge raspodijeljene mehaničke gubitke. Izražen je u N·s/m i traži dinamičku potvrdu."]],
     ["bumperStiffness", ["Bumper compression stiffness", "Krutost stlačivanja gumice"], ["Force–deflection bench test", "Stolno mjerenje sile i deformacije"], ["Slope of bumper force versus axial compression. Higher values make the pad resist compression more strongly; this is N/mm, not Shore hardness.", "Nagib sile gumice prema uzdužnom stlačenju. Veća vrijednost znači da se gumica jače opire stlačivanju; jedinica je N/mm, a ne Shore tvrdoća."]],
+    ["bumperCurve", ["Measured bumper force curve", "Izmjerena krivulja sile gumice"], ["Force–deflection bench test", "Stolno mjerenje sile i deformacije"], ["Optional compression-versus-force points for nonlinear rubber behavior. When present, this curve replaces the single linear stiffness while damping remains a separate dynamic input.", "Neobavezne točke stlačenja i sile za nelinearni odziv gume. Kada je unesena, krivulja zamjenjuje jednu linearnu krutost, dok prigušenje ostaje zaseban dinamički ulaz."]],
     ["bumperDamping", ["Bumper viscous damping", "Viskozno prigušenje gumice"], ["Dynamic contact fit", "Prilagodba dinamičkog kontakta"], ["Velocity-dependent force used to dissipate energy while the bumper is being compressed or released. It changes rebound in the conditional contact model and is not a dB value.", "Sila ovisna o brzini kojom se rasipa energija dok se gumica stišće ili vraća. Mijenja odskok u uvjetnom modelu kontakta i nije vrijednost u dB."]],
     ["bumperMaxCompression", ["Bumper compression cap", "Granica stlačenja gumice"], ["Geometry plus force test", "Geometrija i ispitivanje sile"], ["Largest allowed axial deformation before the model treats the pad as bottomed out against a rigid stop. The effective cap can never exceed the entered physical thickness.", "Najveća dopuštena uzdužna deformacija prije nego što model smatra da je gumica potpuno stisnuta na kruti graničnik. Efektivna granica nikad ne može biti veća od unesene fizičke debljine."]],
     ["restitution", ["Rigid / bottom-out restitution", "Odskok krutog graničnika"], ["High-speed contact measurement", "Brzo mjerenje kontakta"], ["Fraction controlling velocity reversal only when a rigid head is struck or the bumper reaches its compression cap. Zero means no idealized rigid rebound; it does not control the pneumatic cushion.", "Faktor koji određuje promjenu smjera brzine samo pri udaru u krutu glavu ili dosezanju granice stlačenja gumice. Nula znači bez idealiziranog krutog odskoka; ne upravlja pneumatskim jastukom."]],
     ["dischargeCoefficient", ["Head discharge coefficient Cd", "Koeficijent protoka glave Cd"], ["Flow bench or chrono fit", "Protočna klupa ili chrono prilagodba"], ["Effective loss coefficient for mass flow through the bumper opening, receiving bore and downstream nozzle. It combines contraction and turbulence losses; it is not an efficiency percentage.", "Efektivni koeficijent gubitaka masenog protoka kroz otvor gumice, ulazni provrt i izlazni kanal mlaznice. Vrijednost 1 i dalje nije postotak učinkovitosti; koeficijent sažima suženje i turbulentne gubitke."]],
-    ["muzzleDischargeCoefficient", ["Muzzle discharge coefficient Cd", "Koeficijent protoka na ustima Cd"], ["Transient muzzle-flow test", "Mjerenje prijelaznog protoka na ustima"], ["Effective outflow coefficient used only after the BB exits. It changes the modeled pressure-release and muzzle-blast contributor, not the BB speed already reached at exit.", "Efektivni koeficijent istjecanja koji se koristi tek nakon izlaska BB-a. Mijenja modelirano pražnjenje tlaka i doprinos prasku na ustima, ne brzinu koju je BB već dosegnuo pri izlasku."]],
+    ["muzzleDischargeCoefficient", ["Muzzle discharge coefficient Cd", "Koeficijent protoka na ustima Cd"], ["Transient muzzle-flow test", "Mjerenje prijelaznog protoka na ustima"], ["Effective coefficient for front-gas venting before BB exit and compressed-gas discharge after exit. It can influence both exit speed and the modeled muzzle-flow contributor.", "Efektivni koeficijent odzračivanja zraka ispred BB-a prije izlaska i pražnjenja stlačenog plina nakon izlaska. Može utjecati i na izlaznu brzinu i na modelirani doprinos protoka na ustima."]],
     ["pistonLeak", ["Piston-seal leak area", "Površina curenja brtve pistona"], ["Leak-down fit", "Prilagodba pada tlaka"], ["Equivalent area for air bypassing the piston seal from the compressed cylinder side. It already represents an effective leak path and is not a visible geometric hole that must have this shape.", "Ekvivalentna površina zraka koji zaobilazi brtvu pistona sa stlačene strane cilindra. Već predstavlja efektivni put curenja i nije nužno vidljiva rupa toga oblika."]],
     ["nozzleLeak", ["Nozzle / hop leak area", "Površina curenja mlaznice / hopa"], ["Leak-down fit", "Prilagodba pada tlaka"], ["Equivalent leak area from the downstream head/nozzle/hop system to atmosphere, separate from controlled flow into the barrel. Use leak-down evidence or calibration.", "Ekvivalentna površina curenja iz izlaznog sklopa glave, mlaznice i hopa prema atmosferi, odvojena od kontroliranog protoka u cijev. Koristite mjerenje pada tlaka ili kalibraciju."]],
     ["bbLeakCoefficient", ["BB-clearance leak coefficient", "Koeficijent curenja oko BB-a"], ["Calibration parameter", "Kalibracijski parametar"], ["Multiplier for air bypass through the annular clearance between the measured BB and barrel diameters. Zero disables that modeled path; one applies the full effective-clearance estimate.", "Množitelj protoka zraka kroz prstenasti zazor između izmjerenog BB-a i promjera cijevi. Nula isključuje taj modelirani put; jedan primjenjuje puni procijenjeni efektivni zazor."]],
@@ -2810,6 +3036,7 @@
 
   function fieldValue(p, key, t) {
     const value = p[key];
+    if (key === "bumperCurve") return Array.isArray(value) && value.length ? t(`${value.length} measured points`, `${value.length} izmjerenih točaka`) : t("Not entered", "Nije uneseno");
     if (!Number.isFinite(value)) return "—";
     if (UNKNOWN_ZERO.has(key) && value === 0) return t("Unknown / not entered", "Nepoznato / nije uneseno");
     const digits = DIGITS[key] ?? (Math.abs(value) < 1 && value !== 0 ? 2 : 1);
@@ -2901,7 +3128,7 @@
         ${dimH(id, left, contact, 35, `${t("effective travel", "efektivni hod")} ${(p.strokeLength - p.bumperThickness).toFixed(1)} mm`)}
         ${dimH(id, left, right, 243, `${t("nominal stroke", "nominalni hod")} ${fieldValue(p, "strokeLength", t)}`)}
         ${dimV(id, 523, center - boreHalf, center + boreHalf, `Ø ${fieldValue(p, "cylinderBore", t)}`, "end")}
-      </svg><p class="parts-scale-note">${t("Current effective swept volume", "Trenutačni efektivni radni volumen")}: <strong>${(g.sweptVolume * 1e6).toFixed(2)} cm³</strong>. ${t("Undeformed bumper shown; modeled compression cap / stiffness", "Prikazana je nestlačena gumica; modelirana granica stlačenja / krutost")}: <strong>${Math.min(p.bumperThickness, p.bumperMaxCompression).toFixed(2)} mm / ${p.bumperStiffness.toFixed(0)} N/mm</strong>. ${t("Exact deformed shape is unknown.", "Točan deformirani oblik nije poznat.")}</p></div>`;
+      </svg><p class="parts-scale-note">${t("Current effective swept volume", "Trenutačni efektivni radni volumen")}: <strong>${(g.sweptVolume * 1e6).toFixed(2)} cm³</strong>. ${t("Undeformed bumper shown; modeled compression cap / force law", "Prikazana je nestlačena gumica; modelirana granica stlačenja / zakon sile")}: <strong>${Math.min(p.bumperThickness, p.bumperMaxCompression).toFixed(2)} mm / ${p.bumperCurve.length ? t(`${p.bumperCurve.length}-point measured curve`, `izmjerena krivulja s ${p.bumperCurve.length} točaka`) : `${p.bumperStiffness.toFixed(0)} N/mm`}</strong>. ${t("Exact deformed shape is unknown.", "Točan deformirani oblik nije poznat.")}</p></div>`;
   }
 
   function barrelSvg(p, t) {
@@ -2982,10 +3209,11 @@
     const axis = 156, top = 100, bottom = 212;
     const bb = f.bbExited ? end + (f.t - shot.exitTime) * shot.exitVelocity * (end - barrelStart) / shot.barrelLength : barrelStart + f.bbX / shot.barrelLength * (end - barrelStart);
     const radial = 26 / Math.max(p.bumperBore, p.headBore, p.nozzleBore, p.airbrakeDiameter);
-    const peak = Math.max(1, shot.peakCylinderPressure - shot.ambientPressure, shot.peakPressure - shot.ambientPressure);
+    const peak = Math.max(1, shot.peakCylinderPressure - shot.ambientPressure, shot.peakPressure - shot.ambientPressure, shot.peakFrontPressure - shot.ambientPressure);
     const cylinderGlow = clamp((f.cylinderPressure - shot.ambientPressure) / peak);
     const barrelGlow = clamp((f.pressure - shot.ambientPressure) / peak);
-    const amber = "#ffbf69", cyan = "#5de4e7";
+    const frontGlow = clamp((f.frontPressure - shot.ambientPressure) / peak);
+    const amber = "#ffbf69", cyan = "#5de4e7", violet = "#b99cff";
     const gradient = (x1, y1, x2, y2, stops) => {
       const g = ctx.createLinearGradient(x1, y1, x2, y2);
       stops.forEach(([at, color]) => g.addColorStop(at, color)); return g;
@@ -3094,6 +3322,7 @@
     rect(barrelStart, axis - 22, end - barrelStart, 44, gradient(0, axis - 22, 0, axis + 22, [[0, "#a08c69"], [.12, "#544d40"], [.5, "#182830"], [1, "#a69067"]]), "#998667");
     rect(barrelStart, axis - 13, end - barrelStart, 26, "#09141c", "#526a72");
     gas(barrelStart, axis - 12, Math.max(0, Math.min(bb, end) - barrelStart), 24, barrelGlow, cyan, 30, f.flow);
+    if (!f.bbExited) gas(Math.max(barrelStart, bb), axis - 12, Math.max(0, end - Math.max(barrelStart, bb)), 24, frontGlow, violet, 24, f.frontOutflow);
     line(end, axis - 23, end, axis + 23, "#c8d9dd", 3);
     const plume = f.bbExited ? clamp(f.outflow / Math.max(shot.peakOutflow, 1e-10)) : 0;
     if (plume > .001) {
@@ -3129,9 +3358,9 @@
       ctx.fillText(p.bumperThickness > 0 ? t("BUMPER / HEAD / NOZZLE", "ODBOJNIK / GLAVA / MLAZNICA") : t("HEAD / NOZZLE", "GLAVA / MLAZNICA"), 425, 36);
       ctx.fillText(t("INNER BARREL", "UNUTARNJA CIJEV"), 760, 36);
       ctx.fillStyle = amber; ctx.fillText(`${t("Cylinder", "Cilindar")}  ${fmt((f.cylinderPressure - shot.ambientPressure) / 1e5, 2)} bar(g)`, 40, 266);
-      ctx.fillStyle = cyan; ctx.fillText(`${t("Behind BB", "Iza BB-a")}  ${fmt((f.pressure - shot.ambientPressure) / 1e5, 2)} bar(g)`, 660, 266);
+      ctx.fillStyle = cyan; ctx.fillText(`${t("Behind / ahead BB", "Iza / ispred BB-a")}  ${fmt((f.pressure - shot.ambientPressure) / 1e5, 2)} / ${fmt((f.frontPressure - shot.ambientPressure) / 1e5, 2)} bar(g)`, 620, 266);
       rect(40, 279, 270, 3, "#2c363b"); rect(40, 279, cylinderGlow * 270, 3, amber);
-      rect(660, 279, 350, 3, "#2c363b"); rect(660, 279, barrelGlow * 350, 3, cyan);
+      rect(620, 279, 390, 3, "#2c363b"); rect(620, 279, barrelGlow * 390, 3, cyan); rect(620, 284, frontGlow * 390, 2, violet);
       ctx.fillStyle = "#99aeb9";
       ctx.fillText(`${t("Pin overlap", "Preklapanje pina")} ${fmt(f.insertion * 1000, 2)} mm  ·  ${t("Open area", "Otvor")} ${fmt(f.openArea * 1e6, 3)} mm²`, 40, 311);
     } else {
@@ -3161,9 +3390,10 @@
   const fps = v => v === null ? null : v / .3048;
   const stamp = v => fmt(v === null ? null : v * 1000, 2, "ms");
   const clone = v => JSON.parse(JSON.stringify(v));
+  const parseCurveText = value => value.trim() ? value.trim().split(/\n+/).map(line => line.trim().split(/[,;\s]+/).map(Number)) : [];
   let p = P.normalize(), selectedPlatform = "ssg10", component = "amp", springLabel = "unspecified", pinLabel = "plug";
   let provenance = { geometry: "assumed", spring: "assumed" }, shot = null, baseline = null, fraction = 0, playing = false, animation = 0;
-  let measurements = [], fit = null, status = null, diagnostic = null, busy = false, debounce = null;
+  let measurements = [], fit = null, fitSelection = ["dischargeCoefficient"], status = null, diagnostic = null, busy = false, debounce = null;
   let lastValidShot = null, changeComparison = null;
   let optimizer = null;
   let playbackUniform = false, playbackSpeed = 1, calculationPending = false, playheadTime = 0;
@@ -3193,6 +3423,7 @@
     airbrakeTaper: ["Tapered tip length", "Duljina konusnog vrha", "mm", 0, 10, .1],
     deadVolume: ["Cylinder-side residual cavity", "Preostali volumen na strani cilindra", "cm³", .05, 5, .01],
     breechVolume: ["Head / nozzle / breech storage", "Volumen glave, mlaznice i komore", "cm³", .05, 5, .01],
+    frontDeadVolume: ["Muzzle/front-gas residual volume", "Preostali volumen zraka ispred BB-a", "cm³", .001, 2, .001],
     springStiffness: ["Spring stiffness before any simulated cut", "Krutost opruge prije simuliranog skraćivanja", "N/m", 0, 4000, 10],
     springPreload: ["Spring compression at rigid-head plane before added bumper", "Stlačenje opruge na ravnini krute glave prije dodatne gumice", "mm", 0, 150, .5],
     springMass: ["Installed spring mass (after any cut)", "Masa ugrađene opruge (nakon skraćivanja)", "g", 0, 100, .1],
@@ -3297,6 +3528,19 @@
       }
     }
   }
+  function syncBumperControls() {
+    if (!$('bumperStiffness')) return;
+    const fixed = Boolean(p.bumperCurve.length);
+    $('bumperStiffness').disabled = fixed;
+    document.querySelector('[data-range="bumperStiffness"]').disabled = fixed;
+    const input = $('opt-bumperStiffness');
+    if (input) {
+      input.disabled = optimizer.locks.head || fixed;
+      input.value = fixed ? String(p.bumperStiffness) : optimizer.values.bumperStiffness;
+      const note = input.parentElement.querySelector('small');
+      if (note) note.hidden = !fixed;
+    }
+  }
   function group(en, hr, keys, help = "") { return `<section class="control-group"><p class="group-label">${t(en, hr)}</p>${keys.map(field).join("")}${help ? `<p class="field-help">${help}</p>` : ""}</section>`; }
   function provenanceControl(key, en, hr) { return `<label class="provenance"><input type="checkbox" data-provenance="${key}" ${provenance[key] === "measured" ? "checked" : ""}>${t(en, hr)}</label>`; }
   function render() {
@@ -3322,11 +3566,11 @@
         <p class="small-note" id="shortStrokeDynamic"></p>
         ${group("Moving masses", "Pomične mase", ["pistonMass", "bbMass", "bbDiameter"])}<div class="preset-row">${[58, 65, 68, 72, 76, 82].map(m => `<button class="preset" type="button" data-mass="${m}" aria-pressed="${p.pistonMass === m}">${m} g</button>`).join("")}</div>
         <details open><summary>${t("Head, bumper and airbrake geometry", "Geometrija glave, odbojne gumice i zračne kočnice")}</summary><p class="field-help">${t("Pneumatic cushioning: the pin restricts airflow before contact. The rubber bumper acts only when the piston reaches it. These are separate effects.", "Pneumatsko ublažavanje: pin ograničava protok prije kontakta. Odbojna gumica djeluje tek kad je piston dotakne. To su odvojeni učinci.")}</p>
-        <section class="control-group bumper-controls"><p class="group-label">${t("Added cylinder-head bumper", "Dodatna odbojna gumica glave cilindra")}</p>${["bumperThickness", "bumperBore", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "restitution"].map(field).join("")}<p class="field-help">${t("Thickness 0 mm means no added pad. With a pad, stiffness and damping create a finite compression/contact interval; the effective cap is the smaller of the entered limit and physical thickness. Reaching that cap uses the rigid bottom-out restitution. These bench-test inputs are not Shore hardness, sound reduction or dB. Measure the installed pad and identify its force–deflection behavior if contact results matter.", "Debljina 0 mm znači da nema dodatne gumice. Uz gumicu, krutost i prigušenje stvaraju konačan interval stlačivanja/kontakta; efektivna granica manja je od unesene vrijednosti i fizičke debljine. Dosezanje te granice koristi koeficijent odskoka krutog graničnika. Ti ulazi s ispitivanja nisu Shore tvrdoća, smanjenje zvuka ni dB. Izmjerite ugrađenu gumicu i njezin odnos sile i deformacije ako su rezultati kontakta važni.")}</p></section>
+        <section class="control-group bumper-controls"><p class="group-label">${t("Added cylinder-head bumper", "Dodatna odbojna gumica glave cilindra")}</p>${["bumperThickness", "bumperBore", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "restitution"].map(field).join("")}<label for="bumperCurve">${t("Optional measured bumper curve: compression mm, force N", "Neobavezna izmjerena krivulja gumice: stlačenje mm, sila N")}</label><textarea id="bumperCurve" rows="4" placeholder="0, 0&#10;0.5, 100&#10;1.0, 300">${p.bumperCurve.map(v => v.join(", ")).join("\n")}</textarea><p class="field-help">${t("A measured nonlinear curve replaces the single linear stiffness. Start at 0 mm / 0 N and cover the complete compression cap. Dynamic damping is still entered separately; neither input is Shore hardness or dB.", "Izmjerena nelinearna krivulja zamjenjuje jednu linearnu krutost. Počnite s 0 mm / 0 N i pokrijte cijelu granicu stlačenja. Dinamičko prigušenje i dalje se unosi zasebno; nijedan ulaz nije Shore tvrdoća ni dB.")}</p><p class="field-help">${t("Thickness 0 mm means no added pad. With a pad, force and damping create a finite compression/contact interval; the effective cap is the smaller of the entered limit and physical thickness. Reaching that cap uses rigid bottom-out restitution.", "Debljina 0 mm znači da nema dodatne gumice. Uz gumicu, sila i prigušenje stvaraju konačan interval stlačivanja/kontakta; efektivna granica manja je od unesene vrijednosti i fizičke debljine. Dosezanje te granice koristi odskok krutog graničnika.")}</p></section>
         <label for="pinLabel">${t("Installed AMP pin", "Ugrađeni AMP pin")}</label><select id="pinLabel">${[["custom", "Measured / custom", "Izmjeren / prilagođen"], ["plug", "Plug / no airbrake", "Čep / bez zračne kočnice"], ["short", "Short pin — enter measured size", "Kratki pin — unesite dimenzije"], ["medium", "Medium pin — enter measured size", "Srednji pin — unesite dimenzije"], ["long", "Long pin — enter measured size", "Dugi pin — unesite dimenzije"]].map(([v, en, hr]) => `<option value="${v}" ${pinLabel === v ? "selected" : ""}>${t(en, hr)}</option>`).join("")}</select>
-        ${["headBore", "headLength", "nozzleBore", "nozzleLength", "airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "deadVolume", "breechVolume"].map(field).join("")}<p class="small-note" id="clearanceNote"></p><p class="field-help">${t("Internal diameters—not outer diameters. The model has three consecutive axial passages: bumper opening, rigid-head bore and nozzle. Each restricts only the part of the pin actually reaching that segment. Dead volume is the bare rigid-head cavity; the pad's annular solid volume is subtracted automatically. Measure the installed geometry because rubber deformation and eccentricity are not resolved.", "Unutarnji promjeri — ne vanjski promjeri. Model ima tri uzastopna uzdužna kanala: otvor gumice, provrt krute glave i mlaznicu. Svaki ograničava samo dio pina koji stvarno doseže taj segment. Preostali volumen predstavlja šupljinu gole krute glave; puni prstenasti volumen gumice oduzima se automatski. Izmjerite ugrađenu geometriju jer deformacija gume i ekscentričnost nisu razriješene.")}</p>${provenanceControl("geometry", "I have measured the geometry and assembled masses", "Izmjerio/la sam geometriju i mase sklopova")}</details>
+        ${["headBore", "headLength", "nozzleBore", "nozzleLength", "airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "deadVolume", "breechVolume", "frontDeadVolume"].map(field).join("")}<p class="small-note" id="clearanceNote"></p><p class="field-help">${t("Internal diameters—not outer diameters. The model has three consecutive axial passages: bumper opening, rigid-head bore and nozzle. Each restricts only the part of the pin actually reaching that segment. Dead volume is the bare rigid-head cavity; the pad's annular solid volume is subtracted automatically. Front residual volume prevents a zero-volume singularity as the BB clears the crown and should represent only the small terminal/muzzle pocket. Measure the installed geometry because rubber deformation and eccentricity are not resolved.", "Unutarnji promjeri — ne vanjski promjeri. Model ima tri uzastopna uzdužna kanala: otvor gumice, provrt krute glave i mlaznicu. Svaki ograničava samo dio pina koji stvarno doseže taj segment. Preostali volumen predstavlja šupljinu gole krute glave; puni prstenasti volumen gumice oduzima se automatski. Prednji preostali volumen sprječava singularnost nultog volumena pri izlasku BB-a i treba predstavljati samo mali završni džep na ustima. Izmjerite ugrađenu geometriju jer deformacija gume i ekscentričnost nisu razriješene.")}</p>${provenanceControl("geometry", "I have measured the geometry and assembled masses", "Izmjerio/la sam geometriju i mase sklopova")}</details>
         ${springMarkup()}
-        <details><summary>${t("Airflow, friction and environment", "Protok, trenje i okoliš")}</summary>${["dischargeCoefficient", "muzzleDischargeCoefficient", "pistonLeak", "nozzleLeak", "bbLeakCoefficient", "bbBreakaway", "barrelDrag", "heatTransfer", "ambientPressure", "airTemperature"].map(field).join("")}<p class="field-help">${t("Head Cd controls transfer through the bumper/head/nozzle stack. Muzzle Cd is separate and acts only after BB exit, so it changes the modeled discharge/blast contributor but not the already-recorded exit speed. Leak areas include their own effective coefficient. All loss coefficients need evidence; they are not efficiency percentages.", "Cd glave određuje prijenos kroz sklop gumice/glave/mlaznice. Cd usta cijevi odvojen je i djeluje tek nakon izlaska BB-a, pa mijenja modelirano pražnjenje/doprinos prasku, ali ne već zabilježenu izlaznu brzinu. Površine curenja uključuju vlastiti efektivni koeficijent. Svi koeficijenti gubitaka traže potvrdu; nisu postoci učinkovitosti.")}</p></details>
+        <details><summary>${t("Airflow, friction and environment", "Protok, trenje i okoliš")}</summary>${["dischargeCoefficient", "muzzleDischargeCoefficient", "pistonLeak", "nozzleLeak", "bbLeakCoefficient", "bbBreakaway", "barrelDrag", "heatTransfer", "ambientPressure", "airTemperature"].map(field).join("")}<p class="field-help">${t("Head Cd controls transfer through the bumper/head/nozzle stack. Muzzle Cd vents the modeled air ahead of the BB before exit and the compressed charge after exit, so it can now affect both exit speed and the discharge/blast contributor. Leak areas include their own effective coefficient. All loss coefficients need evidence; they are not efficiency percentages.", "Cd glave određuje prijenos kroz sklop gumice/glave/mlaznice. Cd usta odzračuje modelirani zrak ispred BB-a prije izlaska i stlačeni naboj nakon izlaska, pa sada može utjecati i na izlaznu brzinu i na doprinos pražnjenja/praska. Površine curenja uključuju vlastiti efektivni koeficijent. Svi koeficijenti gubitaka traže potvrdu; nisu postoci učinkovitosti.")}</p></details>
         <details><summary>${t("Timing criteria and solver", "Vremenski kriteriji i rješavač")}</summary>${["usefulFraction", "decelThreshold", "maxTime"].map(field).join("")}<p class="field-help">${t("Adaptive midpoint integration, maximum step 0.01 ms. Thresholds are user conventions, not physical switches. The model can end before contact or complete discharge.", "Adaptivna integracija metodom srednje točke, najveći korak 0,01 ms. Pragovi su dogovoreni kriteriji, a ne fizikalne sklopke. Model može završiti prije kontakta ili potpunog pražnjenja.")}</p></details>
       </aside><section class="main">${optimizerMarkup()}<div id="results"></div>${calibrationMarkup()}</section></div></main>`;
     workspace = globalThis.PneumaticWorkspace.mount(document, workspaceState, t, view => {
@@ -3334,15 +3578,17 @@
       if (view === "calibration") $("calibrationPanel").open = true;
       setFrame(fraction);
     });
-    bindLanguage(); bindControls(); bindFieldHelp(); bindOptimizer(); syncSpringControls(); updateResults(); renderMeasurements(); renderOptimizerResults(); workspace.restoreScroll();
+    bindLanguage(); bindControls(); bindFieldHelp(); bindOptimizer(); syncSpringControls(); syncBumperControls(); updateResults(); renderMeasurements(); renderOptimizerResults(); workspace.restoreScroll();
   }
   function calibrationMarkup() {
     return `<details class="panel calibration" id="calibrationPanel"><summary>${t("Calibration · actual chrono measurements", "Kalibracija · stvarna mjerenja kronografom")}</summary><div class="calibration-body"><p class="calibration-intro">${t("Your 0.46 g / 330 fps observation is a reference until its full setup is recorded. Energy is derived from mass and velocity, not an independent measurement. Record each shot. All data stays in this browser unless you export it.", "Mjerenje 0,46 g / 330 fps ostaje referenca dok se ne zabilježi potpuna konfiguracija. Energija se izvodi iz mase i brzine, nije neovisno mjerenje. Zabilježite svaki hitac. Podaci ostaju u ovom pregledniku osim ako ih izvezete.")}</p>
       <form id="measurementForm" class="measurement-form"><label>${t("BB mass (g)", "Masa BB-a (g)")}<input id="measurementMass" type="number" value="${p.bbMass}" min=".1" max="1" step=".01" required></label><label>${t("Measured speed (fps)", "Izmjerena brzina (fps)")}<input id="measurementFps" type="number" value="330" min="1" max="1000" step=".1" required></label><label>${t("Chrono uncertainty (fps)", "Nesigurnost kronografa (fps)")}<input id="measurementSigma" type="number" value="1" min=".1" max="100" step=".1" required></label>
+      <label>${t("Piston contact time (ms, optional)", "Vrijeme kontakta pistona (ms, neobavezno)")}<input id="measurementHitMs" type="number" min="0" max="1000" step=".01"></label><label>${t("Peak cylinder bar(g), optional", "Vršni tlak cilindra bar(g), neobavezno")}<input id="measurementPressure" type="number" min="0" max="100" step=".01"></label><label>${t("Peak bumper force (N, optional)", "Vršna sila gumice (N, neobavezno)")}<input id="measurementBumperForce" type="number" min="0" max="100000" step=".1"></label>
       <label>${t("Use this shot as", "Namjena hica")}<select id="measurementRole"><option value="reference">${t("Reference only", "Samo referenca")}</option><option value="train">${t("Training / fit", "Podatak za prilagodbu")}</option><option value="validation">${t("Held-out validation", "Neovisna provjera")}</option></select></label><label class="wide">${t("Notes: pin, spring, hop setting, BB batch, chrono distance, temperature", "Bilješke: pin, opruga, hop, serija BB-a, udaljenost kronografa, temperatura")}<input id="measurementNotes" type="text" maxlength="2000"></label><label class="wide provenance"><input id="measurementConfirm" type="checkbox">${t("The current inputs describe the hardware used for this measured shot", "Trenutačni ulazi opisuju sklop kojim je ovaj hitac izmjeren")}</label><output id="measurementEnergy" class="wide small-note"></output><button type="submit" class="secondary-button">${t("Add shot", "Dodaj hitac")}</button></form>
-      <p class="small-note">${t("Fitting is enabled only for confirmed setups with measured geometry/masses and spring data. It fits one shared head discharge coefficient (Cd), never spring strength and airflow together. Repeating one setup does not identify more parameters. Held-out shots are excluded from fitting.", "Prilagodba je omogućena samo za potvrđene konfiguracije s izmjerenom geometrijom/masama i podacima opruge. Prilagođava se jedan zajednički koeficijent protoka glave (Cd), nikad zajedno snaga opruge i protok. Ponavljanje iste konfiguracije ne određuje više parametara. Hici za neovisnu provjeru ne koriste se pri prilagodbi.")}</p>
+      <p class="small-note">${t("Fitting is enabled only for confirmed setups with measured geometry/masses and spring data. Select at most three unknowns. Fitting two parameters requires at least two genuinely different training configurations; repeats alone do not create identifiability. Instrumented contact/pressure/force measurements constrain internal mechanics far better than chrono alone. Held-out shots remain excluded.", "Prilagodba je omogućena samo za potvrđene konfiguracije s izmjerenom geometrijom/masama i podacima opruge. Odaberite najviše tri nepoznanice. Prilagodba dvaju parametara traži najmanje dvije stvarno različite konfiguracije; ponavljanja sama ne stvaraju prepoznatljivost. Instrumentirana mjerenja kontakta/tlaka/sile mnogo bolje ograničavaju unutarnju mehaniku od samog kronografa. Hici za neovisnu provjeru ostaju isključeni.")}</p>
+      <fieldset class="fit-parameters"><legend>${t("Parameters to fit", "Parametri za prilagodbu")}</legend>${Object.keys(C.PARAMETER_SPECS).map(key => `<label><input type="checkbox" data-fit-parameter="${key}" ${fitSelection.includes(key) ? "checked" : ""}>${esc(fields[key]?.[language === "hr" ? 1 : 0] || key)}</label>`).join("")}</fieldset>
       <div class="table-wrap"><table><thead><tr><th>BB</th><th>fps / J</th><th>${t("Use / setup", "Namjena / konfiguracija")}</th><th>${t("Notes", "Bilješke")}</th><th></th></tr></thead><tbody id="measurementRows"></tbody></table></div>
-      <div class="fit-row"><button id="fitButton" class="primary-button" type="button">${t("Fit Cd to training shots", "Prilagodi Cd podacima")}</button><button id="exportMeasurements" class="secondary-button" type="button">${t("Export data", "Izvezi podatke")}</button><label class="secondary-button">${t("Import data", "Uvezi podatke")}<input id="importMeasurements" type="file" accept="application/json,.json" hidden></label></div><p id="fitStatus" class="status-line" role="status">${status ? esc(t(...status)) : t("No fit applied. References do not calibrate the solver.", "Prilagodba nije primijenjena. Reference ne kalibriraju rješavač.")}</p><div id="fitReport"></div>
+      <div class="fit-row"><button id="fitButton" class="primary-button" type="button">${t("Fit selected parameters", "Prilagodi odabrane parametre")}</button><button id="exportMeasurements" class="secondary-button" type="button">${t("Export data", "Izvezi podatke")}</button><label class="secondary-button">${t("Import data", "Uvezi podatke")}<input id="importMeasurements" type="file" accept="application/json,.json" hidden></label></div><p id="fitStatus" class="status-line" role="status">${status ? esc(t(...status)) : t("No fit applied. References do not calibrate the solver.", "Prilagodba nije primijenjena. Reference ne kalibriraju rješavač.")}</p><div id="fitReport"></div>
       </div></details>`;
   }
   function ensureOptimizer() {
@@ -3360,12 +3606,12 @@
       <div id="optimizerBody" ${optimizer.open ? "" : "hidden"}><p class="optimizer-target">${t("Performance constraint: keep 95–105% of this setup’s predicted BB exit energy.", "Uvjet performansi: zadrži 95–105% predviđene izlazne energije BB-a trenutačne konfiguracije.")}</p>
       <p class="small-note">${t("Checked = frozen. Enter actual available choices separated by commas; use a dot for decimals. The current value is always included. Example piston masses and pin lengths are hypothetical—not verified compatible AMP parts. Changing geometry can require new sealing/friction measurements.", "Označeno = zamrznuto. Unesite stvarno dostupne vrijednosti odvojene zarezima; decimalni znak je točka. Trenutačna vrijednost uvijek je uključena. Primjeri masa pistona i duljina pina hipotetski su — nisu potvrđeni kompatibilni AMP dijelovi. Promjena geometrije može zahtijevati novo mjerenje brtvljenja i trenja.")}</p>
       <div class="optimizer-locks">${Object.entries(O.GROUPS).map(([group, keys]) => `<fieldset class="optimizer-part"><legend><label><input type="checkbox" data-opt-lock="${group}" ${optimizer.locks[group] ? "checked" : ""}>${t("Freeze", "Zamrzni")} ${t(...labels[group])}</label></legend><details ${!optimizer.locks[group] ? "open" : ""}><summary>${t("Candidate values", "Vrijednosti kandidata")}</summary>${keys.map(key => {
-        const fixedSpring = O.fixedReason(p, key);
-        return `<label class="optimizer-field" for="opt-${key}"><span>${t(fields[key][0], fields[key][1])} (${fields[key][2] === "turns" ? t("turns", "zavoja") : fields[key][2]})</span><input type="text" id="opt-${key}" data-opt-values="${key}" value="${esc(fixedSpring ? String(p[key]) : optimizer.values[key])}" ${optimizer.locks[group] || fixedSpring ? "disabled" : ""} maxlength="180"><small ${fixedSpring ? "" : "hidden"}>${t("Fixed by the spring input mode or measured curve. Enable length mode in Setup to search spring lengths.", "Fiksno zbog načina unosa opruge ili izmjerene krivulje. Za pretragu duljina uključite taj način u Postavkama.")}</small></label>`;
+        const fixedInput = O.fixedReason(p, key);
+        return `<label class="optimizer-field" for="opt-${key}"><span>${t(fields[key][0], fields[key][1])} (${fields[key][2] === "turns" ? t("turns", "zavoja") : fields[key][2]})</span><input type="text" id="opt-${key}" data-opt-values="${key}" value="${esc(fixedInput ? String(p[key]) : optimizer.values[key])}" ${optimizer.locks[group] || fixedInput ? "disabled" : ""} maxlength="180"><small ${fixedInput ? "" : "hidden"}>${fixedInput === "measured-bumper" ? t("Fixed because the measured bumper force curve replaces linear stiffness.", "Fiksno jer izmjerena krivulja sile gumice zamjenjuje linearnu krutost.") : t("Fixed by the spring input mode or measured curve. Enable length mode in Setup to search spring lengths.", "Fiksno zbog načina unosa opruge ili izmjerene krivulje. Za pretragu duljina uključite taj način u Postavkama.")}</small></label>`;
       }).join("")}</details></fieldset>`).join("")}</div>
       <div class="optimizer-options"><label>${t("Ranking preference", "Prioritet rangiranja")}<select id="optimizerPriority">${[["balanced", "Balanced trade-off", "Uravnotežen kompromis"], ["quiet", "Lower sound contributors", "Niži doprinosi zvuku"], ["efficient", "Higher energy efficiency", "Viša energetska učinkovitost"]].map(([value, en, hr]) => `<option value="${value}" ${optimizer.priority === value ? "selected" : ""}>${t(en, hr)}</option>`).join("")}</select></label><label>${t("Maximum combinations", "Najviše kombinacija")}<select id="optimizerBudget">${[60, 120, 240].map(v => `<option ${optimizer.budget === v ? "selected" : ""}>${v}</option>`).join("")}</select></label></div>
-      <p class="small-note">${t("Weather, fitted airflow/leakage, friction, rear damping, rigid restitution and timing criteria stay fixed. Bumper stiffness/damping/compression are searchable hardware only when the head group is unlocked. Every candidate uses the same 250 ms observation limit. Rankings compare impact energy, peak muzzle airflow, exit pressure and efficiency—not dB or guaranteed loudness.", "Vrijeme, prilagođeni protok/curenje, trenje, stražnje prigušenje, kruti odskok i vremenski kriteriji ostaju fiksni. Krutost/prigušenje/stlačenje gumice pretraživi su hardver samo kada je grupa glave otključana. Svaki kandidat koristi isti prozor promatranja od 250 ms. Rangiranje uspoređuje energiju udara, vršni protok, izlazni tlak i učinkovitost — ne dB ni zajamčenu glasnoću.")}</p>
-      <details><summary>${t("How ranking works", "Kako radi rangiranje")}</summary><p class="small-note">${t("Only completed, numerically acceptable shots inside the energy band qualify. Keep the non-dominated trade-offs: no other tested candidate is at least as good on all four objectives and better on one. Rank those with range-normalized weighted costs. Impact / airflow / exit pressure / inefficiency weights: balanced 35/20/15/30%; sound-biased 45/25/20/10%; efficiency-biased 15/10/5/70%. These weights are preferences, not an acoustic formula. A limited search finds the best tested choices, not a global optimum.", "Prikladni su samo završeni, numerički prihvatljivi hici unutar energetskog raspona. Zadržavaju se nedominirani kompromisi: nijedan drugi ispitani kandidat nije jednako dobar u sva četiri cilja i bolji u jednom. Rangiraju se normaliziranim ponderiranim troškovima. Udar / protok / tlak / neučinkovitost: uravnoteženo 35/20/15/30%; zvuk 45/25/20/10%; učinkovitost 15/10/5/70%. Ponderi su prioriteti, ne akustička formula. Ograničena pretraga pronalazi najbolje ispitane opcije, ne globalni optimum.")}</p></details>
+      <p class="small-note">${t("Weather, fitted airflow/leakage, friction, rear damping, rigid restitution and timing criteria stay fixed. Bumper stiffness/damping/compression are searchable hardware only when the head group is unlocked. Every candidate uses the same 250 ms observation limit. Rankings compare total modeled contact dissipation across all contacts, peak muzzle airflow, exit pressure, efficiency and pressure-wave uncertainty—not dB or guaranteed loudness.", "Vrijeme, prilagođeni protok/curenje, trenje, stražnje prigušenje, kruti odskok i vremenski kriteriji ostaju fiksni. Krutost/prigušenje/stlačenje gumice pretraživi su hardver samo kada je grupa glave otključana. Svaki kandidat koristi isti prozor promatranja od 250 ms. Rangiranje uspoređuje ukupno modelirano rasipanje kroz sve kontakte, vršni protok, izlazni tlak, učinkovitost i nesigurnost tlačnih valova — ne dB ni zajamčenu glasnoću.")}</p>
+      <details><summary>${t("How ranking works", "Kako radi rangiranje")}</summary><p class="small-note">${t("Only completed, numerically acceptable shots inside the energy band qualify. Keep the non-dominated trade-offs across five objectives, then rank the frontier with normalized preference weights. Contact / airflow / pressure / inefficiency / uncertainty weights: balanced 30/17/13/25/15%; sound-biased 38/20/17/10/15%; efficiency-biased 12/8/5/60/15%. Contact uses the complete dissipated contact sequence, not only the first strike. These weights are preferences, not an acoustic formula. A limited search finds the best tested choices, not a global optimum.", "Prikladni su samo završeni, numerički prihvatljivi hici unutar energetskog raspona. Zadržavaju se nedominirani kompromisi kroz pet ciljeva, zatim se fronta rangira normaliziranim ponderima. Kontakt / protok / tlak / neučinkovitost / nesigurnost: uravnoteženo 30/17/13/25/15%; zvuk 38/20/17/10/15%; učinkovitost 12/8/5/60/15%. Kontakt koristi cijeli slijed rasipanja, ne samo prvi udar. Ponderi su prioriteti, ne akustička formula. Ograničena pretraga pronalazi najbolje ispitane opcije, ne globalni optimum.")}</p></details>
       <div class="fit-row"><button class="primary-button" type="button" id="runOptimizer">${t("Find best combinations", "Pronađi najbolje kombinacije")}</button><button class="secondary-button" type="button" id="cancelOptimizer" disabled>${t("Cancel search", "Prekini pretragu")}</button></div><p class="status-line" role="status" id="optimizerStatus">${optimizer.status ? esc(t(...optimizer.status)) : ""}</p><div id="optimizerResults"></div></div></section>`;
   }
   function invalidateOptimizer() {
@@ -3426,14 +3672,14 @@
     $("optimizerResults").classList.remove("is-stale");
     const rejected = r.rejected, best = r.frontier.slice(0, 5);
     const changeText = candidate => Object.entries(candidate.changes).map(([key, v]) => `${t(fields[key][0], fields[key][1])}: ${fmt(v.from, 3)} → ${fmt(v.to, 3)} ${fields[key][2]}`).join("; ") || t("Current setup — unchanged", "Trenutačna konfiguracija — nepromijenjena");
-    const metricCells = m => `<td>${fmt(m.energy, 3, "J")}</td><td>${fmt(m.impact * 1000, 3, "mJ")}</td><td>${fmt(m.outflow * 1000, 3, "g/s")}</td><td>${fmt(m.exitGauge / 1e5, 3, "bar(g)")}</td><td>${fmt(m.efficiency * 100, 1, "%")}</td>`;
+    const metricCells = m => `<td>${fmt(m.energy, 3, "J")}</td><td>${fmt(m.impact * 1000, 3, "mJ")}</td><td>${fmt(m.outflow * 1000, 3, "g/s")}</td><td>${fmt(m.exitGauge / 1e5, 3, "bar(g)")}</td><td>${fmt(m.efficiency * 100, 1, "%")}</td><td>${fmt(m.uncertainty, 2)}</td>`;
     $("optimizerResults").innerHTML = `<p class="optimizer-target">${t("Required model exit energy", "Tražena izlazna energija modela")}: ${fmt(r.bounds.min, 3)}–${fmt(r.bounds.max, 3, "J")}.</p>
       <p class="small-note">${t(`Checked ${r.evaluated} of ${r.total.toLocaleString("en")} combinations. ${r.exhaustive ? "All listed combinations checked." : "Sampled search; untested combinations may be better."} ${r.eligible} eligible; ${r.frontier.length} non-dominated trade-offs.`, `Provjereno ${r.evaluated} od ${r.total.toLocaleString("hr")} kombinacija. ${r.exhaustive ? "Provjerene su sve navedene kombinacije." : "Uzorkovana pretraga; neispitane kombinacije mogu biti bolje."} ${r.eligible} prikladnih; ${r.frontier.length} nedominiranih kompromisa.`)}</p>
       <p class="small-note">${t(`Excluded: ${rejected.energy} outside energy band, ${rejected.unfinished} missing contact/unfinished discharge, ${rejected.noExit} no exit, ${rejected.invalid} invalid, ${rejected.numerical} failed numerical checks. Unfinished impacts are unknown, never zero.`, `Isključeno: ${rejected.energy} izvan energije, ${rejected.unfinished} bez kontakta/nepotpuno pražnjenje, ${rejected.noExit} bez izlaska, ${rejected.invalid} nevaljanih, ${rejected.numerical} numerički neprihvatljivih. Nezavršeni udari nepoznati su, nikad nula.`)}</p>
       ${r.noVariables ? `<p class="lab-warning">${t("All values are frozen or have only the current choice. Nothing can be optimized; unfreeze a part and enter alternatives.", "Sve vrijednosti su zamrznute ili imaju samo trenutačni izbor. Nema promjenjivih veličina; odmrznite dio i unesite alternative.")}</p>` : ""}
-      ${best.length ? `<div class="table-wrap"><table class="optimizer-table"><thead><tr><th>${t("Choice / changes", "Odabir / promjene")}</th><th>${t("BB energy", "Energija BB-a")}</th><th>${t("Impact energy", "Energija udara")}</th><th>${t("Peak muzzle flow", "Vršni protok")}</th><th>${t("Exit pressure", "Izlazni tlak")}</th><th>${t("Efficiency", "Učinkovitost")}</th><th></th></tr></thead><tbody>${r.baseline ? `<tr class="optimizer-baseline"><td>${t("Current setup · reference", "Trenutačno · referenca")}</td>${metricCells(r.baseline)}<td></td></tr>` : ""}${best.map((candidate, i) => {
+      ${best.length ? `<div class="table-wrap"><table class="optimizer-table"><thead><tr><th>${t("Choice / changes", "Odabir / promjene")}</th><th>${t("BB energy", "Energija BB-a")}</th><th>${t("All-contact loss", "Gubitak svih kontakata")}</th><th>${t("Peak muzzle flow", "Vršni protok")}</th><th>${t("Exit pressure", "Izlazni tlak")}</th><th>${t("Efficiency", "Učinkovitost")}</th><th>${t("Uncertainty", "Nesigurnost")}</th><th></th></tr></thead><tbody>${r.baseline ? `<tr class="optimizer-baseline"><td>${t("Current setup · reference", "Trenutačno · referenca")}</td>${metricCells(r.baseline)}<td></td></tr>` : ""}${best.map((candidate, i) => {
         const m = candidate.metrics, b = r.baseline;
-        const compromise = b && (m.impact > b.impact + 1e-9 || m.outflow > b.outflow + 1e-9 || m.exitGauge > b.exitGauge + 1e-4 || m.efficiency < b.efficiency - 1e-8);
+        const compromise = b && (m.impact > b.impact + 1e-9 || m.outflow > b.outflow + 1e-9 || m.exitGauge > b.exitGauge + 1e-4 || m.efficiency < b.efficiency - 1e-8 || m.uncertainty > b.uncertainty + 1e-8);
         return `<tr><td><strong>${i + 1}. ${t("Best found trade-off", "Najbolji pronađeni kompromis")}</strong><p>${esc(changeText(candidate))}</p><small>${compromise ? t("At least one objective is worse than the reference.", "Najmanje jedan cilj lošiji je od reference.") : t("No listed objective is worse than the reference, if available.", "Nijedan navedeni cilj nije lošiji od reference, ako je dostupna.")} ${t("Energy threshold → slowing", "Prag energije → usporavanje")}: ${stamp(m.timingMargin)}.</small></td>${metricCells(m)}<td><button class="secondary-button" type="button" data-apply-optimizer="${i}" ${Object.keys(candidate.changes).length ? "" : "disabled"}>${t("Apply & replay", "Primijeni i prikaži")}</button></td></tr>`;
       }).join("")}</tbody></table></div><p class="small-note">${t("Apply changes only the listed unlocked hardware and extends the playback limit to 250 ms (observation time, not a physical change). It marks changed inputs as unmeasured. Calibration records stay intact. Compare actual chrono and sound measurements before buying or changing parts.", "Primjena mijenja samo navedene odmrznute dijelove i produljuje prikaz na 250 ms (vrijeme promatranja, ne fizička promjena). Promijenjeni ulazi označuju se kao neizmjereni. Kalibracijski zapisi ostaju sačuvani. Usporedite stvarna mjerenja kronografom i zvuka prije kupnje ili zamjene dijelova.")}</p>` : `<p class="lab-warning">${t("No complete candidate meets the energy constraint. No best setup is claimed. Review your candidate values; unresolved low-impact cases are not assumed quiet.", "Nijedan završeni kandidat ne zadovoljava energetski uvjet. Ne tvrdi se da postoji najbolja konfiguracija. Provjerite kandidate; nezavršeni slučajevi ne smatraju se tihima.")}</p>`}
       <button class="secondary-button" type="button" id="exportOptimizer">${t("Export search and locks", "Izvezi pretragu i zaključavanja")}</button>`;
@@ -3505,7 +3751,12 @@
     $("clearanceNote").textContent = t(`Full-shaft clearance / annular area — bumper: ${bumperClearance}; metal head: ${g.gap.toFixed(3)} mm / ${(g.annulus * 1e6).toFixed(3)} mm². Added bumper solid volume: ${(g.bumperSolidVolume * 1e6).toFixed(3)} cm³.`, `Zazor tijela pina / prstenasta površina — gumica: ${bumperClearance}; metalna glava: ${g.gap.toFixed(3)} mm / ${(g.annulus * 1e6).toFixed(3)} mm². Puni volumen dodatne gumice: ${(g.bumperSolidVolume * 1e6).toFixed(3)} cm³.`);
     if (!shot?.valid) {
       setResultState("invalid");
-      $("resultError").textContent = t("Cannot simulate this setup. Check dimensions, clearances, residual volumes and spring data. Previous results are hidden: ", "Ovu konfiguraciju nije moguće simulirati. Provjerite dimenzije, zazore, preostale volumene i oprugu. Prethodni rezultati su skriveni: ") + (shot?.errors || []).join(" · "); return;
+      const errorText = {
+        "bumper:curve": ["Bumper curve needs finite, increasing compression points and nondecreasing nonnegative force.", "Krivulja gumice traži konačne rastuće točke stlačenja te neopadajuću nenegativnu silu."],
+        "bumper:coverage": ["Bumper curve must start at 0 mm / 0 N and cover the full compression cap.", "Krivulja gumice mora početi s 0 mm / 0 N i pokriti cijelu granicu stlačenja."],
+        "solver:convergence": ["The numerical solver did not converge; this run is invalid, not a settled shot.", "Numerički rješavač nije konvergirao; ovaj hitac nije valjan niti se smatra smirenim."]
+      };
+      $("resultError").textContent = t("Cannot simulate this setup. Check dimensions, clearances, residual volumes and force curves. Previous results are hidden: ", "Ovu konfiguraciju nije moguće simulirati. Provjerite dimenzije, zazore, preostale volumene i krivulje sile. Prethodni rezultati su skriveni: ") + (shot?.errors || []).map(code => errorText[code] ? t(...errorText[code]) : code).join(" · "); return;
     }
     const s = shot, retention = s.exitEnergy !== null && baseline?.valid && baseline.exitEnergy > 0 ? 100 * s.exitEnergy / baseline.exitEnergy : null;
     const diff = s.engageTime !== null && s.exitTime !== null ? (s.engageTime - s.exitTime) * 1000 : null;
@@ -3519,21 +3770,22 @@
       ${metric(t("Bumper compression / peak force", "Stlačenje gumice / vršna sila"), p.bumperThickness > 0 ? `${fmt(s.maxBumperCompression * 1000, 3)} / ${fmt(s.peakBumperForce, 1)}` : t("inactive", "neaktivno"), t("mm / N · conditional contact model", "mm / N · uvjetni model kontakta"))}
       ${metric(t("Predicted muzzle speed", "Predviđena izlazna brzina"), fmt(fps(s.exitVelocity), 1, "fps"), s.exitEnergy === null ? t("BB did not exit within the run", "BB nije izašao tijekom simulacije") : `${fmt(s.exitEnergy, 3, "J")} · ${t("conditional, not chrono", "uvjetno, nije kronograf")}`)}
       ${metric(t("Energy gained at slowing event", "Energija pri događaju usporavanja"), fmt(s.preBrakeShare === null ? null : s.preBrakeShare * 100, 1, "%"), t("Relative to exit energy; can exceed 100%", "U odnosu na izlaznu energiju; može prijeći 100%"))}
-      ${metric(t("Peak cylinder / BB pressure", "Vršni tlak cilindra / iza BB-a"), `${fmt((s.peakCylinderPressure - s.ambientPressure) / 1e5, 2)} / ${fmt((s.peakPressure - s.ambientPressure) / 1e5, 2)}`, t("bar above atmosphere", "bar iznad atmosferskog tlaka"))}
+      ${metric(t("Peak cylinder / behind / ahead-BB pressure", "Vršni tlak cilindra / iza / ispred BB-a"), `${fmt((s.peakCylinderPressure - s.ambientPressure) / 1e5, 2)} / ${fmt((s.peakPressure - s.ambientPressure) / 1e5, 2)} / ${fmt((s.peakFrontPressure - s.ambientPressure) / 1e5, 2)}`, t("bar above atmosphere", "bar iznad atmosferskog tlaka"))}
       ${metric(t("Relative exit-energy retention", "Relativno zadržavanje izlazne energije"), fmt(retention, 1, "%"), t("Same mass, no-pin baseline; not sound reduction", "Ista masa, referenca bez pina; nije utišavanje"))}
       ${metric(t("Piston momentum at entry", "Količina gibanja pistona pri ulasku"), fmt(s.momentumAtEngage, 3, "kg·m/s"), t("Actual piston mass × signed velocity", "Stvarna masa pistona × predznačena brzina"))}
       ${metric(t("Pin entry relative to BB exit", "Ulazak pina u odnosu na izlazak BB-a"), fmt(diff, 2, "ms"), t("Negative = pin enters first", "Negativno = pin ulazi prvi"))}
       </div>
+      ${s.waveDiagnostics.risk !== "low" ? `<div class="lab-warning" role="status"><strong>${t("Pressure-wave timing uncertainty is not negligible", "Nesigurnost vremenskog odnosa zbog tlačnih valova nije zanemariva")}</strong><p>${t(`The causal travel-time envelope finds up to ${fmt(s.waveDiagnostics.maxTransit * 1000, 3)} ms one-way transit and ${fmt(s.waveDiagnostics.relativePressureSpan * 100, 1)}% pressure-history spread. Its ${s.waveDiagnostics.referenceCellCount}-cell scale is only a resolution reference, not a solved 1D flow field. The primary motion still uses lumped chamber pressure; treat sub-millisecond event ordering as conditional until instrumented or fully coupled 1D validation agrees.`, `Uzročna ovojnica vremena putovanja nalazi do ${fmt(s.waveDiagnostics.maxTransit * 1000, 3)} ms jednosmjernog prolaza i ${fmt(s.waveDiagnostics.relativePressureSpan * 100, 1)}% raspona povijesti tlaka. Skala od ${s.waveDiagnostics.referenceCellCount} ćelije samo je referentna rezolucija, a ne riješeno 1D polje protoka. Primarno gibanje i dalje koristi koncentrirani tlak komore; redoslijed događaja ispod milisekunde smatrajte uvjetnim dok se ne potvrdi instrumentiranim ili potpuno spregnutim 1D modelom.`)}</p></div>` : ""}
       ${!s.complete ? `<div class="lab-warning">${t("Run ended with missing events:", "Simulacija je završila bez događaja:")} ${s.exitTime === null ? t("BB exit. ", "Izlazak BB-a. ") : ""}${s.pistonHitTime === null ? t("Piston contact. ", "Kontakt pistona. ") : ""}${t("Missing contact is not a predicted soft landing. Increase modeled time if appropriate.", "Izostanak kontakta ne znači predviđen mekan udar. Po potrebi povećajte vrijeme simulacije.")}</div>` : ""}
       <section class="panel timing-card"><div class="timing-head"><strong>${verdict}</strong><span>${fmt(delta, 2, "ms")}</span></div><p class="small-note">${t("The amber event is measured from the modeled acceleration after entry—not proof that all slowing is caused by the pin. Compression can slow a piston without an airbrake. Green marks a chosen share of maximum BB energy before exit, not a universal optimum.", "Jantarni događaj temelji se na modeliranom ubrzanju nakon ulaska — nije dokaz da je sve usporavanje uzrokovano pinom. Kompresija može usporiti piston i bez kočnice. Zelena označuje odabrani udio najveće energije BB-a prije izlaska, ne univerzalni optimum.")}</p><div class="event-list">${events().map(([key, label, cls]) => `<button type="button" data-event="${key}" class="${cls}" ${s[key] === null ? "disabled" : ""}>${label}<br><span class="mono">${stamp(s[key])}</span></button>`).join("")}</div></section>
       <section class="panel stage"><div class="stage-toolbar"><button class="primary-button" type="button" id="playButton">${t("Fire / play", "Opali / pokreni")}</button><button class="secondary-button" id="resetButton" type="button">${t("Reset", "Početak")}</button><input id="scrubber" aria-label="${t("Shot time", "Vrijeme opaljenja")}" type="range" min="0" max="1000" value="${fraction * 1000}"><span id="clock" class="clock mono"></span></div><canvas id="mechanism" role="img" aria-label="${t("Schematic piston, bumper, airbrake and BB positions; live numeric values below", "Shematski položaji pistona, odbojne gumice, pina i BB-a; brojčane vrijednosti ispod")}"></canvas><div id="phaseText" class="stage-status" aria-live="off"></div><div id="liveStrip" class="live-strip"></div><p class="results-note">${t("Schematic cutaway. The green pad visibly compresses according to the lumped stiffness/damping model; its exact rubber shape is still illustrative. Glow indicates modeled pressure; particles and trails illustrate flow and motion, not gas dynamics or sound. Every cue pauses with model time.", "Shematski presjek. Zelena gumica vidljivo se stišće prema koncentriranom modelu krutosti/prigušenja; točan oblik gume i dalje je ilustrativan. Sjaj označuje modelirani tlak; čestice i tragovi ilustriraju protok i gibanje, ne dinamiku plina ni zvuk. Sve se pauzira s vremenom modela.")}</p></section>
-      <section class="panel graphs"><div class="graphs-header"><div><h2>${t("Shot traces", "Krivulje opaljenja")}</h2><p>${t("Pressure: amber cylinder, cyan behind BB. Events: green energy threshold, dashed amber slowing, cyan exit. Negative values remain visible.", "Tlak: jantarni cilindar, cijan iza BB-a. Događaji: zeleni prag energije, isprekidano jantarno usporavanje, cijan izlazak. Negativne vrijednosti ostaju vidljive.")}</p></div></div><div class="graphs-mechanism"><div class="graphs-mechanism-heading"><strong>${t("Live firing cutaway", "Živi presjek opaljenja")}</strong><span>${t("synchronized with graph cursor", "sinkronizirano s pokazivačem grafova")}</span></div><canvas id="mechanismGraph" role="img" aria-label="${t("Synchronized piston, bumper, airbrake and BB positions above the shot graphs", "Sinkronizirani položaji pistona, gumice, pina i BB-a iznad grafova opaljenja")}"></canvas></div><div class="chart-grid">${[["pressureChart", t("Pressure vs time", "Tlak kroz vrijeme"), "bar(g)"], ["pistonChart", t("Piston velocity vs time", "Brzina pistona kroz vrijeme"), "m/s"], ["bbChart", t("BB velocity vs time", "Brzina BB-a kroz vrijeme"), "m/s"]].map(([id, label, units]) => `<div class="chart"><div class="chart-title"><span>${label}</span><span>${units} / ms</span></div><canvas id="${id}" role="img" aria-label="${label}; ${t("numeric values in live readouts; export full trace below", "brojčane vrijednosti u prikazu uživo; izvoz cijele krivulje ispod")}"></canvas></div>`).join("")}</div>${I.impactMarkup(s, "impactGraph", "graphs", t, fmt)}</section>
+      <section class="panel graphs"><div class="graphs-header"><div><h2>${t("Shot traces", "Krivulje opaljenja")}</h2><p>${t("Pressure: amber cylinder, cyan behind BB, violet ahead of BB; dashed blue is the causal travel-time estimate, not a solved 1D pressure. Events: green energy threshold, dashed amber slowing, cyan exit. Negative values remain visible.", "Tlak: jantarni cilindar, cijan iza BB-a, ljubičasti ispred BB-a; isprekidana plava je uzročna procjena vremena putovanja, a ne riješeni 1D tlak. Događaji: zeleni prag energije, isprekidano jantarno usporavanje, cijan izlazak. Negativne vrijednosti ostaju vidljive.")}</p></div></div><div class="graphs-mechanism"><div class="graphs-mechanism-heading"><strong>${t("Live firing cutaway", "Živi presjek opaljenja")}</strong><span>${t("synchronized with graph cursor", "sinkronizirano s pokazivačem grafova")}</span></div><canvas id="mechanismGraph" role="img" aria-label="${t("Synchronized piston, bumper, airbrake and BB positions above the shot graphs", "Sinkronizirani položaji pistona, gumice, pina i BB-a iznad grafova opaljenja")}"></canvas></div><div class="chart-grid">${[["pressureChart", t("Pressure vs time", "Tlak kroz vrijeme"), "bar(g)"], ["pistonChart", t("Piston velocity vs time", "Brzina pistona kroz vrijeme"), "m/s"], ["bbChart", t("BB velocity vs time", "Brzina BB-a kroz vrijeme"), "m/s"]].map(([id, label, units]) => `<div class="chart"><div class="chart-title"><span>${label}</span><span>${units} / ms</span></div><canvas id="${id}" role="img" aria-label="${label}; ${t("numeric values in live readouts; export full trace below", "brojčane vrijednosti u prikazu uživo; izvoz cijele krivulje ispod")}"></canvas></div>`).join("")}</div>${I.impactMarkup(s, "impactGraph", "graphs", t, fmt)}</section>
       ${Parts.markup(p, t)}
       ${I.soundMarkup(s, baseline, t, fmt)}
       ${I.impactMarkup(s, "impactResultsChart", "results", t, fmt)}
       ${I.feedbackMarkup(changeComparison, s, baseline, p, provenance, fields, t, fmt)}
-      <section class="panel insight"><div class="panel-heading"><h2>${t("Energy, verification and uncertainty", "Energija, provjera i nesigurnost")}</h2><span class="tag unknown">${t("not experimentally validated", "nije eksperimentalno potvrđeno")}</span></div><div class="assumption-grid"><span>${t("Maximum BB energy observed", "Najveća opažena energija BB-a")}</span><strong>${fmt(s.maxBbEnergy, 3, "J")}</strong><span>${t("Energy lost before exit", "Energija izgubljena prije izlaska")}</span><strong>${fmt(s.bbEnergyLoss, 3, "J")}</strong><span>${t("Positive / negative net BB work", "Pozitivan / negativan neto rad na BB-u")}</span><strong>${fmt(s.positiveBbWork, 3)} / ${fmt(s.negativeBbWork, 3, "J")}</strong><span>${t("Energy balance residual", "Odstupanje energetske bilance")}</span><strong>${fmt(s.energyResidual * 1000, 4, "mJ")}</strong><span>${t("Gas mass residual", "Odstupanje bilance mase plina")}</span><strong>${s.massResidual.toExponential(2)} kg</strong><span>${t("Ambient barrel sound-crossing scale", "Vrijeme prolaza zvuka kroz cijev pri okolišnim uvjetima")}</span><strong>${stamp(s.soundCrossingTime)}</strong></div>
-      <p class="small-note">${t("A small numerical residual does not validate the physics. Two uniform-pressure gas volumes, profile-sliced one-dimensional duct losses, an effective leaky-piston BB and atmospheric pressure ahead of it are simplifications. Pressure waves, spring surge, distributed rubber deformation and structural acoustics are not resolved. Bumper force is conditional on entered stiffness/damping; sub-millisecond timing needs instrumented validation.", "Malo numeričko odstupanje ne potvrđuje fizikalni model. Dva plinska volumena jednolikog tlaka, jednodimenzionalni gubici kanala podijeljeni po profilu, BB kao efektivni propusni klip i atmosferski tlak ispred njega pojednostavljenja su. Tlačni valovi, valovi opruge, raspodijeljena deformacija gume i strukturna akustika nisu razriješeni. Sila gumice ovisi o unesenoj krutosti/prigušenju; vremenski odnos ispod milisekunde traži instrumentiranu provjeru.")}</p>
+      <section class="panel insight"><div class="panel-heading"><h2>${t("Energy, verification and uncertainty", "Energija, provjera i nesigurnost")}</h2><span class="tag unknown">${t("not experimentally validated", "nije eksperimentalno potvrđeno")}</span></div><div class="assumption-grid"><span>${t("Maximum BB energy observed", "Najveća opažena energija BB-a")}</span><strong>${fmt(s.maxBbEnergy, 3, "J")}</strong><span>${t("Energy lost before exit", "Energija izgubljena prije izlaska")}</span><strong>${fmt(s.bbEnergyLoss, 3, "J")}</strong><span>${t("Positive / negative net BB work", "Pozitivan / negativan neto rad na BB-u")}</span><strong>${fmt(s.positiveBbWork, 3)} / ${fmt(s.negativeBbWork, 3, "J")}</strong><span>${t("Energy balance residual", "Odstupanje energetske bilance")}</span><strong>${fmt(s.energyResidual * 1000, 4, "mJ")}</strong><span>${t("Gas mass residual", "Odstupanje bilance mase plina")}</span><strong>${s.massResidual.toExponential(2)} kg</strong><span>${t("Ambient barrel sound-crossing scale", "Vrijeme prolaza zvuka kroz cijev pri okolišnim uvjetima")}</span><strong>${stamp(s.soundCrossingTime)}</strong><span>${t("Causal transit / 24-cell reference scale", "Uzročni prolaz / referentna skala 24 ćelije")}</span><strong>${stamp(s.waveDiagnostics.maxTransit)} / ${stamp(s.waveDiagnostics.referenceCellTransit)}</strong><span>${t("Wave-envelope pressure spread", "Raspon tlačne ovojnice")}</span><strong>${fmt(s.waveDiagnostics.maxPressureDelta / 1e5, 3, "bar")} · ${fmt(s.waveDiagnostics.relativePressureSpan * 100, 1, "%")}</strong></div>
+      <p class="small-note">${t("A small numerical residual does not validate the physics. Cylinder, behind-BB and ahead-BB gas are conservative lumped control volumes; profile-sliced duct losses and the effective leaky-piston BB remain approximations. The front volume vents through the muzzle and opposes BB motion. Spatial pressure waves, spring surge, distributed rubber deformation and structural acoustics are not resolved by the primary solver; the causal diagnostic below bounds that limitation without solving it. Bumper force is conditional on the entered force law and damping; sub-millisecond timing still needs instrumented validation.", "Malo numeričko odstupanje ne potvrđuje fizikalni model. Plin u cilindru, iza BB-a i ispred BB-a predstavljaju konzervativne koncentrirane kontrolne volumene; gubici kanala podijeljeni po profilu i BB kao efektivni propusni klip ostaju aproksimacije. Prednji volumen odzračuje kroz usta i suprotstavlja se gibanju BB-a. Primarni solver ne razrješava prostorne tlačne valove, valove opruge, raspodijeljenu deformaciju gume ni strukturnu akustiku; uzročna dijagnostika niže ograničava taj nedostatak bez njegova rješavanja. Sila gumice ovisi o unesenom zakonu sile i prigušenju; vremenski odnos ispod milisekunde i dalje traži instrumentiranu provjeru.")}</p>
       <div class="fit-row"><button class="secondary-button" id="convergenceButton" type="button">${t("Check finer time steps", "Provjeri manje vremenske korake")}</button><button class="secondary-button" id="sensitivityButton" type="button">${t("Check input sensitivity", "Provjeri osjetljivost na ulaze")}</button><button class="secondary-button" id="exportRun" type="button">${t("Export setup and full trace", "Izvezi postavke i cijelu krivulju")}</button></div>
       <p class="small-note">${t("Sensitivity examples vary head and pin diameter by ±0.02 mm and spring force by ±5%, in all eight combinations. These are explicit test ranges, not measured tolerances or statistical confidence intervals.", "Primjeri osjetljivosti mijenjaju promjer glave i pina za ±0,02 mm te silu opruge za ±5%, u svih osam kombinacija. To su izričito zadani ispitni rasponi, a ne izmjerene tolerancije ili statistički intervali pouzdanosti.")}</p><p id="diagnosticReport" class="status-line" role="status">${diagnostic ? esc(t(...diagnostic)) : ""}</p>
       <div class="source-links"><a href="https://tridos.design/products/ultimate-ssg10-vsr10-piston-cylinder-head-kit" target="_blank" rel="noreferrer">AMP / Tridos</a><a href="https://www.grc.nasa.gov/www/k-12/airplane/mflchk.html" target="_blank" rel="noreferrer">${t("Compressible mass flow", "Stlačivi protok")}</a><a href="https://cris.technion.ac.il/en/publications/the-internal-ballistics-of-airguns/" target="_blank" rel="noreferrer">${t("Thermodynamic model reference", "Referenca termodinamičkog modela")}</a></div></section>`;
@@ -3607,10 +3859,11 @@
     for (const [id, value] of Object.entries({ platformPreset: selectedPlatform, component, springLabel, pinLabel })) $(id).value = value;
     $("springLengthMode").checked = p.springLengthMode === 1;
     $("springCurve").value = p.springCurve.map(pair => pair.join(", ")).join("\n");
+    $("bumperCurve").value = p.bumperCurve.map(pair => pair.join(", ")).join("\n");
     document.querySelectorAll("[data-provenance]").forEach(box => { box.checked = provenance[box.dataset.provenance] === "measured"; });
     document.querySelectorAll("[data-mass]").forEach(button => button.setAttribute("aria-pressed", String(p.pistonMass === Number(button.dataset.mass))));
     $("measurementConfirm").checked = false;
-    syncSpringControls();
+    syncSpringControls(); syncBumperControls();
   }
   function bindFieldHelp() {
     const place = button => {
@@ -3648,11 +3901,11 @@
       selectedPlatform = "custom"; $("platformPreset").value = "custom";
       if (key.startsWith("airbrake")) { pinLabel = p.airbrakeLength > 0 ? "custom" : "plug"; $("pinLabel").value = pinLabel; }
       if (key.startsWith("spring")) { provenance.spring = "assumed"; invalidateFit(); }
-      else if (["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "headBore", "headLength", "nozzleBore", "nozzleLength", "bumperThickness", "bumperBore", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "restitution", "airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "deadVolume", "breechVolume"].includes(key)) provenance.geometry = "assumed";
+      else if (["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "frontDeadVolume", "pistonMass", "bbMass", "bbDiameter", "headBore", "headLength", "nozzleBore", "nozzleLength", "bumperThickness", "bumperBore", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "restitution", "airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "deadVolume", "breechVolume"].includes(key)) provenance.geometry = "assumed";
       document.querySelectorAll("[data-provenance]").forEach(box => { box.checked = provenance[box.dataset.provenance] === "measured"; });
       $("measurementConfirm").checked = false;
       document.querySelectorAll("[data-mass]").forEach(button => button.setAttribute("aria-pressed", Number(button.dataset.mass) === p.pistonMass));
-      syncSpringControls(); scheduleCalculation();
+      syncSpringControls(); syncBumperControls(); scheduleCalculation();
     }));
     document.querySelectorAll("[data-provenance]").forEach(box => box.addEventListener("change", () => { provenance[box.dataset.provenance] = box.checked ? "measured" : "assumed"; }));
     document.querySelectorAll("[data-mass]").forEach(button => button.addEventListener("click", () => { $("pistonMass").value = button.dataset.mass; $("pistonMass").dispatchEvent(new Event("input", { bubbles: true })); }));
@@ -3681,8 +3934,13 @@
       else { document.querySelector('[data-provenance="geometry"]').checked = false; $("measurementConfirm").checked = false; setStatus("Pin label recorded. Enter its measured projection, diameter and assembled mass; no undocumented dimensions were assigned.", "Oznaka pina je zabilježena. Unesite izmjereno izbočenje, promjer i masu sklopa; nisu dodijeljene nepoznate dimenzije."); }
     });
     $("springCurve").addEventListener("change", e => {
-      p.springCurve = e.target.value.trim() ? e.target.value.trim().split(/\n+/).map(line => line.trim().split(/[,;\s]+/).map(Number)) : [];
+      p.springCurve = parseCurveText(e.target.value);
       provenance.spring = "assumed"; document.querySelector('[data-provenance="spring"]').checked = false; $("measurementConfirm").checked = false; invalidateFit(); syncSpringControls(); scheduleCalculation();
+    });
+    $("bumperCurve").addEventListener("change", e => {
+      p.bumperCurve = parseCurveText(e.target.value);
+      provenance.geometry = "assumed"; document.querySelector('[data-provenance="geometry"]').checked = false; $("measurementConfirm").checked = false;
+      invalidateFit(); syncBumperControls(); scheduleCalculation();
     });
     const energyReadout = () => { $("measurementEnergy").textContent = `${t("Derived energy", "Izvedena energija")}: ${fmt(C.energy(Number($("measurementMass").value), Number($("measurementFps").value)), 3, "J")}`; };
     $("measurementMass").addEventListener("input", energyReadout); $("measurementFps").addEventListener("input", energyReadout); energyReadout();
@@ -3693,11 +3951,17 @@
       const confirmed = $("measurementConfirm").checked, mass = Number($("measurementMass").value);
       if (confirmed && P.validate({ ...p, bbMass: mass }).length) { setStatus("Correct invalid setup inputs before recording a confirmed shot.", "Ispravite nevaljane ulaze prije spremanja potvrđenog hica."); return; }
       const row = C.cleanRecord({ id: `shot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, bbMass: mass, fps: Number($("measurementFps").value), sigma: Number($("measurementSigma").value),
+        pistonHitMs: $("measurementHitMs").value, peakCylinderBarG: $("measurementPressure").value, peakBumperForceN: $("measurementBumperForce").value,
         setup: confirmed ? { ...clone(p), bbMass: mass } : null, confirmed, provenance: clone(provenance), role: $("measurementRole").value, solverVersion: P.VERSION,
         notes: `${component} / ${pinLabel} / ${springLabel}. ${$("measurementNotes").value}` });
       if (!row) return;
       measurements.push(row); invalidateFit(); save(); renderMeasurements(); setStatus("Shot saved; previous fit cleared. Only eligible training shots enter a fit; setup metadata remains attached to this record.", "Hitac je spremljen; prethodna prilagodba poništena je. Samo prikladni podaci ulaze u prilagodbu; konfiguracija ostaje pridružena zapisu.");
     });
+    document.querySelectorAll("[data-fit-parameter]").forEach(box => box.addEventListener("change", () => {
+      const selected = [...document.querySelectorAll("[data-fit-parameter]:checked")].map(input => input.dataset.fitParameter);
+      if (selected.length > 3) { box.checked = false; setStatus("Select no more than three fitted parameters.", "Odaberite najviše tri parametra za prilagodbu."); return; }
+      fitSelection = selected; invalidateFit();
+    }));
     $("exportMeasurements").addEventListener("click", () => download("airsoft-chrono-data.json", { ...C.encode(measurements), lastFit: fit }));
     $("importMeasurements").addEventListener("change", async e => {
       if (busy || !e.target.files[0]) return;
@@ -3714,21 +3978,32 @@
       if (busy) return;
       stop(); clearTimeout(debounce);
       if (calculationPending) recalculate();
-      setBusy(true); setStatus("Fitting one discharge coefficient. This cannot establish accurate internal timing…", "Prilagođavanje jednog koeficijenta protoka. To ne potvrđuje točnost unutarnjeg vremenskog odnosa…");
+      if (!fitSelection.length) { setStatus("Select at least one parameter to fit.", "Odaberite barem jedan parametar za prilagodbu."); return; }
+      setBusy(true); setStatus("Fitting selected parameters. Results remain conditional on the measured observables and model structure…", "Prilagođavanje odabranih parametara. Rezultati ostaju uvjetovani izmjerenim veličinama i strukturom modela…");
       try {
-        fit = await C.fitLoss(clone(measurements), n => setStatus(`Evaluating fit ${n}…`, `Provjera prilagodbe ${n}…`));
-        const en = `Cd = ${fit.coefficient.toFixed(4)}. Training RMSE ${fmt(fit.training.rmse, 2)} fps (${fit.training.count} shots, ${fit.distinctTrainingSetups} distinct setups). Held-out RMSE ${fmt(fit.validation.rmse, 2)} fps (${fit.validation.count} shots; ${fit.validation.failures} failed predictions).${fit.boundReached ? " Parameter bound reached." : ""}${fit.weaklyConstrained ? " Cd is weakly constrained by these data." : ""} No timing validation.`;
-        const hr = `Cd = ${fit.coefficient.toFixed(4)}. RMSE prilagodbe ${fmt(fit.training.rmse, 2)} fps (${fit.training.count} hitaca, ${fit.distinctTrainingSetups} različitih konfiguracija). Neovisni RMSE ${fmt(fit.validation.rmse, 2)} fps (${fit.validation.count} hitaca; ${fit.validation.failures} neuspjelih predviđanja).${fit.boundReached ? " Dosegnuta granica parametra." : ""}${fit.weaklyConstrained ? " Ovi podaci slabo određuju Cd." : ""} Vremenski odnos nije potvrđen.`;
+        fit = await C.fitParameters(clone(measurements), fitSelection, n => setStatus(`Evaluating fit ${n}…`, `Provjera prilagodbe ${n}…`));
+        const fitted = Object.entries(fit.parameters).map(([key, value]) => `${fields[key]?.[language === "hr" ? 1 : 0] || key} = ${value.toPrecision(5)}`).join(" · ");
+        const en = `${fitted}. Training RMSE ${fmt(fit.training.rmse, 2)} fps (${fit.training.count} shots, ${fit.training.observations} observables, ${fit.distinctTrainingSetups} distinct setups). Held-out RMSE ${fmt(fit.validation.rmse, 2)} fps (${fit.validation.count} shots; ${fit.validation.failures} failed predictions).${fit.boundReached ? " Parameter bound reached." : ""}${fit.weaklyConstrained ? " Parameters are weakly constrained; do not extrapolate." : ""}`;
+        const hr = `${fitted}. RMSE prilagodbe ${fmt(fit.training.rmse, 2)} fps (${fit.training.count} hitaca, ${fit.training.observations} opažanja, ${fit.distinctTrainingSetups} različitih konfiguracija). Neovisni RMSE ${fmt(fit.validation.rmse, 2)} fps (${fit.validation.count} hitaca; ${fit.validation.failures} neuspjelih predviđanja).${fit.boundReached ? " Dosegnuta granica parametra." : ""}${fit.weaklyConstrained ? " Parametri su slabo određeni; nemojte ekstrapolirati." : ""}`;
         setStatus(en, hr);
-        $("fitReport").innerHTML = `<button class="secondary-button" type="button" id="applyFit">${t("Apply fitted Cd to current setup", "Primijeni prilagođeni Cd na trenutačnu konfiguraciju")}</button>`;
-        $("applyFit").addEventListener("click", () => { p.dischargeCoefficient = fit.coefficient; $("dischargeCoefficient").value = p.dischargeCoefficient; document.querySelector('[data-range="dischargeCoefficient"]').value = p.dischargeCoefficient; $("measurementConfirm").checked = false; recalculate(); });
-      } catch (error) { setStatus(error.message === "fit:too-many-configurations" ? "Fit limit: 32 distinct configurations per dataset." : "Fit unavailable: add confirmed training shots with measured geometry/masses and spring data; each candidate must produce a valid exit.", error.message === "fit:too-many-configurations" ? "Ograničenje prilagodbe: 32 različite konfiguracije po skupu." : "Prilagodba nije dostupna: dodajte potvrđene podatke s izmjerenom geometrijom/masama i oprugom; svaki kandidat mora dati valjan izlazak BB-a."); }
+        $("fitReport").innerHTML = `<button class="secondary-button" type="button" id="applyFit">${t("Apply fitted parameters to current setup", "Primijeni prilagođene parametre na trenutačnu konfiguraciju")}</button>`;
+        $("applyFit").addEventListener("click", () => { for (const [key, value] of Object.entries(fit.parameters)) p[key] = value; syncSetupControls(); $("measurementConfirm").checked = false; recalculate(); });
+      } catch (error) {
+        const messages = {
+          "fit:too-many-configurations": ["Fit limit: 32 distinct configurations per dataset.", "Ograničenje prilagodbe: 32 različite konfiguracije po skupu."],
+          "fit:not-identifiable": ["Not enough distinct training configurations for the selected number of parameters.", "Nema dovoljno različitih konfiguracija za odabrani broj parametara."],
+          "fit:parameters": ["Select between one and three supported parameters.", "Odaberite jedan do tri podržana parametra."],
+          "fit:measured-spring": ["Spring stiffness cannot be fitted while a measured force curve is active.", "Krutost opruge ne može se prilagođavati dok je aktivna izmjerena krivulja sile."],
+          "fit:measured-bumper": ["Bumper stiffness cannot be fitted while a measured bumper force curve is active.", "Krutost gumice ne može se prilagođavati dok je aktivna izmjerena krivulja sile gumice."]
+        };
+        setStatus(...(messages[error.message] || ["Fit unavailable: add eligible measured training data whose simulations produce valid exits.", "Prilagodba nije dostupna: dodajte prikladne izmjerene podatke čije simulacije daju valjan izlazak."]));
+      }
       finally { setBusy(false); }
     });
   }
   function renderMeasurements() {
     if (!$("measurementRows")) return;
-    $("measurementRows").innerHTML = measurements.map((r, i) => `<tr><td>${fmt(r.bbMass, 2, "g")}</td><td>${fmt(r.fps, 1)} / ${fmt(C.energy(r.bbMass, r.fps), 3)}</td><td>${r.role === "train" ? t("Training", "Prilagodba") : r.role === "validation" ? t("Held-out", "Neovisna provjera") : t("Reference only", "Samo referenca")}<br><small>${C.eligible(r) ? t("Measured inputs confirmed", "Izmjereni ulazi potvrđeni") : t("Not fit-eligible", "Nije prikladno za prilagodbu")}${r.setup ? ` · ${fmt(r.setup.pistonMass, 1, "g")} / ${fmt(r.setup.barrelLength, 0, "mm")}` : ` · ${t("setup incomplete", "nepotpuna konfiguracija")}`}</small></td><td>${esc(r.notes)}</td><td><button type="button" class="danger-button" data-remove="${i}" aria-label="${t("Remove shot", "Ukloni hitac")} ${i + 1}">×</button></td></tr>`).join("");
+    $("measurementRows").innerHTML = measurements.map((r, i) => `<tr><td>${fmt(r.bbMass, 2, "g")}</td><td>${fmt(r.fps, 1)} / ${fmt(C.energy(r.bbMass, r.fps), 3)}${Number.isFinite(r.pistonHitMs) ? `<br><small>${t("contact", "kontakt")} ${fmt(r.pistonHitMs, 2, "ms")}</small>` : ""}${Number.isFinite(r.peakCylinderBarG) ? `<br><small>${t("peak pressure", "vršni tlak")} ${fmt(r.peakCylinderBarG, 2, "bar(g)")}</small>` : ""}${Number.isFinite(r.peakBumperForceN) ? `<br><small>${t("peak bumper force", "vršna sila gumice")} ${fmt(r.peakBumperForceN, 1, "N")}</small>` : ""}</td><td>${r.role === "train" ? t("Training", "Prilagodba") : r.role === "validation" ? t("Held-out", "Neovisna provjera") : t("Reference only", "Samo referenca")}<br><small>${C.eligible(r) ? t("Measured inputs confirmed", "Izmjereni ulazi potvrđeni") : t("Not fit-eligible", "Nije prikladno za prilagodbu")}${r.setup ? ` · ${fmt(r.setup.pistonMass, 1, "g")} / ${fmt(r.setup.barrelLength, 0, "mm")}` : ` · ${t("setup incomplete", "nepotpuna konfiguracija")}`}</small></td><td>${esc(r.notes)}</td><td><button type="button" class="danger-button" data-remove="${i}" aria-label="${t("Remove shot", "Ukloni hitac")} ${i + 1}">×</button></td></tr>`).join("");
     document.querySelectorAll("[data-remove]").forEach(button => button.addEventListener("click", () => {
       if (busy) return;
       const i = Number(button.dataset.remove);
@@ -3794,7 +4069,7 @@
       else if (button.dataset.feedbackView) {
         stop(); workspace.selectView(button.dataset.feedbackView);
       }
-      else if (button.id === "exportRun") download("airsoft-pneumatic-run.json", { schemaVersion: 3, solverVersion: P.VERSION, identity: { selectedPlatform, component, springLabel, pinLabel }, provenance, setup: p, result: shot, baseline: { exitEnergy: baseline?.exitEnergy ?? null, impactEnergy: baseline?.impactEnergy ?? null }, limitations: "Unvalidated two-volume, leaky-piston model; not exact joules or dB; see docs/MODEL.md" });
+      else if (button.id === "exportRun") download("airsoft-pneumatic-run.json", { schemaVersion: 3, solverVersion: P.VERSION, identity: { selectedPlatform, component, springLabel, pinLabel }, provenance, setup: p, result: shot, baseline: { exitEnergy: baseline?.exitEnergy ?? null, impactEnergy: baseline?.impactEnergy ?? null }, limitations: "Unvalidated three-control-volume lumped model with a causal wave-travel envelope; not a coupled 1D flow solution and not exact joules or dB; see docs/MODEL.md" });
     };
     results.oninput = event => {
       if (calculationPending || !shot?.valid || busy) return;
@@ -3870,7 +4145,7 @@
     }
     $("phaseText").textContent = parts.join(" ");
     const liveValues = [
-      [t("Cylinder / BB pressure", "Tlak cilindra / iza BB-a"), `${fmt((f.cylinderPressure - shot.ambientPressure) / 1e5, 2)} / ${fmt((f.pressure - shot.ambientPressure) / 1e5, 2, "bar(g)")}`],
+      [t("Cylinder / behind / ahead pressure", "Tlak cilindra / iza / ispred BB-a"), `${fmt((f.cylinderPressure - shot.ambientPressure) / 1e5, 2)} / ${fmt((f.pressure - shot.ambientPressure) / 1e5, 2)} / ${fmt((f.frontPressure - shot.ambientPressure) / 1e5, 2, "bar(g)")}`],
       [t("Piston velocity", "Brzina pistona"), fmt(f.pistonV, 2, "m/s")],
       [t("Piston travel / bumper contact", "Pomak pistona / kontakt s gumicom"), `${fmt(f.pistonX * 1000, 2)} / ${fmt(shot.stroke * 1000, 1, "mm")}`],
       [t("Bumper compression / force", "Stlačenje gumice / sila"), `${fmt(f.bumperCompression * 1000, 3)} / ${fmt(f.bumperForce, 1, "N")}`],
@@ -3902,7 +4177,7 @@
   }
   function drawCharts(time) {
     const traces = [
-      ["pressureChart", [[f => (f.cylinderPressure - shot.ambientPressure) / 1e5, "#ffbf69"], [f => (f.pressure - shot.ambientPressure) / 1e5, "#5de4e7"]]],
+      ["pressureChart", [[f => (f.cylinderPressure - shot.ambientPressure) / 1e5, "#ffbf69"], [f => (f.pressure - shot.ambientPressure) / 1e5, "#5de4e7"], [f => (f.frontPressure - shot.ambientPressure) / 1e5, "#b99cff"], [f => (f.wavePressureEstimate - shot.ambientPressure) / 1e5, "#8da2ff", [5, 4]]]],
       ["pistonChart", [[f => f.pistonV, "#ffbf69"]]], ["bbChart", [[f => f.bbV, "#5de4e7"]]]
     ];
     for (const [id, series] of traces) {
@@ -3917,7 +4192,8 @@
       for (let i = 0; i < 4; i++) { const v = lo + (hi - lo) * i / 3, yy = y(v); ctx.strokeStyle = "#28343c"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(left, yy); ctx.lineTo(right, yy); ctx.stroke(); ctx.fillStyle = "#91a0a7"; ctx.fillText(v.toFixed(hi > 20 ? 0 : 1), left - 6, yy + 4); }
       ctx.strokeStyle = "#62757d"; ctx.beginPath(); ctx.moveTo(left, y(0)); ctx.lineTo(right, y(0)); ctx.stroke();
       ctx.save(); ctx.beginPath(); ctx.rect(left, top, right - left, bottom - top); ctx.clip();
-      for (const [get, color] of series) { ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.beginPath(); shot.frames.forEach((f, i) => { if (i) ctx.lineTo(x(f.t), y(get(f))); else ctx.moveTo(x(f.t), y(get(f))); }); ctx.stroke(); }
+      for (const [get, color, dash] of series) { ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.setLineDash(dash || []); ctx.beginPath(); shot.frames.forEach((f, i) => { if (i) ctx.lineTo(x(f.t), y(get(f))); else ctx.moveTo(x(f.t), y(get(f))); }); ctx.stroke(); }
+      ctx.setLineDash([]);
       for (const [key, color] of [["usefulTime", "#6ee7a8"], ["strongBrakeTime", "#ffbf69"], ["exitTime", "#5de4e7"]]) {
         if (shot[key] === null) continue;
         ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.setLineDash(key === "strongBrakeTime" ? [4, 4] : [2, 3]); ctx.beginPath(); ctx.moveTo(x(shot[key]), top); ctx.lineTo(x(shot[key]), bottom); ctx.stroke();

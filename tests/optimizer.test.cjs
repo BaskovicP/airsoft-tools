@@ -7,7 +7,7 @@ function mockShot(p) {
   return { valid: true, exitTime: .02, pistonHitTime: .03, dischargeComplete: true, exitEnergy: 2,
     exitVelocity: 100, impactEnergy: p.pistonMass / 1000, peakOutflow: .01, exitPressure: 150000,
     ambientPressure: 101300, energyResidual: 0, releasedSpringEnergy: .01,
-    strongBrakeTime: .019, usefulTime: .018, duration: .05 };
+    strongBrakeTime: .019, usefulTime: .018, duration: .05, pistonImpacts: [{ complete: true, dissipatedEnergy: p.pistonMass / 1000 }] };
 }
 test('optimizer parses finite decimal lists and rejects malformed/excessive lists', () => {
   assert.deepEqual(O.parseValues('58, 65; 68 68 0.46'), [58,65,68,.46]);
@@ -38,6 +38,12 @@ test('measured spring curve is never scaled, dropped or bypassed', () => {
   assert.throws(()=>O.searchSpace(p,{locks:{spring:false},values:{springMass:[20]}}),/measured-spring/);
   const space=O.searchSpace(p,{locks:{spring:false},values:{springPreload:[40,60]}});
   for(let i=0;i<space.total;i++) assert.deepEqual(O.candidateAt(space,i).springCurve,p.springCurve);
+});
+test('measured bumper curve cannot be silently replaced by optimized linear stiffness', () => {
+  const p=P.normalize({bumperThickness:2,bumperMaxCompression:1,bumperCurve:[[0,0],[1,250]]});
+  assert.throws(()=>O.searchSpace(p,{locks:{head:false},values:{bumperStiffness:[500]}}),/measured-bumper/);
+  const space=O.searchSpace(p,{locks:{head:false},values:{bumperDamping:[80,160]}});
+  for(let i=0;i<space.total;i++) assert.deepEqual(O.candidateAt(space,i).bumperCurve,p.bumperCurve);
 });
 test('search coverage is bounded, deterministic, unique and always includes current setup', () => {
   const space=O.searchSpace(P.DEFAULTS,{locks:{piston:false,airbrake:false,barrel:false},values:{pistonMass:[58,65,68,72,76,82],airbrakeLength:[0,10,15,20,25],barrelLength:[303,430,510]}});
@@ -74,7 +80,7 @@ test('efficiency uses initial spring work, independent of variable end time', ()
 });
 test('Pareto frontier excludes dominated choices and retains real tradeoffs', () => {
   const c=(index,vector)=>({index,vector,changes:{pistonMass:{from:71,to:70}}});
-  const a=c(0,[1,1,1,-.5]),b=c(1,[2,2,2,-.4]),d=c(2,[.5,1,1,-.4]);
+  const a=c(0,[1,1,1,-.5,.1]),b=c(1,[2,2,2,-.4,.2]),d=c(2,[.5,1,1,-.4,.1]);
   const ranked=O.rank([a,b,d]);
   assert.equal(ranked.length,2);assert.ok(!ranked.some(r=>r.index===1));
   assert.ok(ranked.every(r=>Number.isFinite(r.score)));

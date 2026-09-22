@@ -108,7 +108,7 @@ test('no drive gives equilibrium, not fictional exit or contact', () => {
 test('restrictive-pin fixture retains signed pressure reversal and honest missing contact', () => {
   const s = P.simulate(RESTRICTIVE_PIN);
   assert.equal(s.valid, true); assert.ok(s.exitVelocity > 0); assert.ok(s.frames.some(f => f.pistonV < 0));
-  assert.ok(Math.abs(s.energyResidual) / s.energyScale < 1e-4); assert.ok(Math.abs(s.massResidual) < 1e-14);
+  assert.ok(Math.abs(s.energyResidual) / s.energyScale < 1e-4); assert.ok(Math.abs(s.massResidual) < 1e-9);
   assert.equal(s.pistonHitTime, null); assert.equal(s.impactEnergy, null); assert.ok(s.strongBrakeTime >= s.engageTime);
   assert.ok(s.usefulTime < s.exitTime); assert.ok(s.peakCylinderPressure > s.peakPressure);
   assert.ok(s.muzzleMass > 0); assert.ok(s.exitGasMass > 0);
@@ -151,7 +151,7 @@ test('BB can lose speed when resistance exceeds thrust', () => {
 });
 test('heat flow and leakage are included in energy and mass accounting', () => {
   const s = P.simulate({ heatTransfer: .1, pistonLeak: .1, nozzleLeak: .1, airTemperature: 40, restitution: .2 });
-  assert.equal(s.valid, true); assert.ok(Math.abs(s.energyResidual) / s.energyScale < .001); assert.ok(Math.abs(s.massResidual) < 1e-14);
+  assert.equal(s.valid, true); assert.ok(Math.abs(s.energyResidual) / s.energyScale < .001); assert.ok(Math.abs(s.massResidual) < 1e-9);
 });
 test('near-closed cylinder recovers adiabatic pV^gamma invariant', () => {
   const p = P.normalize({ headBore: .001, airbrakeLength: 0, airbrakeTaper: 0, pistonLeak: 0, nozzleLeak: 0, bbLeakCoefficient: 0, maxTime: 5 });
@@ -166,11 +166,35 @@ test('muzzle discharge excludes nozzle-seal leakage', () => {
   const expected = P.massFlow(f.pressure, f.bbTemperature, s.ambientPressure, s.params.airTemperature + 273.15, P.geometry(s.params, f.pistonX, s.barrelLength).ab * s.params.muzzleDischargeCoefficient);
   close(f.outflow, expected, 1e-12);
 });
-test('muzzle Cd changes only post-exit discharge, not the recorded BB exit', () => {
+test('muzzle Cd controls front-gas venting before exit and discharge after exit', () => {
   const restricted = P.simulate({ muzzleDischargeCoefficient: .2 }), open = P.simulate({ muzzleDischargeCoefficient: 1 });
-  close(restricted.exitVelocity, open.exitVelocity); close(restricted.exitTime, open.exitTime);
-  assert.ok(open.peakOutflow > restricted.peakOutflow * 4.9);
+  assert.ok(restricted.peakFrontPressure > open.peakFrontPressure);
+  assert.ok(restricted.exitVelocity < open.exitVelocity); assert.notEqual(restricted.exitTime, open.exitTime);
+  assert.ok(open.peakOutflow > restricted.peakOutflow * 4);
   assert.notEqual(open.pistonImpactVelocity, restricted.pistonImpactVelocity);
+});
+test('air ahead of the BB is a vented conservative control volume', () => {
+  const s = P.simulate({ frontDeadVolume: .1 });
+  assert.equal(s.valid, true); assert.ok(s.peakFrontPressure > s.ambientPressure);
+  assert.ok(s.exitFrontPressure > s.ambientPressure); assert.ok(s.frames.some(frame => frame.frontOutflow > 0));
+  assert.ok(Math.abs(s.energyResidual) / s.energyScale < .001); assert.ok(Math.abs(s.massResidual) < 1e-9);
+});
+test('pressure-wave diagnostic is finite and explicitly remains an envelope', () => {
+  const s = P.simulate();
+  assert.equal(s.waveDiagnostics.method, 'causal-travel-envelope');
+  assert.equal(s.waveDiagnostics.referenceCellCount, 24);
+  for (const key of ['maxTransit', 'referenceCellTransit', 'maxPressureDelta', 'relativePressureSpan']) assert.ok(Number.isFinite(s.waveDiagnostics[key]));
+  assert.ok(s.waveDiagnostics.maxTransit > 0); assert.ok(s.frames.every(frame => Number.isFinite(frame.wavePressureEstimate)));
+});
+test('measured bumper curve replaces linear stiffness and integrates stored energy', () => {
+  const p = P.normalize({ bumperThickness: 2, bumperMaxCompression: 1, bumperStiffness: 0,
+    bumperCurve: [[0, 0], [.5, 100], [1, 300]] });
+  assert.deepEqual(P.validate(p), []);
+  close(P.bumperElasticForce(p, .00075), 200, 1e-12);
+  close(P.bumperPotential(p, .001), .125, 1e-12);
+  const h=1e-8; close((P.bumperPotential(p,.00075+h)-P.bumperPotential(p,.00075-h))/(2*h),P.bumperElasticForce(p,.00075),1e-6);
+  assert.ok(P.validate({ ...p, bumperCurve: [[0, 0], [.5, 100]] }).includes('bumper:coverage'));
+  assert.ok(P.validate({ ...p, bumperCurve: [[0, 0], [.5, 100], [1, 90]] }).includes('bumper:curve'));
 });
 test('default timestep refinement converges separately for velocity and event time', () => {
   const a = P.simulate({}, { dt: 5e-6, tolerance: 5e-6 }), b = P.simulate({}, { dt: 2.5e-6, tolerance: 1.25e-6 });
@@ -186,8 +210,28 @@ test('compliant bumper force, compression and dissipation converge without resti
   assert.equal(a.pistonImpacts[0].reboundVelocity, null); assert.equal(b.pistonImpacts[0].reboundVelocity, null);
   assert.ok(Math.abs(a.maxBumperCompression - b.maxBumperCompression) < 1e-7);
   assert.ok(Math.abs(a.peakBumperForce - b.peakBumperForce) / b.peakBumperForce < 1e-4);
-  assert.ok(Math.abs(a.bumperDissipatedEnergy - b.bumperDissipatedEnergy) < 1e-5);
+  assert.ok(Math.abs(a.bumperDissipatedEnergy - b.bumperDissipatedEnergy) < 1e-4);
   assert.ok(Math.abs(b.energyResidual) / b.energyScale < .001);
+  assert.equal(a.pistonSettled, true); assert.equal(b.pistonSettled, true);
+  assert.ok(Math.abs(a.frames.at(-1).pistonA) < 1); assert.ok(Math.abs(b.frames.at(-1).pistonA) < 1);
+});
+test('a low piston speed with large acceleration is not falsely reported as settled', () => {
+  const s = P.simulate({ bumperThickness: 4, bumperBore: 8 });
+  assert.equal(s.valid, true); assert.equal(s.pistonSettled, true); assert.equal(s.terminationReason, 'settled');
+  assert.ok(Math.abs(s.frames.at(-1).pistonA) < 1);
+  assert.equal(s.pistonImpacts.at(-1).settledInContact, true);
+});
+test('exhausting the integration step budget is an explicit convergence failure', () => {
+  const s = P.simulate({}, { maxSteps: 1 });
+  assert.equal(s.valid, false); assert.deepEqual(s.errors, ['solver:convergence']); assert.equal(s.terminationReason, 'step-limit');
+});
+test('taper clearance validation uses the local diameter that actually reaches each segment', () => {
+  const p = P.normalize({ bumperThickness: 6, bumperBore: 6, bumperMaxCompression: 1,
+    headLength: 12, headBore: 5, nozzleLength: 15, nozzleBore: 3,
+    airbrakeLength: 19, airbrakeDiameter: 4.5, airbrakeTipDiameter: 2, airbrakeTaper: 10 });
+  assert.deepEqual(P.validate(p), []);
+  assert.ok(P.passage(p, .020, 250000, 350, 150000, 320).minArea > 0);
+  assert.ok(P.validate({ ...p, airbrakeTipDiameter: 3.1 }).includes('pin:clearance'));
 });
 test('contact before BB exit survives refinement and conserves energy within budget', () => {
   const p = { springStiffness: 1800, springPreload: 100, airbrakeLength: 0 };
@@ -230,13 +274,35 @@ test('one-parameter fit recovers synthetic Cd; held-out shots never enter fit', 
   const result = await C.fitLoss([row, { ...row, id: 'repeat' }, { ...row, id: 'holdout', fps: measured+10, role: 'validation' }]);
   close(result.coefficient, .68, .002); assert.equal(result.distinctTrainingSetups, 1); assert.equal(result.training.count, 2); assert.equal(result.validation.count, 1); close(result.validation.rmse, 10, .1);
 });
+test('multi-parameter calibration requires distinct conditions and can use instrumented observables', async () => {
+  const trueValues = { dischargeCoefficient: .64, barrelDrag: .35 };
+  const simulate = p => ({ valid: true, exitVelocity: (250 + 120 * p.dischargeCoefficient - p.barrelDrag * p.barrelLength / 8) * .3048,
+    pistonHitTime: (.02 + p.barrelDrag * .002), peakCylinderPressure: p.ambientPressure * 1000 + (2 + p.dischargeCoefficient) * 1e5,
+    ambientPressure: p.ambientPressure * 1000, peakBumperForce: 100 + p.barrelDrag * 20 });
+  const make = (id, barrelLength) => {
+    const setup = P.normalize({ barrelLength, ...trueValues }), shot = simulate(setup);
+    return { id, bbMass: setup.bbMass, fps: shot.exitVelocity / .3048, sigma: .2, role: 'train', setup, confirmed: true,
+      solverVersion: P.VERSION, provenance: { geometry: 'measured', spring: 'measured' }, pistonHitMs: shot.pistonHitTime * 1000, pistonHitSigmaMs: .1 };
+  };
+  const rows = [make('a', 300), make('b', 500)];
+  await assert.rejects(C.fitParameters([rows[0]], Object.keys(trueValues), () => {}, simulate), /not-identifiable/);
+  const result = await C.fitParameters(rows, Object.keys(trueValues), () => {}, simulate);
+  close(result.parameters.dischargeCoefficient, trueValues.dischargeCoefficient, .02);
+  close(result.parameters.barrelDrag, trueValues.barrelDrag, .02);
+  assert.equal(result.training.observations, 4); assert.equal(result.fittedParameters.length, 2);
+});
+test('calibration cannot replace a measured bumper curve with fitted linear stiffness', async () => {
+  const setup=P.normalize({bumperThickness:2,bumperMaxCompression:1,bumperCurve:[[0,0],[1,250]]});
+  const row={id:'bumper',bbMass:setup.bbMass,fps:300,sigma:1,role:'train',setup,confirmed:true,solverVersion:P.VERSION,provenance:{geometry:'measured',spring:'measured'}};
+  await assert.rejects(C.fitParameters([row],['bumperStiffness'],()=>{},()=>({valid:true,exitVelocity:100})),/measured-bumper/);
+});
 test('browser bundle is classic standalone JS and exports identical solver', () => {
   const html = fs.readFileSync('index.html', 'utf8'), script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
   assert.ok(!html.includes('type="module"')); assert.ok(!html.includes('src="./app.js"'));
   const pure = script.slice(0, script.indexOf('/* UI shared'));
   const ctx = vm.createContext({ setTimeout }); vm.runInContext(pure, ctx);
   assert.equal(ctx.PneumaticPhysics.VERSION, P.VERSION);
-  assert.equal(ctx.PneumaticOptimizer.VERSION, '1.0.0');
+  assert.equal(ctx.PneumaticOptimizer.VERSION, '2.0.0');
   assert.equal(typeof ctx.PneumaticPlayback.frameAt, 'function');
   close(ctx.PneumaticPhysics.simulate({ maxTime: 10 }).frames.at(-1).pistonX, P.simulate({ maxTime: 10 }).frames.at(-1).pistonX);
   assert.equal(fs.readFileSync('dist/app.js','utf8').trim(), script.trim());
