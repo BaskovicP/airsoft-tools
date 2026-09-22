@@ -109,7 +109,8 @@
   function languageSwitch() { return `<div class="language-switch" role="group" aria-label="${t("Language", "Jezik")}"><button type="button" data-lang="en" aria-pressed="${language === "en"}">English</button><button type="button" data-lang="hr" aria-pressed="${language === "hr"}">Hrvatski</button></div>`; }
   function field(key) {
     const [en, hr, unit, min, max, step] = fields[key];
-    return `<div class="control"><label for="${key}"><span>${t(en, hr)}</span><span class="mono">${unit === "turns" ? t("turns", "zavoja") : unit}</span></label><div class="field-entry"><input data-range="${key}" aria-label="${t(en, hr)}" type="range" min="${min}" max="${max}" step="${step}" value="${p[key]}"><input id="${key}" data-number="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${p[key]}" required></div></div>`;
+    const name = t(en, hr), helpId = `field-help-${key}`, help = Parts.help(key, t);
+    return `<div class="control"><div class="control-label-row"><label for="${key}"><span>${name}</span><span class="mono">${unit === "turns" ? t("turns", "zavoja") : unit}</span></label><span class="field-info-wrap"><button class="field-info" type="button" data-field-info="${helpId}" aria-label="${esc(t(`Explain ${en}`, `Objasni: ${hr}`))}" aria-describedby="${helpId}"><span aria-hidden="true">i</span></button><span class="field-tooltip" id="${helpId}" role="tooltip">${esc(help)}</span></span></div><div class="field-entry"><input data-range="${key}" aria-label="${name}" type="range" min="${min}" max="${max}" step="${step}" value="${p[key]}"><input id="${key}" data-number="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${p[key]}" required></div></div>`;
   }
   function springMarkup() {
     return `<details id="springDetails" ${p.springLengthMode ? "open" : ""}><summary>${t("Spring length, cutting & mechanical losses", "Duljina i skraćivanje opruge te mehanički gubici")}</summary>
@@ -184,7 +185,7 @@
       if (view === "calibration") $("calibrationPanel").open = true;
       setFrame(fraction);
     });
-    bindLanguage(); bindControls(); bindOptimizer(); syncSpringControls(); updateResults(); renderMeasurements(); renderOptimizerResults(); workspace.restoreScroll();
+    bindLanguage(); bindControls(); bindFieldHelp(); bindOptimizer(); syncSpringControls(); updateResults(); renderMeasurements(); renderOptimizerResults(); workspace.restoreScroll();
   }
   function calibrationMarkup() {
     return `<details class="panel calibration" id="calibrationPanel"><summary>${t("Calibration · actual chrono measurements", "Kalibracija · stvarna mjerenja kronografom")}</summary><div class="calibration-body"><p class="calibration-intro">${t("Your 0.46 g / 330 fps observation is a reference until its full setup is recorded. Energy is derived from mass and velocity, not an independent measurement. Record each shot. All data stays in this browser unless you export it.", "Mjerenje 0,46 g / 330 fps ostaje referenca dok se ne zabilježi potpuna konfiguracija. Energija se izvodi iz mase i brzine, nije neovisno mjerenje. Zabilježite svaki hitac. Podaci ostaju u ovom pregledniku osim ako ih izvezete.")}</p>
@@ -461,6 +462,30 @@
     document.querySelectorAll("[data-mass]").forEach(button => button.setAttribute("aria-pressed", String(p.pistonMass === Number(button.dataset.mass))));
     $("measurementConfirm").checked = false;
     syncSpringControls();
+  }
+  function bindFieldHelp() {
+    const place = button => {
+      const tooltip = $(button.dataset.fieldInfo);
+      if (!tooltip) return;
+      const margin = 12, gap = 9, width = Math.min(340, Math.max(160, window.innerWidth - margin * 2));
+      tooltip.style.width = `${width}px`;
+      const trigger = button.getBoundingClientRect(), height = tooltip.getBoundingClientRect().height;
+      const left = Math.max(margin, Math.min(window.innerWidth - width - margin, trigger.right - width));
+      const below = trigger.bottom + gap;
+      const opensAbove = below + height > window.innerHeight - margin && trigger.top - height - gap >= margin;
+      tooltip.style.left = `${left}px`;
+      const maximumTop = Math.max(margin, window.innerHeight - height - margin);
+      tooltip.style.top = `${opensAbove ? trigger.top - height - gap : Math.max(margin, Math.min(below, maximumTop))}px`;
+      tooltip.dataset.side = opensAbove ? "above" : "below";
+    };
+    document.querySelectorAll("[data-field-info]").forEach(button => {
+      button.addEventListener("pointerenter", () => place(button));
+      button.addEventListener("focus", () => place(button));
+      button.addEventListener("click", () => place(button));
+      button.addEventListener("keydown", event => {
+        if (event.key === "Escape") button.blur();
+      });
+    });
   }
   function bindControls() {
     $("toggleControls").addEventListener("click", e => { const closed = document.querySelector(".controls-panel").classList.toggle("is-collapsed"); e.currentTarget.setAttribute("aria-expanded", String(!closed)); });

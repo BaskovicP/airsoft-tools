@@ -4,6 +4,7 @@ const vm = require("node:vm");
 const fs = require("node:fs");
 const path = require("node:path");
 const source = fs.readFileSync(path.join(__dirname, "../src/app.js"), "utf8");
+const page = fs.readFileSync(path.join(__dirname, "../src/page.html"), "utf8");
 function functionSource(name) {
   const start = source.indexOf(`  function ${name}(`);
   assert.ok(start >= 0, name);
@@ -106,6 +107,19 @@ test("parameter preset paths and live frames cannot rebuild the results shell", 
   assert.doesNotMatch(functionSource("bindControls"), /\brender\(\)/);
   assert.doesNotMatch(functionSource("renderOptimizerResults"), /\brender\(\)/);
   assert.match(functionSource("setFrame"), /if \(!\$\("liveStrip"\)\.firstChild\)/);
+});
+
+test("setup fields expose shared help on hover, keyboard focus and touch focus", () => {
+  const field = functionSource("field"), binding = functionSource("bindFieldHelp");
+  assert.match(field, /Parts\.help\(key, t\)/);
+  assert.match(field, /class="field-info"/);
+  assert.match(field, /role="tooltip"/);
+  assert.match(field, /aria-describedby/);
+  assert.match(binding, /pointerenter/);
+  assert.match(binding, /addEventListener\("focus"/);
+  assert.match(binding, /event\.key === "Escape"/);
+  assert.match(page, /\.field-info-wrap:hover \.field-tooltip/);
+  assert.match(page, /\.field-info-wrap:focus-within \.field-tooltip/);
 });
 
 test("Graphs renders the same live cutaway at the graph cursor time", () => {

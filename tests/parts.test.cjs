@@ -16,6 +16,18 @@ test("parts atlas covers every direct part field and every non-caliper model inp
   assert.doesNotMatch(html, /NaN|Infinity|undefined|null/);
 });
 
+test("every numeric setup field has specific bilingual contextual help", () => {
+  const expected = Object.keys(P.DEFAULTS).filter(key => !["springCurve", "springLengthMode"].includes(key)).sort();
+  assert.deepEqual([...Parts.HELP_FIELDS].sort(), expected);
+  for (const key of expected) {
+    assert.ok(Parts.help(key, en).length >= 45, `${key} needs a specific English explanation`);
+    assert.ok(Parts.help(key, hr).length >= 45, `${key} needs a specific Croatian explanation`);
+  }
+  assert.match(Parts.help("headLength", en), /Axial length.*receiving bore.*downstream nozzle/i);
+  assert.match(Parts.help("nozzleBore", hr), /unutarnji promjer.*ulaznog provrta.*hop komore/i);
+  assert.equal(Parts.help("notAField", en), "");
+});
+
 test("airbrake endpoint explanation follows bumper and head geometry", () => {
   const insideBumper = Parts.markup(P.normalize({ airbrakeLength: 4, bumperThickness: 6, headLength: 12 }), en);
   const insideHead = Parts.markup(P.normalize({ airbrakeLength: 10, bumperThickness: 6, headLength: 12 }), en);
