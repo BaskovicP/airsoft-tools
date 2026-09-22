@@ -22,6 +22,10 @@ test('added annular bumper moves contact, occupies volume and preserves explicit
   const s = P.simulate(p);
   assert.equal(s.valid, true); close(s.stroke, P.contactStroke(p)); close(s.bumperThickness, .004);
   assert.ok(s.pistonHitTime > 0); close(s.frames.filter(f => f.t === s.pistonHitTime).at(-1).pistonX, s.stroke);
+  assert.equal(s.pistonImpacts.length, 1); assert.equal(s.pistonImpacts[0].settledInContact, true);
+  assert.ok(s.maxBumperCompression > 0 && s.maxBumperCompression < P.bumperLimit(p));
+  assert.ok(s.peakBumperForce > 0 && s.bumperDissipatedEnergy > 0);
+  assert.ok(s.pistonImpacts[0].duration > 0); assert.equal(s.pistonImpacts[0].bottomedOut, false);
   assert.ok(P.validate({ bumperThickness: 85 }).includes('bumper:thickness'));
   assert.ok(P.validate({ bumperThickness: -1 }).includes('bumperThickness:nonnegative'));
   assert.ok(P.validate({ bumperThickness: 4, bumperBore: 24 }).includes('cylinder:clearance'));
@@ -70,6 +74,20 @@ test('narrow laminar clearance matches thin-gap limit, not arbitrary iteration f
   const lessOverlap = P.passage(p, .01, 101335, 293.15, 101325, 293.15).mdot;
   assert.ok(lessOverlap > actual * 1.9);
 });
+test('tapered pin flow resolves the actually overlapped axial profile', () => {
+  const common = { airbrakeLength: 20, airbrakeDiameter: 3.8 };
+  const tapered = P.passage(P.normalize({ ...common, airbrakeTipDiameter: 2, airbrakeTaper: 6 }), .018, 2e5, 293.15, 1e5, 293.15).mdot;
+  const shaft = P.passage(P.normalize({ ...common, airbrakeTipDiameter: 3.8, airbrakeTaper: 0 }), .018, 2e5, 293.15, 1e5, 293.15).mdot;
+  const thin = P.passage(P.normalize({ ...common, airbrakeDiameter: 2, airbrakeTipDiameter: 2, airbrakeTaper: 0 }), .018, 2e5, 293.15, 1e5, 293.15).mdot;
+  assert.ok(tapered > shaft && tapered < thin);
+});
+test('fully inserted pin volume stops transferring while bumper compression continues', () => {
+  const p = P.normalize({ bumperThickness: 4, bumperBore: 8, airbrakeLength: 5, airbrakeDiameter: 3.8, airbrakeTipDiameter: 2, airbrakeTaper: 2 });
+  const contact = P.geometry(p, P.contactStroke(p), 0), compressed = P.geometry(p, P.contactStroke(p) + .0005, 0);
+  assert.equal(contact.inserted, .005); assert.equal(compressed.inserted, .005);
+  assert.equal(contact.pinArea, 0); assert.equal(compressed.pinArea, 0);
+  close(compressed.vb, contact.vb); close(compressed.dvc, -compressed.ac); close(compressed.dvb, 0);
+});
 test('spring force is invariant at fixed compression, linear and measured curves agree', () => {
   const p = P.normalize(), short = P.normalize({ strokeLength: 65 });
   close(P.springForce(p, .04), P.springForce(short, .02));
@@ -95,7 +113,7 @@ test('restrictive-pin fixture retains signed pressure reversal and honest missin
   assert.ok(s.usefulTime < s.exitTime); assert.ok(s.peakCylinderPressure > s.peakPressure);
   assert.ok(s.muzzleMass > 0); assert.ok(s.exitGasMass > 0);
   assert.ok(s.preContactReversalTime < s.exitTime); assert.equal(s.contactReboundTime, null);
-  assert.ok(s.maxPreContactRetreat > .012 && s.maxPreContactRetreat < .0125);
+  assert.ok(s.maxPreContactRetreat > .0115 && s.maxPreContactRetreat < .0119);
 });
 test('absent pin does not invent airbrake events; contact is still possible', () => {
   const s = P.simulate({ airbrakeLength: 0, airbrakeTaper: 0 });
@@ -145,14 +163,31 @@ test('muzzle discharge excludes nozzle-seal leakage', () => {
   const s = P.simulate({ airbrakeLength: 0, nozzleLeak: .1 });
   const f = s.frames.find(f => f.bbExited && f.pressure > 120000);
   assert.ok(f);
-  const expected = P.massFlow(f.pressure, f.bbTemperature, s.ambientPressure, s.params.airTemperature + 273.15, P.geometry(s.params, f.pistonX, s.barrelLength).ab * .85);
+  const expected = P.massFlow(f.pressure, f.bbTemperature, s.ambientPressure, s.params.airTemperature + 273.15, P.geometry(s.params, f.pistonX, s.barrelLength).ab * s.params.muzzleDischargeCoefficient);
   close(f.outflow, expected, 1e-12);
+});
+test('muzzle Cd changes only post-exit discharge, not the recorded BB exit', () => {
+  const restricted = P.simulate({ muzzleDischargeCoefficient: .2 }), open = P.simulate({ muzzleDischargeCoefficient: 1 });
+  close(restricted.exitVelocity, open.exitVelocity); close(restricted.exitTime, open.exitTime);
+  assert.ok(open.peakOutflow > restricted.peakOutflow * 4.9);
+  assert.notEqual(open.pistonImpactVelocity, restricted.pistonImpactVelocity);
 });
 test('default timestep refinement converges separately for velocity and event time', () => {
   const a = P.simulate({}, { dt: 5e-6, tolerance: 5e-6 }), b = P.simulate({}, { dt: 2.5e-6, tolerance: 1.25e-6 });
   assert.ok(Math.abs(a.exitVelocity-b.exitVelocity)/b.exitVelocity < .001);
   assert.ok(Math.abs(a.exitTime-b.exitTime) < .00002);
   assert.ok(Math.abs(a.peakPressure-b.peakPressure)/b.peakPressure < .001);
+});
+test('compliant bumper force, compression and dissipation converge without restitution bounce', () => {
+  const p = { bumperThickness: 4, bumperBore: 8 };
+  const a = P.simulate(p, { dt: 5e-6, tolerance: 5e-6 }), b = P.simulate(p, { dt: 2.5e-6, tolerance: 1.25e-6 });
+  assert.equal(a.pistonImpacts.length, 1); assert.equal(b.pistonImpacts.length, 1);
+  assert.equal(a.pistonImpacts[0].bottomedOut, false); assert.equal(b.pistonImpacts[0].bottomedOut, false);
+  assert.equal(a.pistonImpacts[0].reboundVelocity, null); assert.equal(b.pistonImpacts[0].reboundVelocity, null);
+  assert.ok(Math.abs(a.maxBumperCompression - b.maxBumperCompression) < 1e-7);
+  assert.ok(Math.abs(a.peakBumperForce - b.peakBumperForce) / b.peakBumperForce < 1e-4);
+  assert.ok(Math.abs(a.bumperDissipatedEnergy - b.bumperDissipatedEnergy) < 1e-5);
+  assert.ok(Math.abs(b.energyResidual) / b.energyScale < .001);
 });
 test('contact before BB exit survives refinement and conserves energy within budget', () => {
   const p = { springStiffness: 1800, springPreload: 100, airbrakeLength: 0 };

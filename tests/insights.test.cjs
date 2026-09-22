@@ -89,16 +89,18 @@ test("Croatian explanations and unavailable quantities do not introduce NaN or n
 
 test("impact sequence keeps first contact and later recontacts as separate exact events", () => {
   const pistonImpacts = [
-    { index: 1, time: .03, incomingVelocity: 3, reboundVelocity: -.15, pistonEnergy: .3195 },
+    { index: 1, time: .03, incomingVelocity: 3, reboundVelocity: null, pistonEnergy: .3195, peakCompression: .0008, peakForce: 480, duration: .004 },
     { index: 2, time: .031, incomingVelocity: .2, reboundVelocity: -.01, pistonEnergy: .00142 }
   ];
-  const summary = I.impactSummary(fixture({ pistonImpacts }));
+  const shot = fixture({ pistonImpacts, params: { pistonMass: 71, airbrakeLength: 10, bumperThickness: 4, bumperMaxCompression: 1 } });
+  const summary = I.impactSummary(shot);
   assert.equal(summary.count, 2); assert.equal(summary.first, pistonImpacts[0]); assert.equal(summary.last, pistonImpacts[1]);
   assert.ok(Math.abs(summary.laterEnergy - .00142) < 1e-12); assert.ok(Math.abs(summary.totalEnergy - .32092) < 1e-12);
-  const html = I.impactMarkup(fixture({ pistonImpacts }), "impactGraph", "graphs", t, fmt);
+  const html = I.impactMarkup(shot, "impactGraph", "graphs", t, fmt);
   assert.match(html, /id="impactGraph"/); assert.match(html, /2 contacts/);
   assert.match(html, /data-impact-time="0\.03"/); assert.match(html, /data-impact-time="0\.031"/);
-  assert.match(html, /pressure-driven reversal before contact is not counted/); assert.match(html, /does not predict peak force/);
+  assert.match(html, /pressure-driven reversal before contact is not counted/); assert.match(html, /480\.0 N/);
+  assert.match(html, /settled in contact/); assert.match(html, /not measured loudness/);
 });
 
 test("impact sequence does not turn a pre-contact pressure reversal into an impact", () => {

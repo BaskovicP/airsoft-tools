@@ -1,7 +1,7 @@
 /* Pure, dependency-free conservative lumped model. See docs/MODEL.md. */
 (function (root) {
   "use strict";
-  const VERSION = "3.3.0";
+  const VERSION = "3.4.0";
   const R = 287.05, GAMMA = 1.4, CV = R / (GAMMA - 1), CP = CV + R;
   const area = d => Math.PI * (d / 2000) ** 2;
   const DEFAULTS = Object.freeze({
@@ -13,7 +13,10 @@
     // Added annular pad ahead of the rigid head. Zero thickness preserves the
     // bare-head geometry; its bore remains explicit for installed pads.
     bumperThickness: 0, bumperBore: 4,
-    deadVolume: .55, breechVolume: .45, dischargeCoefficient: .75,
+    // Kelvin-Voigt loading model. These values are illustrative until measured;
+    // with a zero-thickness bumper they are inactive and the rigid stop remains.
+    bumperStiffness: 250, bumperDamping: 160, bumperMaxCompression: 1,
+    deadVolume: .55, breechVolume: .45, dischargeCoefficient: .75, muzzleDischargeCoefficient: .85,
     pistonLeak: .005, nozzleLeak: .005, bbLeakCoefficient: .15,
     springStiffness: 550, springPreload: 50, springMass: 0, springCurve: [],
     springLengthMode: 0, springFreeLength: 0, springInstalledLength: 0, springCutLength: 0,
@@ -26,6 +29,10 @@
   function contactStroke(raw) {
     const p = normalize(raw);
     return (p.strokeLength - p.bumperThickness) / 1000;
+  }
+  function bumperLimit(raw) {
+    const p = normalize(raw);
+    return Math.min(p.bumperThickness, p.bumperMaxCompression) / 1000;
   }
   // Lengths are axial mm, not wire length. Rate scaling is a uniform-coil estimate.
   // The entered front seat/preload refers to the rigid-head plane before an
@@ -50,19 +57,21 @@
     const positive = ["cylinderBore", "strokeLength", "barrelLength", "barrelDiameter", "pistonMass", "bbMass", "bbDiameter", "bumperBore", "headBore", "headLength", "nozzleBore", "nozzleLength", "deadVolume", "breechVolume", "ambientPressure", "maxTime"];
     for (const key of Object.keys(DEFAULTS)) if (key !== "springCurve" && !Number.isFinite(p[key])) errors.push(`${key}:finite`);
     for (const key of positive) if (!(p[key] > 0)) errors.push(`${key}:positive`);
-    for (const key of ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "bumperThickness", "springStiffness", "springPreload", "springMass", "pistonLeak", "nozzleLeak", "pistonFriction", "sealFriction", "rearDamping", "bbBreakaway", "barrelDrag", "heatTransfer", "decelThreshold"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
+    for (const key of ["airbrakeLength", "airbrakeDiameter", "airbrakeTipDiameter", "airbrakeTaper", "bumperThickness", "bumperStiffness", "bumperDamping", "bumperMaxCompression", "springStiffness", "springPreload", "springMass", "pistonLeak", "nozzleLeak", "pistonFriction", "sealFriction", "rearDamping", "bbBreakaway", "barrelDrag", "heatTransfer", "decelThreshold"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
     if (p.bbDiameter >= p.barrelDiameter) errors.push("bb:clearance");
     if ((p.bumperThickness > 0 && p.cylinderBore <= p.bumperBore) || p.cylinderBore <= p.headBore || p.cylinderBore <= p.airbrakeDiameter) errors.push("cylinder:clearance");
+    const maximumPinReach = p.airbrakeLength + Math.min(p.bumperThickness, p.bumperMaxCompression);
     if (p.airbrakeLength > 0 && (
       (p.bumperThickness > 0 && p.airbrakeDiameter >= p.bumperBore) ||
-      (p.airbrakeLength > p.bumperThickness && p.airbrakeDiameter >= p.headBore) ||
-      (p.airbrakeLength > p.bumperThickness + p.headLength && p.airbrakeDiameter >= p.nozzleBore)
+      (maximumPinReach > p.bumperThickness && p.airbrakeDiameter >= p.headBore) ||
+      (maximumPinReach > p.bumperThickness + p.headLength && p.airbrakeDiameter >= p.nozzleBore)
     )) errors.push("pin:clearance");
     if (!(p.bumperThickness < p.strokeLength)) errors.push("bumper:thickness");
+    if (p.bumperThickness > 0 && p.bumperMaxCompression > 0 && !(p.bumperStiffness > 0)) errors.push("bumper:stiffness");
     const travel = p.strokeLength - p.bumperThickness;
-    if (p.airbrakeLength > travel || p.airbrakeLength > p.bumperThickness + p.headLength + p.nozzleLength) errors.push("pin:length");
+    if (p.airbrakeLength > travel || maximumPinReach > p.bumperThickness + p.headLength + p.nozzleLength) errors.push("pin:length");
     if (p.airbrakeTipDiameter > p.airbrakeDiameter || p.airbrakeTaper > p.airbrakeLength && p.airbrakeLength > 0) errors.push("pin:profile");
-    if (!(p.dischargeCoefficient > 0 && p.dischargeCoefficient <= 1) || !(p.bbLeakCoefficient >= 0 && p.bbLeakCoefficient <= 1) || !(p.restitution >= 0 && p.restitution <= 1)) errors.push("coefficient:range");
+    if (!(p.dischargeCoefficient > 0 && p.dischargeCoefficient <= 1) || !(p.muzzleDischargeCoefficient > 0 && p.muzzleDischargeCoefficient <= 1) || !(p.bbLeakCoefficient >= 0 && p.bbLeakCoefficient <= 1) || !(p.restitution >= 0 && p.restitution <= 1)) errors.push("coefficient:range");
     if (!(p.usefulFraction > 0 && p.usefulFraction <= 1) || p.airTemperature <= -273.15 || p.maxTime > 250) errors.push("range:invalid");
     if (![0, 1].includes(p.springLengthMode)) errors.push("spring:mode");
     for (const key of ["springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"]) if (p[key] < 0) errors.push(`${key}:nonnegative`);
@@ -78,10 +87,10 @@
     if (!Array.isArray(p.springCurve)) errors.push("spring:curve");
     else if (p.springCurve.length) {
       if (p.springCurve.length < 2 || p.springCurve.some((v, i, a) => !Array.isArray(v) || v.length !== 2 || !v.every(Number.isFinite) || v[0] < 0 || v[1] < 0 || i > 0 && v[0] <= a[i - 1][0])) errors.push("spring:curve");
-      else if (p.springCurve[0][0] > spring.preload || p.springCurve.at(-1)[0] < spring.cockedCompression) errors.push("spring:coverage");
+      else if (p.springCurve[0][0] > spring.preload - bumperLimit(p) * 1000 || p.springCurve.at(-1)[0] < spring.cockedCompression) errors.push("spring:coverage");
     }
     if (!errors.length) {
-      const g = geometry(p, contactStroke(p), 0);
+      const g = geometry(p, contactStroke(p) + bumperLimit(p), 0);
       if (g.vc <= 0 || g.vb <= 0) errors.push("volume:pin");
     }
     return [...new Set(errors)];
@@ -100,12 +109,17 @@
   }
   function geometry(raw, x, y) {
     const p = normalize(raw), ac = area(p.cylinderBore), ab = area(p.barrelDiameter), stroke = contactStroke(p);
+    const hardStop = stroke + bumperLimit(p);
     const bumper = p.bumperThickness / 1000;
     const bumperSolidVolume = Math.max(0, ac - area(p.bumperBore)) * bumper;
     const insertion = Math.max(0, p.airbrakeLength / 1000 - (stroke - x));
-    const displaced = pinVolume(p, insertion), ap = area(pinDiameter(p, insertion));
+    const pinLength = p.airbrakeLength / 1000, inserted = Math.min(insertion, pinLength);
+    const displaced = pinVolume(p, inserted);
+    // Once the whole pin is downstream, further piston travel no longer moves
+    // pin volume between the two control volumes.
+    const ap = insertion > 0 && insertion < pinLength ? area(pinDiameter(p, insertion)) : 0;
     return {
-      ac, ab, stroke, insertion, pinArea: ap,
+      ac, ab, stroke, hardStop, insertion, inserted, pinArea: ap,
       vc: p.deadVolume * 1e-6 + ac * (p.strokeLength / 1000 - x) - bumperSolidVolume - pinVolume(p, p.airbrakeLength / 1000) + displaced,
       vb: p.breechVolume * 1e-6 + ab * y - displaced,
       dvc: -ac + ap, dvb: -ap,
@@ -129,16 +143,17 @@
   }
   function springEnergy(p, x) {
     const end = contactStroke(p);
-    const points = [x, end];
+    const direction = x <= end ? 1 : -1, low = Math.min(x, end), high = Math.max(x, end);
+    const points = [low, high];
     const spring = springState(p);
     for (const pair of p.springCurve || []) {
       const at = (spring.preload + spring.contactTravel - pair[0]) / 1000;
-      if (at > x && at < end) points.push(at);
+      if (at > low && at < high) points.push(at);
     }
     points.sort((a, b) => a - b);
     let sum = 0;
     for (let i = 1; i < points.length; i++) sum += (springForce(p, points[i - 1]) + springForce(p, points[i])) / 2 * (points[i] - points[i - 1]);
-    return sum;
+    return direction * sum;
   }
   // Isentropic reservoir-to-reservoir short restriction; signed, including choking.
   function massFlow(pa, ta, pb, tb, effectiveArea) {
@@ -150,19 +165,39 @@
       : Math.sqrt(2 * GAMMA / (GAMMA - 1) * (r ** (2 / GAMMA) - r ** ((GAMMA + 1) / GAMMA)));
     return (forward ? 1 : -1) * effectiveArea * pu / Math.sqrt(R * temp) * f;
   }
-  // Series loss approximation. Long annuli include overlap, viscosity and Re-dependent wall friction.
-  // Not a resolved nozzle/pressure-wave model: see model limitations.
+  function annularPoiseuille(diameterRatio) {
+    const r = Math.max(0, Math.min(.999999, diameterRatio));
+    if (r < 1e-6) return 64;
+    if (1 - r < 1e-3) return 96;
+    const r2 = r * r;
+    const denominator = 1 - r2 * r2 - (1 - r2) ** 2 / Math.log(1 / r);
+    return 64 * (1 - r) ** 2 * (1 - r2) / denominator;
+  }
+  // Series loss approximation. The actually overlapped pin interval is sliced
+  // along its taper, so each axial element uses its local annular clearance.
+  // This is still not a resolved nozzle/pressure-wave model: see limitations.
   function passage(p, insertion, pc, tc, pb, tb) {
     const parts = [];
     const bumperLength = p.bumperThickness / 1000, headLength = p.headLength / 1000;
+    const pinLength = p.airbrakeLength / 1000, pinTip = insertion, pinBase = pinTip - pinLength;
+    const pushOpen = (length, bore) => {
+      if (length > 1e-12) parts.push({ a: area(bore), dh: bore / 1000, l: length, annular: false, poiseuille: 64 });
+    };
     for (const [start, length, bore] of [[0, bumperLength, p.bumperBore], [bumperLength, headLength, p.headBore], [bumperLength + headLength, p.nozzleLength / 1000, p.nozzleBore]]) {
       if (length <= 0) continue;
-      const overlap = Math.min(length, Math.max(0, insertion - start));
-      if (overlap > 0) {
-        const d = pinDiameter(p, insertion - start);
-        parts.push({ a: area(bore) - area(d), dh: (bore - d) / 1000, l: overlap, annular: true });
+      const end = start + length, lo = Math.max(start, pinBase), hi = Math.min(end, pinTip);
+      if (!(hi > lo)) { pushOpen(length, bore); continue; }
+      pushOpen(lo - start, bore);
+      // A 0.25 mm maximum slice resolves the entered taper without making the
+      // ODE cost depend excessively on an unusually long passage.
+      const count = Math.min(64, Math.max(1, Math.ceil((hi - lo) / .00025)));
+      const slice = (hi - lo) / count;
+      for (let index = 0; index < count; index++) {
+        const axial = lo + (index + .5) * slice;
+        const d = pinDiameter(p, pinTip - axial), a = area(bore) - area(d), dh = (bore - d) / 1000;
+        parts.push({ a, dh, l: slice, annular: true, poiseuille: annularPoiseuille(d / bore) });
       }
-      if (length > overlap) parts.push({ a: area(bore), dh: bore / 1000, l: length - overlap, annular: false });
+      pushOpen(end - hi, bore);
     }
     const minArea = Math.min(...parts.map(v => v.a));
     const temp = pc >= pb ? tc : tb;
@@ -170,7 +205,7 @@
     const flux = massFlow(pc, tc, pb, tb, 1);
     if (flux === 0) return { mdot: 0, minArea };
     const k0 = 1 / (minArea * p.dischargeCoefficient) ** 2;
-    const c = parts.reduce((sum, q) => sum + (q.annular ? 96 : 64) * mu * q.l / (q.dh ** 2 * q.a), 0);
+    const c = parts.reduce((sum, q) => sum + q.poiseuille * mu * q.l / (q.dh ** 2 * q.a), 0);
     // Stable positive root of k0*m² + c*m = flux² (all-laminar branch).
     const laminarFlow = 2 * flux ** 2 / (c + Math.sqrt(c * c + 4 * k0 * flux ** 2));
     if (parts.every(q => laminarFlow * q.dh / (q.a * mu) <= 2000)) return { mdot: Math.sign(flux) * laminarFlow, minArea };
@@ -180,7 +215,7 @@
       let resistance = k0;
       for (const q of parts) {
         const re = mdot * q.dh / (q.a * mu);
-        const laminar = (q.annular ? 96 : 64) / re;
+        const laminar = q.poiseuille / re;
         const blend = Math.max(0, Math.min(1, (re - 2000) / 2000));
         const f = laminar * (1 - blend) + Math.max(laminar, .3164 / re ** .25) * blend;
         resistance += f * q.l / q.dh / q.a ** 2;
@@ -199,13 +234,15 @@
     const g0 = geometry(p, 0, 0), pa = p.ambientPressure * 1000, ta = p.airTemperature + 273.15;
     const mp = (p.pistonMass + p.springMass / 3) / 1000, mbb = p.bbMass / 1000, L = p.barrelLength / 1000;
     // x,v,y,w,mc,Uc,mb,Ub, friction dissipation, external enthalpy,
-    // wall heat, ambient boundary work, external mass, BB positive/negative net work
-    let s = [0, 0, 0, 0, pa * g0.vc / (R * ta), pa * g0.vc / (GAMMA - 1), pa * g0.vb / (R * ta), pa * g0.vb / (GAMMA - 1), 0, 0, 0, 0, 0, 0, 0];
-    let t = 0, exited = false, hit = false, contactLoss = 0, muzzleMass = 0, peakOutflow = 0, peakPressure = pa;
+    // wall heat, ambient boundary work, external mass, BB positive/negative net
+    // work, and energy dissipated by the compliant bumper.
+    let s = [0, 0, 0, 0, pa * g0.vc / (R * ta), pa * g0.vc / (GAMMA - 1), pa * g0.vb / (R * ta), pa * g0.vb / (GAMMA - 1), 0, 0, 0, 0, 0, 0, 0, 0];
+    let t = 0, exited = false, hit = false, contactLoss = 0, rigidContactLoss = 0, muzzleMass = 0, peakOutflow = 0, peakPressure = pa;
     let exitTime = null, exitVelocity = null, exitPressure = null, exitGasMass = null, pistonHitTime = null, impactVelocity = null;
     let engageTime = null, decelTime = null, strongBrakeTime = null, momentumAtEngage = null, brakeEnergy = null, reboundTime = null;
     let preContactReversalTime = null, contactReboundTime = null, peakPistonX = 0, maxPistonRetreat = 0, maxPreContactRetreat = 0;
     const pistonImpacts = [];
+    let activeContact = null, maxBumperCompression = 0, peakBumperForce = 0;
     let maxBbEnergy = 0, maxBbTime = 0, peakPistonV = 0, peakCylinderPressure = pa, rejectedSteps = 0, steps = 0, nextStore = 0;
     const frames = [], history = [], maxTime = (options.maxTime ?? p.maxTime) / 1000;
     const maxDt = options.dt ?? 1e-5, tolerance = options.tolerance ?? 2e-5;
@@ -219,15 +256,23 @@
       const lc = massFlow(pc, tc, pa, ta, p.pistonLeak * 1e-6);
       const gap = Math.max(0, g.ab - area(p.bbDiameter));
       const nozzleLeak = massFlow(pb, tb, pa, ta, p.nozzleLeak * 1e-6);
-      const bbFlow = massFlow(pb, tb, pa, ta, exited ? g.ab * .85 : gap * p.bbLeakCoefficient);
+      const bbFlow = massFlow(pb, tb, pa, ta, exited ? g.ab * p.muzzleDischargeCoefficient : gap * p.bbLeakCoefficient);
       const lb = nozzleLeak + bbFlow;
       const hc = lc * CP * (lc >= 0 ? tc : ta), hb = lb * CP * (lb >= 0 ? tb : ta);
       const h = pass.mdot * CP * (pass.mdot >= 0 ? tc : tb);
       const fs = springForce(p, v[0]), gasForce = pa * g.ac + pc * g.dvc + pb * g.dvb;
       const fp = frictionForce(fs + gasForce, v[1], p.pistonFriction + p.sealFriction * Math.max(0, pc - pa) * g.ac);
       const rear = p.rearDamping * v[1];
-      let ap = (fs + gasForce - fp - rear) / mp;
-      if (v[0] <= 0 && v[1] <= 0 && ap < 0 || v[0] >= g.stroke && v[1] >= 0 && ap > 0) ap = 0;
+      const bumperCompression = Math.max(0, v[0] - g.stroke);
+      const bumperElasticForce = p.bumperStiffness * 1000 * bumperCompression;
+      // Kelvin-Voigt damping is capped on unloading so the pad can push but
+      // never pull the piston. The corresponding loss term keeps the energy
+      // ledger closed while the deformed pad relaxes.
+      const bumperEffectiveDamping = bumperCompression <= 0 ? 0 : v[1] >= 0 ? p.bumperDamping : Math.min(p.bumperDamping, bumperElasticForce / Math.max(1e-12, -v[1]));
+      const bumperDampingForce = bumperEffectiveDamping * v[1];
+      const bumperForce = bumperElasticForce + bumperDampingForce;
+      let ap = (fs + gasForce - fp - rear - bumperForce) / mp;
+      if (v[0] <= 0 && v[1] <= 0 && ap < 0 || v[0] >= g.hardStop && v[1] >= 0 && ap > 0) ap = 0;
       const thrust = (pb - pa) * g.ab;
       const fb = exited ? 0 : frictionForce(thrust, v[3], v[2] <= 1e-10 ? p.bbBreakaway : p.barrelDrag);
       let ab = exited ? 0 : (thrust - fb) / mbb;
@@ -238,21 +283,55 @@
       return {
         d: [vx, ap, vy, ab, -pass.mdot - lc, -pc * g.dvc * vx - h - hc + qc,
           pass.mdot - lb, -pb * (g.dvb * vx + g.ab * vy) + h - hb + qb,
-          fp * vx + rear * vx + fb * vy, -hc - hb, qc + qb, pa * g.ac * vx - pa * g.ab * vy, -lc - lb, Math.max(0, power), Math.max(0, -power)],
-        pc, pb, tc, tb, g, fs, ap, ab, flow: pass.mdot, outflow: exited ? bbFlow : 0, minArea: pass.minArea
+          fp * vx + rear * vx + fb * vy, -hc - hb, qc + qb, pa * g.ac * vx - pa * g.ab * vy, -lc - lb, Math.max(0, power), Math.max(0, -power),
+          bumperEffectiveDamping * vx ** 2],
+        pc, pb, tc, tb, g, fs, ap, ab, bumperCompression, bumperForce,
+        flow: pass.mdot, outflow: exited ? bbFlow : 0, minArea: pass.minArea
       };
     }
     const validState = v => v.every(Number.isFinite) && v[4] > 0 && v[5] > 0 && v[6] > 0 && v[7] > 0 && geometry(p, v[0], exited ? L : v[2]).vc > 0 && geometry(p, v[0], exited ? L : v[2]).vb > 0;
-    const totalEnergy = v => v[5] + v[7] + springEnergy(p, v[0]) + .5 * mp * v[1] ** 2 + .5 * mbb * v[3] ** 2;
+    const bumperEnergy = v => .5 * p.bumperStiffness * 1000 * Math.max(0, v[0] - g0.stroke) ** 2;
+    const totalEnergy = v => v[5] + v[7] + springEnergy(p, v[0]) + .5 * mp * v[1] ** 2 + .5 * mbb * v[3] ** 2 + bumperEnergy(v);
     function frame(e) {
       return { t, pistonX: s[0], pistonV: s[1], pistonA: e.ap, bbX: s[2], bbV: s[3], bbA: e.ab, pressure: e.pb, cylinderPressure: e.pc, cylinderTemperature: e.tc, bbTemperature: e.tb,
-        insertion: e.g.insertion, flow: e.flow, outflow: e.outflow, openArea: e.minArea, pistonHit: hit, bbExited: exited,
-        energyResidual: totalEnergy(s) + s[8] + contactLoss - initialEnergy - s[9] - s[10] - s[11] };
+        insertion: e.g.insertion, flow: e.flow, outflow: e.outflow, openArea: e.minArea,
+        bumperCompression: e.bumperCompression, bumperForce: e.bumperForce, pistonHit: hit, bbExited: exited,
+        energyResidual: totalEnergy(s) + s[8] + contactLoss + s[15] - initialEnergy - s[9] - s[10] - s[11] };
+    }
+    const compliantBumper = g0.hardStop > g0.stroke + 1e-12;
+    function beginContact(contactState, incomingVelocity) {
+      if (pistonHitTime === null) { pistonHitTime = t; impactVelocity = incomingVelocity; }
+      hit = true;
+      const event = { index: pistonImpacts.length + 1, time: t, incomingVelocity, reboundVelocity: null,
+        pistonEnergy: .5 * p.pistonMass / 1000 * incomingVelocity ** 2,
+        effectiveMovingEnergy: .5 * mp * incomingVelocity ** 2, dissipatedEnergy: 0,
+        peakCompression: 0, peakForce: 0, duration: null, bottomedOut: false,
+        cylinderPressure: contactState.pc, bbPressure: contactState.pb,
+        _dampingStart: s[15], _hardLossStart: rigidContactLoss };
+      pistonImpacts.push(event); activeContact = event;
+      return event;
+    }
+    function updateContact(contactState) {
+      if (!activeContact) return;
+      activeContact.peakCompression = Math.max(activeContact.peakCompression, contactState.bumperCompression);
+      activeContact.peakForce = Math.max(activeContact.peakForce, contactState.bumperForce);
+      activeContact.dissipatedEnergy = s[15] - activeContact._dampingStart + rigidContactLoss - activeContact._hardLossStart;
+      maxBumperCompression = Math.max(maxBumperCompression, contactState.bumperCompression);
+      peakBumperForce = Math.max(peakBumperForce, contactState.bumperForce);
+    }
+    function finishContact(reboundVelocity, endTime = t) {
+      if (!activeContact) return;
+      activeContact.reboundVelocity = reboundVelocity;
+      activeContact.duration = Math.max(0, endTime - activeContact.time);
+      activeContact.settledInContact = reboundVelocity === null;
+      activeContact.dissipatedEnergy = s[15] - activeContact._dampingStart + rigidContactLoss - activeContact._hardLossStart;
+      delete activeContact._dampingStart; delete activeContact._hardLossStart;
+      activeContact = null;
     }
     while (t < maxTime && steps < 300000) {
       let e = evaluate(s), h = Math.min(dt, maxTime - t);
       // Limit steps at geometric transitions and approximate event crossings.
-      for (const [at, pos, vel] of [[g0.stroke - p.airbrakeLength / 1000, s[0], s[1]], [g0.stroke, s[0], s[1]], [0, s[0], s[1]], [L, s[2], exited ? 0 : s[3]], [0, s[2], exited ? 0 : s[3]]]) {
+      for (const [at, pos, vel] of [[g0.stroke - p.airbrakeLength / 1000, s[0], s[1]], [g0.stroke, s[0], s[1]], [g0.hardStop, s[0], s[1]], [0, s[0], s[1]], [L, s[2], exited ? 0 : s[3]], [0, s[2], exited ? 0 : s[3]]]) {
         const eta = (at - pos) / vel;
         if (eta > 1e-9 && eta < h) h = eta;
       }
@@ -260,7 +339,7 @@
       const mid = s.map((v, i) => v + e.d[i] * h / 2);
       if (!validState(mid)) { dt = h / 2; rejectedSteps++; if (dt < 1e-10) break; continue; }
       const em = evaluate(mid), next = s.map((v, i) => v + em.d[i] * h);
-      const scales = [g0.stroke, 10, L, 100, initialMass, initialEnergy, initialMass, initialEnergy, 1, 1, 1, 1, initialMass, 1, 1];
+      const scales = [g0.hardStop, 10, L, 100, initialMass, initialEnergy, initialMass, initialEnergy, 1, 1, 1, 1, initialMass, 1, 1, 1];
       let error = 0;
       for (let i = 0; i < 8; i++) error = Math.max(error, Math.abs((em.d[i] - e.d[i]) * h) / Math.max(scales[i] * .01, Math.abs(s[i]), Math.abs(next[i])));
       if (!validState(next) || error > tolerance && h > 1e-9) { dt = h * Math.max(.15, .8 * Math.sqrt(tolerance / Math.max(error, tolerance))); rejectedSteps++; if (dt < 1e-10) break; continue; }
@@ -273,30 +352,42 @@
         if (prev[vel] * s[vel] < 0 && Math.abs(s[vel]) < .001) { contactLoss += .5 * mass * s[vel] ** 2; s[vel] = 0; }
         if (s[pos] < 0) { s[pos] = 0; contactLoss += .5 * mass * s[vel] ** 2; s[vel] = 0; }
       }
-      if (s[0] >= g0.stroke - 1e-11 && s[1] > 0) {
+      // Compliant pads begin a finite contact episode at the undeformed face.
+      // A zero-compression pad retains the exact rigid-boundary event model.
+      if (compliantBumper && !activeContact && prev[0] < g0.stroke - 1e-11 && s[0] >= g0.stroke - 1e-11 && s[1] > 0) {
         s[0] = g0.stroke;
-        // Preserve the contact discontinuity for playback; never interpolate a
-        // negative post-impact velocity backwards into the pre-impact trajectory.
+        const contactState = evaluate(s);
+        beginContact(contactState, s[1]); frames.push(frame(contactState));
+      }
+      if (compliantBumper && activeContact && s[0] >= g0.hardStop - 1e-11 && s[1] > 0) {
+        s[0] = g0.hardStop;
         const contactState = evaluate(s), incomingVelocity = s[1];
-        frames.push(frame(contactState));
-        if (pistonHitTime === null) { pistonHitTime = t; impactVelocity = incomingVelocity; }
-        hit = true; contactLoss += .5 * mp * incomingVelocity ** 2 * (1 - p.restitution ** 2); s[1] *= -p.restitution;
-        if (Math.abs(s[1]) < .005) { contactLoss += .5 * mp * s[1] ** 2; s[1] = 0; }
-        pistonImpacts.push({ index: pistonImpacts.length + 1, time: t, incomingVelocity, reboundVelocity: s[1],
-          pistonEnergy: .5 * p.pistonMass / 1000 * incomingVelocity ** 2,
-          effectiveMovingEnergy: .5 * mp * incomingVelocity ** 2,
-          dissipatedEnergy: .5 * mp * (incomingVelocity ** 2 - s[1] ** 2),
-          cylinderPressure: contactState.pc, bbPressure: contactState.pb });
-        frames.push(frame(evaluate(s)));
+        frames.push(frame(contactState)); activeContact.bottomedOut = true;
+        const hardLoss = .5 * mp * incomingVelocity ** 2 * (1 - p.restitution ** 2);
+        contactLoss += hardLoss; rigidContactLoss += hardLoss; s[1] *= -p.restitution;
+        if (Math.abs(s[1]) < .005) { const settleLoss = .5 * mp * s[1] ** 2; contactLoss += settleLoss; rigidContactLoss += settleLoss; s[1] = 0; }
+        updateContact(evaluate(s)); frames.push(frame(evaluate(s)));
+      } else if (!compliantBumper && s[0] >= g0.stroke - 1e-11 && s[1] > 0) {
+        s[0] = g0.stroke;
+        const contactState = evaluate(s), incomingVelocity = s[1];
+        frames.push(frame(contactState)); beginContact(contactState, incomingVelocity);
+        const hardLoss = .5 * mp * incomingVelocity ** 2 * (1 - p.restitution ** 2);
+        contactLoss += hardLoss; rigidContactLoss += hardLoss; s[1] *= -p.restitution;
+        if (Math.abs(s[1]) < .005) { const settleLoss = .5 * mp * s[1] ** 2; contactLoss += settleLoss; rigidContactLoss += settleLoss; s[1] = 0; }
+        finishContact(s[1]); frames.push(frame(evaluate(s)));
       }
       e = evaluate(s);
+      updateContact(e);
+      if (compliantBumper && activeContact && prev[0] > g0.stroke + 1e-11 && s[0] <= g0.stroke + 1e-11 && s[1] < 0) {
+        s[0] = g0.stroke; e = evaluate(s); updateContact(e); finishContact(s[1]); frames.push(frame(e));
+      }
       if (!exited && s[2] >= L - 1e-11 && s[3] > 0) {
         s[2] = L; exited = true; exitTime = t; exitVelocity = s[3]; exitPressure = e.pb; exitGasMass = s[4] + s[6];
         e = evaluate(s);
       }
       if (p.airbrakeLength > 0 && engageTime === null && e.g.insertion > 0) { engageTime = t; momentumAtEngage = p.pistonMass / 1000 * s[1]; }
       if (decelTime === null && s[1] > .05 && e.ap < 0) decelTime = t;
-      if (strongBrakeTime === null && e.g.insertion > 0 && s[1] > .05 && e.ap < -p.decelThreshold) { strongBrakeTime = t; brakeEnergy = .5 * mbb * s[3] ** 2; }
+      if (strongBrakeTime === null && e.g.insertion > 0 && e.bumperCompression <= 1e-12 && s[1] > .05 && e.ap < -p.decelThreshold) { strongBrakeTime = t; brakeEnergy = .5 * mbb * s[3] ** 2; }
       if (reboundTime === null && s[1] < -.005) reboundTime = t;
       if (!hit && preContactReversalTime === null && s[1] < -.005) preContactReversalTime = t;
       if (hit && contactReboundTime === null && s[1] < -.005) contactReboundTime = t;
@@ -309,7 +400,7 @@
       peakOutflow = Math.max(peakOutflow, e.outflow); muzzleMass += Math.max(0, em.outflow) * h;
       if (exited && hit && t > Math.max(exitTime, pistonHitTime) + .004 && Math.abs(e.pc - pa) < .002 * pa && Math.abs(e.pb - pa) < .002 * pa && Math.abs(s[1]) < .005) break;
     }
-    const final = evaluate(s); frames.push(frame(final));
+    const final = evaluate(s); updateContact(final); finishContact(null); frames.push(frame(final));
     const numericalFailure = t < maxTime - 1e-9 && !(exited && hit && Math.abs(final.pc - pa) < .002 * pa && Math.abs(final.pb - pa) < .002 * pa && Math.abs(s[1]) < .005);
     let usefulTime = null;
     if (exitTime !== null && maxBbEnergy > 1e-9) {
@@ -322,11 +413,11 @@
     const exitEnergy = exitVelocity === null ? null : .5 * mbb * exitVelocity ** 2;
     const massResidual = s[4] + s[6] - initialMass - s[12];
     return { version: VERSION, params: p, valid: !numericalFailure, errors: numericalFailure ? ["solver:convergence"] : [], frames,
-      duration: t, stroke: g0.stroke, nominalStroke: p.strokeLength / 1000, bumperThickness: p.bumperThickness / 1000,
+      duration: t, stroke: g0.stroke, hardStop: g0.hardStop, nominalStroke: p.strokeLength / 1000, bumperThickness: p.bumperThickness / 1000,
       barrelLength: L, barrelVolume: g0.barrelVolume, cylinderVolume: g0.sweptVolume, ratio: g0.sweptVolume / g0.barrelVolume,
       ambientPressure: pa, engageTime, decelTime, strongBrakeTime, reboundTime, usefulTime, exitTime, pistonHitTime,
       preContactReversalTime, contactReboundTime, maxPistonRetreat, maxPreContactRetreat,
-      pistonImpacts,
+      pistonImpacts, maxBumperCompression, peakBumperForce, bumperDissipatedEnergy: s[15],
       exitVelocity, exitEnergy, exitPressure, exitGasMass, pistonImpactVelocity: impactVelocity,
       impactEnergy: impactVelocity === null ? null : .5 * p.pistonMass / 1000 * impactVelocity ** 2,
       momentumAtEngage, preBrakeShare: brakeEnergy === null || !exitEnergy ? null : brakeEnergy / exitEnergy,
@@ -338,7 +429,7 @@
       dischargeComplete: exited && Math.abs(final.pc - pa) < .01 * pa && Math.abs(final.pb - pa) < .01 * pa
     };
   }
-  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, contactStroke, geometry, pinVolume, pinDiameter, springState, springForce, springEnergy, massFlow, passage, simulate };
+  const api = { VERSION, DEFAULTS, R, GAMMA, CV, normalize, validate, contactStroke, bumperLimit, geometry, pinVolume, pinDiameter, springState, springForce, springEnergy, massFlow, passage, simulate };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PneumaticPhysics = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

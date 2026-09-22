@@ -2,7 +2,7 @@
 
 Research and source review: 21 September 2026. Code reviewed: `index.html` at commit `0b3ede8`. This document specifies proposed changes; it does not change the simulation or validate its present predictions.
 
-Implementation follow-up: the v3 code now implements the conservative lumped-model core and revised interface/calibration. This original research checklist is retained as the audit baseline, not marked wholesale complete. See [implemented model, tests and remaining work](MODEL.md), especially the unresolved spherical-BB/ahead-gas and 1D pressure-wave validation items.
+Implementation follow-up: model v3.4 now implements the conservative lumped-model core, profile-resolved concentric pin overlap, a finite lumped bumper contact, separate post-exit muzzle Cd, and revised interface/calibration. This original research checklist is retained as the audit baseline, not marked wholesale complete. See [implemented model, tests and remaining work](MODEL.md), especially the unresolved spherical-BB/ahead-gas, nonlinear elastomer and 1D pressure-wave validation items.
 
 ## Objective and conclusion
 
@@ -47,7 +47,8 @@ Specific additions to the plan for this kit:
 | Cylinder residual cavity volume | Air space left at piston contact, including cup recesses | Geometry or measured volume, with uncertainty |
 | Transfer passage and breech volumes | Gas storage between cylinder and BB; count each cavity once | Measured dimensions and BB seating location |
 | Barrel ID, length, BB diameter and mass | Pressure force, available air space, and blow-by | Measured values/distributions rather than only labels |
-| Piston cup, bumper thickness, spring-seat locations | Influence sealing, contact, stroke, and spring compression separately | Exact assembly/part variant |
+| Piston cup, bumper thickness/ID, spring-seat locations | Influence sealing, contact, stroke, and spring compression separately | Exact assembly/part variant |
+| Bumper force–deflection, damping and usable compression | Required for conditional contact force/duration instead of restitution-only bounce | Instrumented quasi-static and dynamic bench tests |
 
 A single nozzle diameter is insufficient for all platforms: Sniper Mechanics describes an SSG10/VSR head with a dual-bore nozzle. Silverback explicitly specifies a **4.00 mm internal nozzle** for the original SRS/TAC-41 heads associated with its Advanced Piston Head; this is not an SSG10 specification. [Sniper Mechanics head description](https://snipermechanics.com/vsr10-ssg10-damper-cylinder-head/), [Silverback geometry and airbrake description](https://www.silverback-airsoft.com/bph-01).
 
@@ -148,7 +149,7 @@ If short stroking is done with a front bumper or a longer piston assembly, recal
 2. Actual cylinder bore, piston stroke, pin projection, head bore profile and passage lengths. Attach tolerances and distinguish measured from nominal dimensions. Bore gauges/pin gauges and a micrometer may resolve close clearances better than a casual caliper reading.
 3. Total moving assembly mass, barrel length/ID, BB brand/batch and mass/diameter sample, bucking/hop setting.
 4. Spring force at several compression lengths over the installed range; installed preload/seat geometry; spring mass if modeling it.
-5. Head/cup/breech cavities, seals and bumper geometry. Leak-down or flow measurements should be recorded with their pressure and piston/pin position; a stationary test does not fully identify dynamic sealing.
+5. Head/cup/breech cavities, seals and bumper geometry. Record bumper force versus deflection and a dynamic contact/rebound trace if using the stiffness/damping fields. Leak-down or flow measurements should be recorded with their pressure and piston/pin position; a stationary test does not fully identify dynamic sealing.
 
 ### Then build an informative dataset
 

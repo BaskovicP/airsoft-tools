@@ -4,6 +4,7 @@
   const SCHEMA = 3, KEY = "ssg10-pneumatic-lab-v3", OLD_KEY = "ssg10-pneumatic-lab-v2";
   const LENGTH_FIELDS = ["springLengthMode", "springFreeLength", "springInstalledLength", "springCutLength", "springActiveCoils", "springRemovedCoils", "springSolidLength"];
   const BUMPER_FIELDS = ["bumperThickness", "bumperBore"];
+  const MODEL_34_FIELDS = ["bumperStiffness", "bumperDamping", "bumperMaxCompression", "muzzleDischargeCoefficient"];
   const fps = v => v / .3048;
   const energy = (mass, speed) => .5 * mass / 1000 * (speed * .3048) ** 2;
   function reference() {
@@ -17,15 +18,19 @@
     // Only fill fields that did not exist in an otherwise complete historical
     // snapshot. v3.2 used headBore as the implicit bumper opening, so preserve
     // that geometry explicitly instead of inventing the new default.
-    const previousComplete = row.setup && (
-      row.solverVersion === "3.0.0" && [...LENGTH_FIELDS, ...BUMPER_FIELDS].every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => ![...LENGTH_FIELDS, ...BUMPER_FIELDS].includes(k)).every(k => Object.hasOwn(row.setup, k)) ||
-      row.solverVersion === "3.1.1" && BUMPER_FIELDS.every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => !BUMPER_FIELDS.includes(k)).every(k => Object.hasOwn(row.setup, k)) ||
-      row.solverVersion === "3.2.0" && !Object.hasOwn(row.setup, "bumperBore") && Object.keys(P.DEFAULTS).filter(k => k !== "bumperBore").every(k => Object.hasOwn(row.setup, k))
-    );
+    const missingByVersion = {
+      "3.0.0": [...LENGTH_FIELDS, ...BUMPER_FIELDS, ...MODEL_34_FIELDS],
+      "3.1.1": [...BUMPER_FIELDS, ...MODEL_34_FIELDS],
+      "3.2.0": ["bumperBore", ...MODEL_34_FIELDS],
+      "3.3.0": MODEL_34_FIELDS
+    };
+    const expectedMissing = missingByVersion[row.solverVersion];
+    const previousComplete = row.setup && expectedMissing && expectedMissing.every(k => !Object.hasOwn(row.setup, k)) && Object.keys(P.DEFAULTS).filter(k => !expectedMissing.includes(k)).every(k => Object.hasOwn(row.setup, k));
     const setupComplete = row.setup && (previousComplete || Object.keys(P.DEFAULTS).every(k => Object.hasOwn(row.setup, k)));
     const migratedSetup = previousComplete ? { ...row.setup,
       ...(!Object.hasOwn(row.setup, "bumperThickness") ? { bumperThickness: 0 } : {}),
-      ...(!Object.hasOwn(row.setup, "bumperBore") ? { bumperBore: row.setup.headBore } : {})
+      ...(!Object.hasOwn(row.setup, "bumperBore") ? { bumperBore: row.setup.headBore } : {}),
+      ...Object.fromEntries(MODEL_34_FIELDS.filter(key => !Object.hasOwn(row.setup, key)).map(key => [key, P.DEFAULTS[key]]))
     } : row.setup;
     const setup = !legacy && setupComplete && P.validate(migratedSetup).length === 0 ? P.normalize(migratedSetup) : null;
     const provenance = Object.fromEntries(Object.entries(row.provenance || {}).filter(([k, v]) => ["geometry", "spring"].includes(k) && ["assumed", "measured"].includes(v)));
@@ -49,7 +54,7 @@
     const map = new Map();
     for (const r of rows) {
       const setup = { ...r.setup, bbMass: r.bbMass };
-      const identity = Object.fromEntries(Object.entries(setup).filter(([k]) => !["dischargeCoefficient", "maxTime", "decelThreshold", "usefulFraction", ...LENGTH_FIELDS].includes(k)));
+      const identity = Object.fromEntries(Object.entries(setup).filter(([k]) => !["dischargeCoefficient", "muzzleDischargeCoefficient", "maxTime", "decelThreshold", "usefulFraction", ...LENGTH_FIELDS].includes(k)));
       // Only the force/compression law enters the ODE. Hidden inputs and alternate
       // ways of entering that same law cannot manufacture independent conditions.
       const spring = P.springState(setup);

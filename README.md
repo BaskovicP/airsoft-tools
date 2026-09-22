@@ -2,23 +2,23 @@
 
 Standalone English/Croatian tools for exploring spring-airsoft pneumatic timing. Open `index.html` directly—no server, account, network access or runtime dependencies are required. The first screen is a tool menu; the pneumatic timing lab is its first tool.
 
-## Physics model v3.3
+## Physics model v3.4
 
-The lab now solves connected cylinder and behind-BB gas volumes with mass/energy accounting, compressible reversible flow, head/airbrake restriction, spring force, signed piston/BB motion, leakage and post-exit discharge. It exposes integration/conservation diagnostics, step-refinement checks and explicit input-sensitivity scenarios.
+The lab now solves connected cylinder and behind-BB gas volumes with mass/energy accounting, compressible reversible flow, profile-sliced head/airbrake restriction, spring force, signed piston/BB motion, finite bumper contact, leakage and post-exit discharge. It exposes integration/conservation diagnostics, step-refinement checks and explicit input-sensitivity scenarios.
 
 **This is still an unvalidated lumped model, not an exact SSG10 predictor.** Numerical convergence does not establish real-world accuracy. Pressure waves, a resolved spherical BB/ahead-gas flow, detailed cup/bumper deformation and structural acoustics are not implemented. See [model equations, limitations and validation](docs/MODEL.md) and the [original physics accuracy plan](docs/PHYSICS_ACCURACY_PLAN.md).
 
 ### Geometry and mechanics
 
 - Fixed cylinder bore; nominal stroke changes swept volume without resizing the cylinder.
-- Optional annular cylinder-head bumper thickness and independent inner diameter. The pad moves the contact plane rearward, reduces effective piston travel/swept volume and occupies modeled gas volume. Its opening is a separate first passage before the rigid-head bore, so a short pin can finish entirely inside the bumper without entering the metal head.
+- Optional annular cylinder-head bumper thickness and independent inner diameter. Entered stiffness, damping and usable compression produce a finite contact episode with live compression/force; rigid restitution applies only to a bare stop or pad bottom-out. These are conditional bench-test parameters, not hardness, sound or dB.
 - Head receiving-bore and downstream nozzle diameters/lengths.
 - Airbrake projection, shaft diameter, tip diameter and taper; dynamic overlap, clearance and pin displacement.
 - Cylinder residual and downstream storage volumes (each cavity counted once).
 - Any piston mass from 5–300 g; quick buttons for 58, 65, 68, 72, 76 and 82 g.
 - Spring stiffness/preload or a user-entered force/compression curve. M110–M220 are identity labels only, not hidden power multipliers.
 - Optional spring free/installed lengths and a cut-spring estimate; derived preload, active-coil rate adjustment and known-solid-height checks.
-- Seal and nozzle leakage, BB clearance leakage, hop release/moving resistance, seal friction, approximate bumper restitution, optional spring effective mass, heat exchange, air temperature and pressure. Bumper restitution controls rebound only; it is not hardness, sound reduction, peak force or dB.
+- Seal and nozzle leakage, BB clearance leakage, hop release/moving resistance, seal friction, optional spring effective mass, heat exchange, air temperature and pressure. Head Cd and post-exit muzzle Cd are separate unknowns; the latter changes discharge but not the already-recorded BB exit speed.
 
 AMP / Tridos Ultimate is the user's identified assembly; Scorpion remains a separate identity option. AMP pin selections do not invent dimensions. The Tridos listing says nominal 71 g, while AMP lists 69 g without a brake / 72 g with its longest pin. Weigh the actual assembly. The **default is a clearly labeled no-airbrake reference** (zero pin projection), not a verified model of the installed rifle. Enter measured pin geometry to enable an airbrake. The 4 mm passage and inactive 3.8 mm pin-diameter starting values are **not verified AMP specifications**.
 
@@ -56,13 +56,13 @@ The Shot view also includes a visual tuning-target bar: green = the selected sha
 
 **Piston impact & muzzle blast — what do these mean?** opens the explanatory cards at the top of Results. They distinguish the mechanical strike from escaping-air discharge, with actual modeled mJ and g/s rather than an arbitrary loudness index. The gradient bars compare each quantity with the same modeled inputs/mass and zero airbrake projection: 100% is that reference. The drawn scale ends at 200%, with any larger numerical ratio shown uncapped and the cap disclosed. Missing events, invalid baselines and zero baselines stay unavailable; none is labeled quiet. These ratios are not sound reduction, dB, peak force, durability or suppressor predictions. Outflow comparisons are peaks observed during each run; unfinished discharge remains explicitly unresolved.
 
-Graphs and Results both include a **Piston contact sequence**. Every actual front-boundary contact is plotted in an expanded millisecond window and listed with its exact solver time, incoming speed, rebound speed and piston-only kinetic energy. The first strike is amber and later recontacts are cyan; clicking any listed event moves the shared animation/playhead to that instant. Pressure-driven reversal before the head is deliberately excluded. A sequence with two contacts is a modeled mechanical event history, not proof of two audible knocks: adding the contact energies does not determine force, acoustic energy, loudness or dB.
+Graphs and Results both include a **Piston contact sequence**. Each continuous contact episode is plotted and listed with start time, incoming speed and piston kinetic energy; compliant-pad entries also show modeled peak compression, peak force and duration. Recontact is counted only after separation. Pressure-driven reversal before the head is excluded. These conditional mechanics are not proof of audible knocks, acoustic energy, durability, loudness or dB.
 
 Short/narrow screens use normal page flow rather than a fixed-height workspace. Mobile **Settings / Preview** shortcuts jump and focus the relevant controls. Model warnings remain visible; hiding long explanations does not hide invalid inputs or missing-event notices. Open shot disclosures and selected categories/views survive parameter edits; chrono drafts remain intact.
 
 ### Animation and outputs
 
-The animation and graphs have dedicated views next to the settings. Graphs repeats the same live firing cutaway directly above the pressure, piston-velocity, BB-velocity and piston-contact traces, synchronized to the shared playback time and graph cursor; it does not run a second simulation. They use solver states, independent cylinder/BB pressure colors and signed arrows. Cylinder stroke, bumper, pin and the bumper/head/nozzle passages share one axial drawing scale, so visible pad contact and pin entry match the calculated geometry; the barrel has its own scale. The green annular pad uses the entered inner diameter and receives a symbolic contact-deformation highlight. Exact pre/post-contact samples prevent interpolation from showing a reverse velocity before impact.
+The animation and graphs have dedicated views next to the settings. Graphs repeats the same live firing cutaway directly above the pressure, piston-velocity, BB-velocity and piston-contact traces, synchronized to the shared playback time and graph cursor; it does not run a second simulation. They use solver states, independent cylinder/BB pressure colors and signed arrows. Cylinder stroke, bumper, pin and the bumper/head/nozzle passages share one axial drawing scale, so visible pad contact and pin entry match the calculated geometry; the barrel has its own scale. The green annular pad uses the entered inner diameter and visibly shortens/bulges from solver compression; its exact 3D shape remains illustrative. Exact pre/post rigid-impact samples prevent interpolation from showing a reverse velocity before impact.
 
 Parameter edits update the existing panels, canvases and readouts in place. Playback pauses at the same model time (clamped to a shorter run if necessary), with a small updating indicator; it does not reset to the beginning. Presets, the no-pin option and optimizer application preserve open sections and unfinished chrono notes. Invalid inputs hide stale results without collapsing their layout. Stale optimizer tables stay visibly marked and cannot be applied or exported until another search.
 
@@ -70,13 +70,13 @@ The cutaway adds layered metal and spring shading, pressure glow, signed airflow
 
 **Firing focus + faster settling** reserves most playback time for the shot and initial discharge, then shows the entire later interval faster. Uniform full-run slow motion and playback-speed controls are also available. Nothing is cut from the trajectory: the clock, scrubber, graphs, event buttons and exported data keep physical model time.
 
-Pressure-driven reversal **before** head contact is distinguished from reverse motion **after** contact. Maximum modeled backward travel is reported in millimeters. A pre-contact retreat above 1 mm gets an explicit input/model-validation warning; that display threshold is a convention, not a physical limit. The previous tight 20 mm pin example produces about 12.2 mm of pre-contact retreat under its assumptions and is retained as a test fixture, not a normal SSG10 default. No velocity clipping or hidden damping suppresses such predictions.
+Pressure-driven reversal **before** head contact is distinguished from reverse motion **after** contact. Maximum modeled backward travel is reported in millimeters. A pre-contact retreat above 1 mm gets an explicit input/model-validation warning; that display threshold is a convention, not a physical limit. The previous tight 20 mm pin example produces about 11.7 mm of pre-contact retreat with the v3.4 profile-sliced flow assumptions and is retained as a test fixture, not a normal SSG10 default. No velocity clipping or hidden damping suppresses such predictions.
 
 Clickable events show entry, initial deceleration, a user-defined substantial-deceleration threshold after entry, the selected share of maximum pre-exit BB energy (95% by default), BB exit, rebound and contact. A deceleration after entry is not automatically caused entirely by the airbrake. The no-pin comparison keeps piston mass fixed but changes occupied gas volume.
 
 Missing exits and contacts remain unavailable. A timeout does not become muzzle velocity or a soft impact. The useful-energy timing goal is unavailable until an exit occurs.
 
-Contact speed/kinetic energy and muzzle pressure/gas inventory/discharge replace arbitrary 0–100 sound indices. They are conditional model quantities—not peak impact force, perceived loudness, exact real-world Joules or dB.
+Contact speed/kinetic energy, conditional bumper force/compression, and muzzle pressure/gas inventory/discharge replace arbitrary 0–100 sound indices. They are conditional model quantities—not perceived loudness, exact real-world Joules or dB.
 
 ### Calibration and data
 
@@ -86,7 +86,7 @@ Contact speed/kinetic energy and muzzle pressure/gas inventory/discharge replace
 - Fit only one shared bounded head discharge coefficient. Repeats improve repeatability information, not the number of identifiable parameters.
 - Report training and held-out errors, parameter-bound/weak-constraint warnings, and export the fit profile/residuals.
 - Preserve old v2 records as unverified references and discard old fitted coefficients.
-- Preserve complete v3.0/v3.1 setup snapshots when adding inactive defaults, and preserve a v3.2 pad's former implicit head-bore-sized opening as an explicit bumper diameter. Old versions remain excluded from new fits and their original snapshots stay in exports.
+- Preserve complete v3.0–v3.3 setup snapshots when adding only historically missing/contact-flow defaults, including a v3.2 pad's former implicit head-bore-sized opening. Old versions remain excluded from new fits and their original snapshots stay in exports.
 - JSON import/export; full setup and shot-trace export; local storage only.
 - Limits: 2,000 records and 32 distinct configurations per fit. Export a backup before deleting measurements.
 
@@ -94,7 +94,7 @@ Contact speed/kinetic energy and muzzle pressure/gas inventory/discharge replace
 
 Choose **Optimize** to open **Freeze parts & optimize**. Checked groups stay fixed: cylinder, barrel, head/nozzle, piston, airbrake, spring and BB. Enter discrete values for unlocked hardware, using comma-separated numbers and decimal dots. The current value is always included. Example masses and pin lengths are hypothetical alternatives, not a catalog of compatible AMP parts.
 
-The optimizer preserves **95–105% of the starting setup's predicted BB exit energy**. Weather, fitted flow/leakage, friction, damping and timing criteria never vary. All candidates are observed with the same 250 ms time limit; missing contact or incomplete discharge never counts as zero noise.
+The optimizer preserves **95–105% of the starting setup's predicted BB exit energy**. An unlocked head group can include alternative bumper stiffness, damping and compression limits; weather, fitted flow/leakage, other friction/damping and timing criteria remain fixed. All candidates are observed with the same 250 ms time limit; missing contact or incomplete discharge never counts as zero noise.
 
 The shortlist balances first-contact piston energy, peak muzzle flow, exit pressure and spring-to-BB energy efficiency. It retains non-dominated tradeoffs, then uses disclosed ranking weights for balanced, sound-biased or efficiency-biased preferences. It is a **best-found model comparison**, not a claim of lowest real-world dB. Search coverage, exclusions and any worsening relative to the reference are shown.
 

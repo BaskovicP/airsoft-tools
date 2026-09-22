@@ -83,14 +83,18 @@
     rect(rigidHead, axis - 35, passageEnd - rigidHead, 70, gradient(0, axis - 35, 0, axis + 35, [[0, "#abbbc3"], [.1, "#526675"], [.55, "#273d49"], [1, "#758d9a"]]), "#8199a5");
     for (let x = rigidHead + 5; x < passageEnd; x += 7) line(x, axis - 34, x, axis - 26, "#a9bbc544");
     if (bumperWidth > 0) {
-      const hole = p.bumperBore * radial, touching = f.pistonHit && Math.abs(face - head) < Math.max(.8, scale * .03);
-      const bulge = touching ? Math.min(5, 1 + bumperWidth * .2) : 0;
-      const rubber = gradient(head, 0, rigidHead, 0, [[0, touching ? "#7ff4ce" : "#42bca0"], [.48, "#173f3b"], [1, "#0d2828"]]);
-      rect(head, top + 5 - bulge, bumperWidth, axis - hole / 2 - (top + 5) + bulge, rubber, "#72d7c3");
-      rect(head, axis + hole / 2, bumperWidth, bottom - 5 - (axis + hole / 2) + bulge, rubber, "#72d7c3");
+      const compression = Math.max(0, f.bumperCompression || 0) * 1000 * scale;
+      const padFace = Math.min(rigidHead, head + compression), padWidth = Math.max(0, rigidHead - padFace);
+      const limit = Math.max(.001, Math.min(p.bumperThickness, p.bumperMaxCompression));
+      const compressionShare = clamp((f.bumperCompression || 0) * 1000 / limit);
+      const hole = p.bumperBore * radial, touching = compressionShare > 1e-5;
+      const bulge = touching ? Math.min(8, 1 + compressionShare * 7) : 0;
+      const rubber = gradient(padFace, 0, rigidHead, 0, [[0, touching ? "#7ff4ce" : "#42bca0"], [.48, "#173f3b"], [1, "#0d2828"]]);
+      rect(padFace, top + 5 - bulge, padWidth, axis - hole / 2 - (top + 5) + bulge, rubber, "#72d7c3");
+      rect(padFace, axis + hole / 2, padWidth, bottom - 5 - (axis + hole / 2) + bulge, rubber, "#72d7c3");
       if (touching) {
-        line(head + Math.min(bumperWidth * .35, 3), top + 9, head + Math.min(bumperWidth * .35, 3), axis - hole / 2 - 3, "#c7fff0", 2);
-        line(head + Math.min(bumperWidth * .35, 3), axis + hole / 2 + 3, head + Math.min(bumperWidth * .35, 3), bottom - 9, "#c7fff0", 2);
+        line(padFace + Math.min(padWidth * .35, 3), top + 9, padFace + Math.min(padWidth * .35, 3), axis - hole / 2 - 3, "#c7fff0", 2);
+        line(padFace + Math.min(padWidth * .35, 3), axis + hole / 2 + 3, padFace + Math.min(padWidth * .35, 3), bottom - 9, "#c7fff0", 2);
       }
     }
     for (const [x, width, height] of [[head, rigidHead - head, p.bumperBore * radial], [rigidHead, step - rigidHead, p.headBore * radial], [step, passageEnd - step, p.nozzleBore * radial]]) {

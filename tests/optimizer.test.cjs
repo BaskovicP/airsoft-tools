@@ -14,10 +14,10 @@ test('optimizer parses finite decimal lists and rejects malformed/excessive list
   for (const v of ['', 'NaN', '1e999', '58g', Array(13).fill('1').join(',')]) assert.throws(() => O.parseValues(v));
 });
 test('hardware allowlist never permits weather, calibration, losses or numerical settings', () => {
-  for (const key of ['airTemperature','ambientPressure','dischargeCoefficient','pistonLeak','barrelDrag','restitution','maxTime','usefulFraction','springCurve']) assert.throws(() => O.searchSpace(P.DEFAULTS, { values: { [key]: [1] } }), /forbidden/);
+  for (const key of ['airTemperature','ambientPressure','dischargeCoefficient','muzzleDischargeCoefficient','pistonLeak','barrelDrag','restitution','maxTime','usefulFraction','springCurve']) assert.throws(() => O.searchSpace(P.DEFAULTS, { values: { [key]: [1] } }), /forbidden/);
   assert.throws(() => O.searchSpace(P.DEFAULTS, { locks: { weather: false } }), /unknown-group/);
 });
-test('bumper thickness and bore are explicit head hardware while restitution remains fixed', () => {
+test('bumper geometry and contact properties are explicit head hardware while restitution remains fixed', () => {
   const space=O.searchSpace(P.DEFAULTS,{locks:{head:false},values:{bumperThickness:[0,2,4],bumperBore:[4,6]}});
   assert.equal(space.total,6);assert.deepEqual(space.dimensions.map(v=>v.key),['bumperThickness','bumperBore']);
   assert.deepEqual([...new Set(Array.from({length:space.total},(_,i)=>O.candidateAt(space,i).restitution))],[P.DEFAULTS.restitution]);

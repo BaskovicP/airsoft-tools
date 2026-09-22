@@ -17,7 +17,8 @@
     springInstalledLength: "mm", springCutLength: "mm", springActiveCoils: "turns",
     springRemovedCoils: "turns", springSolidLength: "mm", springStiffness: "N/m",
     springPreload: "mm", springMass: "g", pistonFriction: "N", sealFriction: "",
-    rearDamping: "N·s/m", restitution: "", dischargeCoefficient: "", pistonLeak: "mm²",
+    rearDamping: "N·s/m", bumperStiffness: "N/mm", bumperDamping: "N·s/m", bumperMaxCompression: "mm",
+    restitution: "", dischargeCoefficient: "", muzzleDischargeCoefficient: "", pistonLeak: "mm²",
     nozzleLeak: "mm²", bbLeakCoefficient: "", bbBreakaway: "N", barrelDrag: "N",
     heatTransfer: "W/K", ambientPressure: "kPa abs", airTemperature: "°C",
     usefulFraction: "", decelThreshold: "m/s²", maxTime: "ms"
@@ -26,7 +27,7 @@
     cylinderBore: 2, barrelDiameter: 2, bbDiameter: 2, bumperBore: 2,
     airbrakeDiameter: 2, airbrakeTipDiameter: 2, headBore: 2, nozzleBore: 2,
     deadVolume: 2, breechVolume: 2, pistonLeak: 3, nozzleLeak: 3,
-    sealFriction: 3, bbLeakCoefficient: 2, restitution: 2, dischargeCoefficient: 2,
+    sealFriction: 3, bbLeakCoefficient: 2, restitution: 2, dischargeCoefficient: 2, muzzleDischargeCoefficient: 2,
     heatTransfer: 3, usefulFraction: 3
   };
   const UNKNOWN_ZERO = new Set(["springFreeLength", "springInstalledLength", "springActiveCoils", "springSolidLength", "springMass"]);
@@ -90,8 +91,12 @@
     ["pistonFriction", ["Piston sliding friction", "Klizno trenje pistona"], ["Bench force test", "Ispitivanje sile na stolu"]],
     ["sealFriction", ["Pressure-dependent seal friction", "Trenje brtve ovisno o tlaku"], ["Fit / instrumented test", "Prilagodba / instrumentirano ispitivanje"]],
     ["rearDamping", ["Rear vent / mechanical drag", "Stražnji otvor / mehanički otpor"], ["Fit / coast-down evidence", "Prilagodba / mjerenje usporavanja"]],
-    ["restitution", ["Bumper restitution", "Koeficijent odskoka gumice"], ["High-speed contact measurement", "Brzo mjerenje kontakta"]],
+    ["bumperStiffness", ["Bumper compression stiffness", "Krutost stlačivanja gumice"], ["Force–deflection bench test", "Stolno mjerenje sile i deformacije"]],
+    ["bumperDamping", ["Bumper viscous damping", "Viskozno prigušenje gumice"], ["Dynamic contact fit", "Prilagodba dinamičkog kontakta"]],
+    ["bumperMaxCompression", ["Bumper compression cap", "Granica stlačenja gumice"], ["Geometry plus force test", "Geometrija i ispitivanje sile"]],
+    ["restitution", ["Rigid / bottom-out restitution", "Odskok krutog graničnika"], ["High-speed contact measurement", "Brzo mjerenje kontakta"]],
     ["dischargeCoefficient", ["Head discharge coefficient Cd", "Koeficijent protoka glave Cd"], ["Flow bench or chrono fit", "Protočna klupa ili chrono prilagodba"]],
+    ["muzzleDischargeCoefficient", ["Muzzle discharge coefficient Cd", "Koeficijent protoka na ustima Cd"], ["Transient muzzle-flow test", "Mjerenje prijelaznog protoka na ustima"]],
     ["pistonLeak", ["Piston-seal leak area", "Površina curenja brtve pistona"], ["Leak-down fit", "Prilagodba pada tlaka"]],
     ["nozzleLeak", ["Nozzle / hop leak area", "Površina curenja mlaznice / hopa"], ["Leak-down fit", "Prilagodba pada tlaka"]],
     ["bbLeakCoefficient", ["BB-clearance leak coefficient", "Koeficijent curenja oko BB-a"], ["Calibration parameter", "Kalibracijski parametar"]],
@@ -200,7 +205,7 @@
         ${dimH(id, left, contact, 35, `${t("effective travel", "efektivni hod")} ${(p.strokeLength - p.bumperThickness).toFixed(1)} mm`)}
         ${dimH(id, left, right, 243, `${t("nominal stroke", "nominalni hod")} ${fieldValue(p, "strokeLength", t)}`)}
         ${dimV(id, 523, center - boreHalf, center + boreHalf, `Ø ${fieldValue(p, "cylinderBore", t)}`, "end")}
-      </svg><p class="parts-scale-note">${t("Current effective swept volume", "Trenutačni efektivni radni volumen")}: <strong>${(g.sweptVolume * 1e6).toFixed(2)} cm³</strong>. ${t("The bumper is drawn as an undeformed spacer; compression shape is unknown.", "Gumica je nacrtana kao nedeformirani odstojnik; oblik pod stlačenjem nije poznat.")}</p></div>`;
+      </svg><p class="parts-scale-note">${t("Current effective swept volume", "Trenutačni efektivni radni volumen")}: <strong>${(g.sweptVolume * 1e6).toFixed(2)} cm³</strong>. ${t("Undeformed bumper shown; modeled compression cap / stiffness", "Prikazana je nestlačena gumica; modelirana granica stlačenja / krutost")}: <strong>${Math.min(p.bumperThickness, p.bumperMaxCompression).toFixed(2)} mm / ${p.bumperStiffness.toFixed(0)} N/mm</strong>. ${t("Exact deformed shape is unknown.", "Točan deformirani oblik nije poznat.")}</p></div>`;
   }
 
   function barrelSvg(p, t) {
