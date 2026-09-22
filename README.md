@@ -38,7 +38,15 @@ A pre-cut measured curve cannot be reused for a hypothetical cut. For an already
 
 On laptop/desktop-sized viewports, settings and results have independent scroll areas. Choose **Cylinder & barrel**, **Piston & BB**, **Airbrake, bumper & head**, **Spring**, **Losses & environment**, **Rifle presets**, or **Timing & solver** from the settings selector; changing categories keeps the preview in place and remembers each category's scroll position. Inputs are moved once, never duplicated or reset.
 
-Use **Shot**, **Graphs**, **Results**, **Optimize**, and **Chrono** to switch views directly. The compact Shot view shows the cutaway plus predicted exit energy, volume ratio, piston-contact energy, muzzle pressure/flow and useful-energy timing. Full telemetry and playback/model notes expand on demand. Playback and scrubbing remain available in Shot, Graphs and Results. Applying an optimizer choice opens Shot, selects the relevant settings category and replays it.
+Use **Shot**, **Parts**, **Graphs**, **Results**, **Optimize**, and **Chrono** to switch views directly. The compact Shot view shows the cutaway plus predicted exit energy, volume ratio, piston-contact energy, muzzle pressure/flow and useful-energy timing. Full telemetry and playback/model notes expand on demand. Playback and scrubbing remain available in Shot, Parts, Graphs and Results. Applying an optimizer choice opens Shot, selects the relevant settings category and replays it.
+
+### Parts and measurement atlas
+
+**Parts / Dijelovi** is a setup-driven measurement atlas, separate from the firing animation. Its contact-state cutaway shows the piston, airbrake profile, independent bumper opening, metal head receiving bore, downstream nozzle and barrel. Axial head-stack lengths share a drawing scale so the atlas explicitly reports whether the pin tip ends inside the bumper, receiving bore or nozzle. Radial bores and tiny clearances are enlarged for legibility and are labeled as such; the numeric inputs, not the drawing, are the measurement record.
+
+Additional diagrams identify cylinder bore, nominal stroke versus bumper-reduced contact travel, piston mass, barrel/BB diameters and clearance, spring seats, free length, cut length and compression reference planes. Every dimension card shows the live setup value, a suggested instrument or evidence route and the exact endpoints to measure in English and Croatian. Spring values that have not been entered remain visibly unknown rather than being inferred.
+
+The atlas also lists non-caliper inputs—friction, restitution, leak areas, flow coefficient, hop release force, heat transfer, environment and analysis thresholds—separately as bench-test, calibration, environmental or convention values. It does not imply that these are direct part dimensions. Safety text requires an unloaded, fully decocked and disassembled setup, and cavity-volume guidance does not recommend introducing liquid into an assembled replica.
 
 Results also contains **What changed & what to try next**. Every valid edit is compared with the immediately preceding valid setup: changed inputs are named and exit energy/velocity, piston-contact energy, muzzle flow, exit pressure and useful-energy-to-slowing margin show signed deltas. A single changed input is an A/B model comparison; simultaneous edits are explicitly labeled as a combined result that cannot be attributed to one setting. Invalid intermediate edits do not erase the last valid reference.
 
@@ -102,6 +110,7 @@ Searches are deterministic and capped at 60/120/240 combinations, can be cancell
 - `src/view.js`: keyed incremental DOM updates that preserve live canvases and readouts;
 - `src/workspace.js`: grouped settings, view navigation, compact result organization and scroll preservation;
 - `src/insights.js`: event-timing presentation and explicitly relative sound-contributor quantities/explanations;
+- `src/parts.js`: bilingual dynamic cutaways, measurement references and non-caliper input inventory;
 - `src/animation.js`: solver-driven cutaway rendering and schematic visual cues;
 - `src/app.js`: bilingual controls, playback, graphs and data UI.
 
@@ -113,7 +122,7 @@ npm test
 npm run package:cloudflare
 ```
 
-There are no npm dependencies to install. Tests cover geometry/work invariants, flow/choking/laminar limits, invalid setups, missing events, rebound and BB deceleration, leakage/heat accounting, timestep refinement, synthetic calibration, migration, persistent nodes/disclosures, workspace navigation/scroll/focus, and standalone/build parity. Tests are numerical/source/DOM-contract checks, not browser visual QA or experimental validation.
+There are no npm dependencies to install. Tests cover geometry/work invariants, flow/choking/laminar limits, invalid setups, missing events, rebound and BB deceleration, leakage/heat accounting, timestep refinement, synthetic calibration, migration, the Parts field inventory and endpoint classification, persistent nodes/disclosures, workspace navigation/scroll/focus, and standalone/build parity. Tests are numerical/source/DOM-contract checks, not browser visual QA or experimental validation.
 
 For a local HTTP preview, optionally run `python3 -m http.server 8000`, then open `http://127.0.0.1:8000`.
 

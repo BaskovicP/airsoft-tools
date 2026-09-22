@@ -56,7 +56,7 @@ function documentFixture() {
     group("section", "pistonMass"), node("div", { class: "preset-row" }), group("details", "pinLabel"),
     node("details", { id: "springDetails" }, [field("springStiffness")]), group("details", "dischargeCoefficient"), group("details", "usefulFraction")
   ]);
-  const results = node("div", { id: "results" }, [node("div", { id: "resultStatus" }), node("div", { id: "resultContent" }, W.VIEWS.filter(([id]) => ["shot", "graphs", "details"].includes(id)).map(([id]) => node("section", { id: "workspace-" + id, "data-workspace-panel": id })))]);
+  const results = node("div", { id: "results" }, [node("div", { id: "resultStatus" }), node("div", { id: "resultContent" }, W.VIEWS.filter(([id]) => ["shot", "parts", "graphs", "details"].includes(id)).map(([id]) => node("section", { id: "workspace-" + id, "data-workspace-panel": id })))]);
   const main = node("section", { class: "main" }, [node("section", { class: "optimizer" }), results, node("details", { id: "calibrationPanel" }, [field("measurementNotes")])]);
   doc.root.append(node("main", { class: "app" }, [aside, main]));
   return { doc, node, aside, main };
@@ -82,13 +82,14 @@ test("view switches retain panels, chrono drafts and status while restoring view
   const workspace = W.mount(doc, s, en => en, view => events.push(view));
   const shot = doc.getElementById("workspace-shot"), body = doc.getElementById("workspaceBody"); body.scrollTop = 90;
   workspace.selectView("graphs"); body.scrollTop = 150;
+  workspace.selectView("parts"); assert.equal(doc.getElementById("resultContent").hidden, false); assert.equal(doc.getElementById("workspace-parts").hidden, false);
   workspace.selectView("calibration"); assert.equal(doc.getElementById("resultContent").hidden, true);
   assert.equal(doc.getElementById("resultStatus").hidden, false); assert.equal(doc.getElementById("measurementNotes"), note); assert.equal(note.value, "My measured spring");
   workspace.selectView("shot"); assert.equal(doc.getElementById("workspace-shot"), shot); assert.equal(shot.hidden, false); assert.equal(body.scrollTop, 90);
   workspace.selectView("graphs"); assert.equal(body.scrollTop, 150);
   const buttons = doc.querySelector(".workspace-nav").querySelectorAll("button");
   assert.equal(buttons.filter(button => button.getAttribute("aria-pressed") === "true").length, 1);
-  assert.equal(events.length, 4);
+  assert.equal(events.length, 5);
 });
 
 test("mobile shortcuts focus reachable controls and show the same preview", () => {
@@ -104,14 +105,15 @@ test("prepared results retain one transport/canvas and keep incomplete warnings 
   const { doc, node } = documentFixture();
   const canvas = node("canvas", { id: "mechanism" }), live = node("div", { id: "liveStrip" }), transport = node("div", { class: "stage-toolbar" });
   const stage = node("section", { class: "stage" }, [node("p", { class: "playback-reference" }), transport, canvas, live, node("p", { class: "results-note" }), node("div", { class: "playback-options" })]);
-  const graphs = node("section", { class: "graphs" }), details = node("div", { class: "readout-grid" }), sound = node("section", { id: "soundExplanations" });
-  const next = node("div", {}, [details, sound, stage, graphs]);
+  const parts = node("section", { class: "panel parts-atlas" }), graphs = node("section", { class: "graphs" }), details = node("div", { class: "readout-grid" }), sound = node("section", { id: "soundExplanations" });
+  const next = node("div", {}, [details, sound, stage, parts, graphs]);
   W.prepareResults(next, "<div><strong>2.3 J</strong></div>", { flag: "Model only", live: "Live values", help: "Options", timingHTML: '<section id="shotTiming"></section>', explainSound: "Impact explained", explainFeedback: "Changes explained" }, "Missing contact");
   assert.equal(next.children[0], transport); assert.equal(transport.id, "workspace-transport");
   assert.equal(next.querySelector("#mechanism"), canvas); assert.equal(next.querySelectorAll("#mechanism").length, 1);
   assert.equal(next.querySelector("#liveStrip"), live); assert.equal(live.parentNode.id, "liveValuesDetails");
   assert.equal(next.querySelector(".shot-incomplete").parentNode, stage);
   assert.equal(details.parentNode.id, "workspace-details"); assert.equal(graphs.dataset.workspacePanel, "graphs");
+  assert.equal(parts.id, "workspace-parts"); assert.equal(parts.dataset.workspacePanel, "parts"); assert.equal(parts.parentNode, next);
   assert.equal(next.querySelector("#playbackDetails").getAttribute("data-preserve-open"), "");
   assert.equal(next.querySelector("#shotTiming").parentNode, stage); assert.equal(next.querySelector("#explainSound").parentNode, stage);
   assert.equal(next.querySelector("#explainFeedback").parentNode, stage);
@@ -123,5 +125,5 @@ test("full-render scroll snapshot restores both workspace panes", () => {
   const pages = doc.getElementById("settingsPages"), body = doc.getElementById("workspaceBody");
   pages.scrollTop = 45; body.scrollTop = 115; workspace.rememberScroll(); pages.scrollTop = 0; body.scrollTop = 0;
   workspace.restoreScroll(); assert.equal(pages.scrollTop, 45); assert.equal(body.scrollTop, 115);
-  assert.equal(W.CATEGORIES.length, 7); assert.equal(W.VIEWS.length, 5);
+  assert.equal(W.CATEGORIES.length, 7); assert.equal(W.VIEWS.length, 6);
 });

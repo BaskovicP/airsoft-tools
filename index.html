@@ -1250,8 +1250,83 @@
       .feedback-footer { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
       .feedback-footer p { max-width:680px; margin:0; }
       .feedback-footer button { flex:0 0 auto; }
+      /* Parts: dynamic, measurement-first technical atlas. The drawings identify
+         reference planes and bores; numeric labels remain the source of truth. */
+      .parts-atlas { padding:20px; overflow:hidden; }
+      .parts-atlas-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding-bottom:18px; border-bottom:1px solid var(--line); }
+      .parts-atlas-heading h2 { margin-top:5px; font-size:1.35rem; }
+      .parts-atlas-heading p { max-width:820px; margin:8px 0 0; color:var(--muted); font-size:.95rem; line-height:1.6; }
+      .parts-eyebrow { color:var(--cyan); font:700 .75rem var(--mono); letter-spacing:.1em; text-transform:uppercase; }
+      .parts-safety { display:grid; grid-template-columns:auto minmax(0,1fr); gap:12px; align-items:baseline; margin:16px 0; padding:13px 15px; border:1px solid color-mix(in srgb,var(--amber) 55%,var(--line)); border-radius:9px; background:color-mix(in srgb,var(--amber) 6%,var(--panel)); }
+      .parts-safety strong { color:var(--amber); }
+      .parts-safety span { color:var(--muted); font-size:.875rem; line-height:1.5; }
+      .parts-diagrams { display:grid; gap:14px; }
+      .parts-figure-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+      .parts-figure-grid .parts-figure:last-child { grid-column:1 / -1; }
+      .parts-figure { min-width:0; overflow:hidden; border:1px solid var(--line-bright); border-radius:12px; background:linear-gradient(145deg,#0a1318,#111d23 55%,#0a1217); }
+      .parts-figure-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; min-height:82px; padding:15px 16px 10px; border-bottom:1px solid var(--line); }
+      .parts-figure-heading h3 { margin:0; color:var(--text); font-size:1rem; }
+      .parts-figure-heading p { max-width:740px; margin:5px 0 0; color:var(--muted); font-size:.8rem; line-height:1.45; }
+      .parts-figure-heading > strong { flex:0 0 auto; max-width:290px; padding:6px 9px; border:1px solid color-mix(in srgb,var(--cyan) 55%,var(--line)); border-radius:999px; background:var(--cyan-dim); color:var(--cyan); font:650 .75rem var(--mono); line-height:1.35; text-align:center; }
+      .parts-svg { display:block; width:100%; height:auto; background:radial-gradient(circle at 45% 50%,rgba(93,228,231,.045),transparent 42%),linear-gradient(#0a1217,#0c161c); }
+      .parts-svg text { fill:var(--text); font-family:var(--mono); font-size:12px; }
+      .parts-svg .parts-centerline { stroke:var(--cyan); stroke-width:1; stroke-dasharray:7 7; opacity:.34; }
+      .parts-svg .parts-cylinder-wall { fill:var(--line); stroke:var(--line-bright); stroke-width:2; }
+      .parts-svg .parts-piston { fill:url(#steel-airpath); stroke:var(--text); stroke-opacity:.4; stroke-width:1.5; }
+      .parts-figure-grid .parts-svg .parts-piston { fill:url(#steel-cylinder); }
+      .parts-svg .parts-piston-face { fill:var(--line-bright); stroke:var(--cyan); stroke-opacity:.55; }
+      .parts-svg .parts-head { fill:url(#dark-steel-airpath); stroke:var(--muted); stroke-width:1.5; fill-rule:evenodd; }
+      .parts-svg .parts-nozzle,.parts-svg .parts-barrel { fill:var(--line-bright); stroke:var(--muted); stroke-width:1.25; fill-rule:evenodd; }
+      .parts-svg .parts-rubber { fill:url(#rubber-airpath); stroke:var(--green); stroke-width:1.5; fill-rule:evenodd; }
+      .parts-figure-grid .parts-svg .parts-rubber { fill:url(#rubber-cylinder); }
+      .parts-svg .parts-pin { fill:var(--amber); stroke:color-mix(in srgb,var(--amber) 60%,var(--text)); stroke-width:1.2; }
+      .parts-svg .parts-bb { fill:var(--text); stroke:var(--cyan); stroke-width:2; }
+      .parts-svg .parts-endview-outer { fill:var(--line); stroke:var(--line-bright); stroke-width:2; }
+      .parts-svg .parts-endview-bore { fill:#071014; stroke:var(--cyan); stroke-opacity:.55; stroke-width:1.5; }
+      .parts-svg .parts-dimension line { stroke:var(--cyan); stroke-width:1.2; }
+      .parts-svg .parts-dimension text { fill:var(--cyan); font-size:11px; }
+      .parts-svg .parts-leader path { fill:none; stroke:var(--amber); stroke-width:1; }
+      .parts-svg .parts-leader text { fill:var(--amber); font-size:11px; }
+      .parts-svg .parts-component-labels text,.parts-svg .parts-caption { fill:var(--muted); font-size:10px; letter-spacing:.08em; }
+      .parts-svg .parts-part-label { fill:var(--text); font-weight:700; }
+      .parts-svg .parts-absent { stroke:var(--green); stroke-width:3; stroke-dasharray:5 4; opacity:.65; }
+      .parts-svg .parts-contact-plane { stroke:var(--green); stroke-width:2; }
+      .parts-svg .parts-rigid-plane { stroke:var(--amber); stroke-width:2; stroke-dasharray:5 4; }
+      .parts-svg .parts-motion { fill:none; stroke:var(--cyan); stroke-width:2; }
+      .parts-svg .parts-spring-seat { stroke:var(--line-bright); stroke-width:8; }
+      .parts-svg .parts-spring { fill:none; stroke:var(--amber); stroke-width:8; stroke-linecap:round; filter:drop-shadow(0 0 7px rgba(255,191,105,.18)); }
+      .parts-svg .parts-cut line { stroke:var(--red); stroke-width:2; stroke-dasharray:5 4; }
+      .parts-svg .parts-cut text { fill:var(--red); font-size:11px; }
+      .parts-scale-note { margin:0; padding:11px 15px 14px; border-top:1px solid var(--line); color:var(--muted); font-size:.8rem; line-height:1.5; }
+      .parts-scale-note strong { color:var(--text); font-family:var(--mono); }
+      .parts-measurement-intro { margin:26px 0 13px; }
+      .parts-measurement-intro h2 { font-size:1.15rem; }
+      .parts-measurement-intro p { margin:7px 0 0; color:var(--muted); font-size:.875rem; line-height:1.5; }
+      .parts-measure-groups { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+      .parts-measure-group { min-width:0; padding:16px; border:1px solid var(--line); border-radius:11px; background:#0b151a; }
+      .parts-measure-heading { min-height:88px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+      .parts-measure-heading h3 { margin:0; color:var(--cyan); font-size:1rem; }
+      .parts-measure-heading p { margin:6px 0 0; color:var(--muted); font-size:.8rem; line-height:1.45; }
+      .parts-measure-list { display:grid; }
+      .parts-measurement { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:5px 12px; padding:13px 0; border-bottom:1px solid var(--line); }
+      .parts-measurement:last-child { border-bottom:0; padding-bottom:0; }
+      .parts-measure-name { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px 12px; }
+      .parts-measure-name strong { font-size:.875rem; line-height:1.4; }
+      .parts-measure-name output { color:var(--text); font:650 .84rem var(--mono); white-space:nowrap; }
+      .parts-method { grid-column:2; grid-row:1; align-self:start; padding:3px 6px; border:1px solid color-mix(in srgb,var(--green) 45%,var(--line)); border-radius:999px; color:var(--green); font:650 .68rem var(--mono); white-space:nowrap; }
+      .parts-measurement p { grid-column:1 / -1; margin:0; color:var(--muted); font-size:.78rem; line-height:1.5; }
+      .parts-model-parameters { margin-top:16px; padding:14px 16px; border:1px solid var(--line-bright); border-radius:10px; background:#0b151a; }
+      .parts-model-parameters > summary { padding:0; color:var(--text); font-size:.9rem; font-weight:650; }
+      .parts-model-parameters > p { margin:12px 0; color:var(--muted); font-size:.825rem; line-height:1.5; }
+      .parts-parameter-table { width:100%; border-collapse:collapse; font-size:.8rem; }
+      .parts-parameter-table th,.parts-parameter-table td { padding:9px 8px; border-top:1px solid var(--line); text-align:left; vertical-align:top; line-height:1.4; }
+      .parts-parameter-table thead th { border-top:0; color:var(--muted); font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; }
+      .parts-parameter-table tbody th { width:38%; font-weight:600; }
+      .parts-parameter-table td:nth-child(2) { width:20%; color:var(--cyan); white-space:nowrap; }
+      .parts-cavity-note { margin:14px 0 0; padding-left:12px; border-left:3px solid var(--amber); color:var(--muted); font-size:.8rem; line-height:1.5; }
       @media(max-width:1200px) { .sound-explanations .intensity-grid { grid-template-columns:1fr; } .change-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .action-steps { grid-template-columns:1fr; } .action-step p { min-height:0; } }
-      @media(max-width:680px) { .change-summary { grid-template-columns:1fr; } .change-metrics { grid-template-columns:1fr; } .feedback-heading,.feedback-footer { align-items:stretch; flex-direction:column; } .feedback-footer button { width:100%; } }
+      @media(max-width:900px) { .parts-figure-grid,.parts-measure-groups { grid-template-columns:1fr; } .parts-figure-grid .parts-figure:last-child { grid-column:auto; } }
+      @media(max-width:680px) { .change-summary { grid-template-columns:1fr; } .change-metrics { grid-template-columns:1fr; } .feedback-heading,.feedback-footer { align-items:stretch; flex-direction:column; } .feedback-footer button { width:100%; } .parts-atlas { padding:14px; } .parts-atlas-heading,.parts-figure-heading { align-items:stretch; flex-direction:column; } .parts-figure-heading > strong { max-width:none; align-self:flex-start; } .parts-safety { grid-template-columns:1fr; } .parts-measurement { grid-template-columns:1fr; } .parts-method { grid-column:1; grid-row:auto; justify-self:start; } }
       @media(max-width:500px) { .event-key { grid-template-columns:1fr; } .shot-timing { padding:12px 10px; } .sound-explainer,.setup-feedback { padding:14px; } }
     </style>
 </head>
@@ -1968,7 +2043,7 @@
     ["losses", "Losses & environment", "Gubici i okoliš"], ["rifle", "Rifle presets", "Predlošci replika"],
     ["solver", "Timing & solver", "Vrijeme i rješavač"]
   ];
-  const VIEWS = [["shot", "Shot", "Hitac"], ["graphs", "Graphs", "Grafovi"], ["details", "Results", "Rezultati"], ["optimizer", "Optimize", "Optimizacija"], ["calibration", "Chrono", "Kronograf"]];
+  const VIEWS = [["shot", "Shot", "Hitac"], ["parts", "Parts", "Dijelovi"], ["graphs", "Graphs", "Grafovi"], ["details", "Results", "Rezultati"], ["optimizer", "Optimize", "Optimizacija"], ["calibration", "Chrono", "Kronograf"]];
   function mount(doc, state, t, onView) {
     const $ = id => doc.getElementById(id);
     const aside = doc.querySelector(".controls-panel"), main = doc.querySelector(".main");
@@ -2012,7 +2087,7 @@
       $("settingsCategory").value = state.category;
       main.querySelectorAll("[data-workspace-panel]").forEach(panel => { panel.hidden = panel.dataset.workspacePanel !== state.view; });
       // Pending/invalid status remains visible even in Optimize or Chrono.
-      if ($("resultContent")) $("resultContent").hidden = !["shot", "graphs", "details"].includes(state.view);
+      if ($("resultContent")) $("resultContent").hidden = !["shot", "parts", "graphs", "details"].includes(state.view);
       nav.querySelectorAll("button").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.workspaceView === state.view)));
     }
     function selectCategory(value) {
@@ -2044,7 +2119,7 @@
     };
   }
   function prepareResults(next, summaryHTML, caption, incomplete) {
-    const doc = next.ownerDocument, stage = next.querySelector(".stage"), graphs = next.querySelector(".graphs");
+    const doc = next.ownerDocument, stage = next.querySelector(".stage"), parts = next.querySelector(".parts-atlas"), graphs = next.querySelector(".graphs");
     const transport = stage.querySelector(".stage-toolbar"); transport.id = "workspace-transport"; transport.remove();
     const disclosure = (id, label) => {
       const details = doc.createElement("details"); details.id = id; details.className = "stage-disclosure"; details.setAttribute("data-preserve-open", "");
@@ -2074,11 +2149,12 @@
     }
     stage.append(live, help);
     stage.id = "workspace-shot"; stage.dataset.workspacePanel = "shot";
+    parts.id = "workspace-parts"; parts.dataset.workspacePanel = "parts";
     graphs.id = "workspace-graphs"; graphs.dataset.workspacePanel = "graphs";
     const details = doc.createElement("section"); details.id = "workspace-details"; details.dataset.workspacePanel = "details";
-    for (const child of Array.from(next.childNodes)) if (child !== stage && child !== graphs) details.append(child);
+    for (const child of Array.from(next.childNodes)) if (child !== stage && child !== parts && child !== graphs) details.append(child);
     const sound = details.querySelector("#soundExplanations"); if (sound) details.prepend(sound);
-    next.append(transport, stage, graphs, details);
+    next.append(transport, stage, parts, graphs, details);
   }
   const api = { mount, prepareResults, CATEGORIES, VIEWS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
@@ -2293,6 +2369,278 @@
 })(typeof globalThis !== "undefined" ? globalThis : this);
 
 
+/* Dynamic bilingual measurement atlas for the configured hardware. The SVGs
+   are explanatory cutaways: numeric labels are inputs, not metrology-grade CAD. */
+(function (root) {
+  "use strict";
+  const P = typeof module !== "undefined" && module.exports ? require("./physics.js") : root.PneumaticPhysics;
+  const esc = value => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
+  const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+  const number = value => Number.isFinite(value) ? value : 0;
+  const label = (pair, t) => t(pair[0], pair[1]);
+
+  const UNITS = {
+    cylinderBore: "mm", strokeLength: "mm", pistonMass: "g", deadVolume: "cm³",
+    bumperThickness: "mm", bumperBore: "mm", airbrakeLength: "mm", airbrakeDiameter: "mm",
+    airbrakeTipDiameter: "mm", airbrakeTaper: "mm", headBore: "mm", headLength: "mm",
+    nozzleBore: "mm", nozzleLength: "mm", breechVolume: "cm³", barrelLength: "mm",
+    barrelDiameter: "mm", bbDiameter: "mm", bbMass: "g", springFreeLength: "mm",
+    springInstalledLength: "mm", springCutLength: "mm", springActiveCoils: "turns",
+    springRemovedCoils: "turns", springSolidLength: "mm", springStiffness: "N/m",
+    springPreload: "mm", springMass: "g", pistonFriction: "N", sealFriction: "",
+    rearDamping: "N·s/m", restitution: "", dischargeCoefficient: "", pistonLeak: "mm²",
+    nozzleLeak: "mm²", bbLeakCoefficient: "", bbBreakaway: "N", barrelDrag: "N",
+    heatTransfer: "W/K", ambientPressure: "kPa abs", airTemperature: "°C",
+    usefulFraction: "", decelThreshold: "m/s²", maxTime: "ms"
+  };
+  const DIGITS = {
+    cylinderBore: 2, barrelDiameter: 2, bbDiameter: 2, bumperBore: 2,
+    airbrakeDiameter: 2, airbrakeTipDiameter: 2, headBore: 2, nozzleBore: 2,
+    deadVolume: 2, breechVolume: 2, pistonLeak: 3, nozzleLeak: 3,
+    sealFriction: 3, bbLeakCoefficient: 2, restitution: 2, dischargeCoefficient: 2,
+    heatTransfer: 3, usefulFraction: 3
+  };
+  const UNKNOWN_ZERO = new Set(["springFreeLength", "springInstalledLength", "springActiveCoils", "springSolidLength", "springMass"]);
+
+  const GROUPS = [
+    {
+      title: ["Cylinder & piston", "Cilindar i piston"],
+      note: ["Measure the working bore, the two contact planes and the complete moving piston assembly.", "Izmjerite radni provrt, dvije dodirne ravnine i cijeli pokretni sklop pistona."],
+      rows: [
+        ["cylinderBore", ["Cylinder internal diameter", "Unutarnji promjer cilindra"], ["Bore gauge", "Mjerač provrta"], ["Measure the swept working bore at several depths and directions; ordinary caliper jaws are not reliable inside a long bore.", "Izmjerite radni provrt na više dubina i smjerova; obične čeljusti pomičnog mjerila nisu pouzdane u dugom provrtu."]],
+        ["strokeLength", ["Nominal piston stroke", "Nominalni hod pistona"], ["Depth rod", "Dubinomjer"], ["Axial distance from the cocked piston-face position to the rigid cylinder-head contact plane, before adding the bumper.", "Uzdužna udaljenost od položaja čela zapetog pistona do ravnine dodira krute glave, prije dodavanja gumice."]],
+        ["pistonMass", ["Assembled moving piston mass", "Masa sastavljenog pokretnog pistona"], ["Digital scale", "Digitalna vaga"], ["Weigh the exact moving assembly: body, cup/seal, airbrake pin and fitted weights. Do not add the stationary bumper.", "Izvažite točan pokretni sklop: tijelo, čašicu/brtvu, pin zračne kočnice i utege. Ne dodajte nepomičnu gumicu."]],
+        ["deadVolume", ["Cylinder-side residual cavity", "Preostala šupljina na strani cilindra"], ["Derived volume", "Izvedeni volumen"], ["Derive from the cavity geometry at piston contact, including recesses. This is not the swept cylinder volume.", "Izvedite iz geometrije šupljine pri dodiru pistona, uključujući udubljenja. To nije radni volumen cilindra."]]
+      ]
+    },
+    {
+      title: ["Airbrake, bumper & head", "Zračna kočnica, gumica i glava"],
+      note: ["These dimensions decide where the pin tip is when the piston face first touches the bumper or head.", "Ove dimenzije određuju gdje se vrh pina nalazi kada čelo pistona prvi put dodirne gumicu ili glavu."],
+      rows: [
+        ["airbrakeLength", ["Pin projection", "Izbočenje pina"], ["Depth caliper", "Dubinsko mjerilo"], ["From the piston contact face to the farthest point of the airbrake tip, parallel to the piston axis.", "Od dodirnog čela pistona do najudaljenije točke vrha pina, paralelno s osi pistona."]],
+        ["airbrakeDiameter", ["Airbrake shaft diameter", "Promjer tijela pina"], ["Micrometer", "Mikrometar"], ["Measure the full-diameter cylindrical section, not the tapered tip.", "Mjerite cilindrični dio punog promjera, ne konusni vrh."]],
+        ["airbrakeTipDiameter", ["Airbrake tip diameter", "Promjer vrha pina"], ["Micrometer", "Mikrometar"], ["Measure at the forward end. Enter zero only for a genuinely sharp mathematical-tip approximation.", "Mjerite na prednjem kraju. Nulu unesite samo kao aproksimaciju stvarno oštrog matematičkog vrha."]],
+        ["airbrakeTaper", ["Taper length", "Duljina konusa"], ["Caliper", "Pomično mjerilo"], ["Axial length from where the shaft begins narrowing to the end of the tip.", "Uzdužna duljina od mjesta gdje se tijelo počinje sužavati do kraja vrha."]],
+        ["bumperThickness", ["Added bumper thickness", "Debljina dodatne gumice"], ["Caliper, light load", "Pomično mjerilo, mala sila"], ["Uncompressed axial thickness. Soft rubber changes under clamp force; record the measurement method.", "Nestlačena uzdužna debljina. Meka guma mijenja se pod silom čeljusti; zabilježite način mjerenja."]],
+        ["bumperBore", ["Bumper inner diameter", "Unutarnji promjer gumice"], ["Pin gauges", "Mjerni trnovi"], ["Measure the smallest free opening through the bumper. Do not assume it equals the metal receiving bore.", "Izmjerite najmanji slobodni otvor kroz gumicu. Ne pretpostavljajte da je jednak metalnom ulaznom provrtu."]],
+        ["headBore", ["Head receiving-bore diameter", "Promjer ulaznog provrta glave"], ["Pin gauges", "Mjerni trnovi"], ["The metal bore the airbrake enters after any bumper—not the nozzle outlet diameter.", "Metalni provrt u koji pin ulazi nakon gumice — nije promjer izlaznog kanala mlaznice."]],
+        ["headLength", ["Receiving-passage length", "Duljina ulaznog provrta"], ["Depth rod", "Dubinomjer"], ["Axial length of the receiving bore before the passage changes into the downstream nozzle section.", "Uzdužna duljina ulaznog provrta prije prijelaza u izlazni kanal mlaznice."]],
+        ["nozzleBore", ["Downstream nozzle diameter", "Promjer izlaznog kanala mlaznice"], ["Pin gauges", "Mjerni trnovi"], ["Smallest effective internal diameter after the receiving passage and before the hop chamber.", "Najmanji efektivni unutarnji promjer nakon ulaznog provrta i prije hop komore."]],
+        ["nozzleLength", ["Downstream nozzle length", "Duljina izlaznog kanala mlaznice"], ["Depth rod", "Dubinomjer"], ["Axial length assigned to the smaller downstream passage.", "Uzdužna duljina pripisana manjem izlaznom kanalu."]],
+        ["breechVolume", ["Head / nozzle / breech storage", "Volumen glave, mlaznice i komore"], ["Derived volume", "Izvedeni volumen"], ["Derive from the connected cavity geometry behind the seated BB. Keep it separate from cylinder-side dead volume.", "Izvedite iz spojene geometrije šupljine iza postavljenog BB-a. Držite ga odvojeno od preostalog volumena cilindra."]]
+      ]
+    },
+    {
+      title: ["Inner barrel & BB", "Unutarnja cijev i BB"],
+      note: ["The barrel diameter and actual BB diameter are separate inputs; their difference controls the model's annular leakage path.", "Promjer cijevi i stvarni promjer BB-a odvojeni su ulazi; njihova razlika određuje prstenasti put curenja u modelu."],
+      rows: [
+        ["barrelLength", ["Inner-barrel length", "Duljina unutarnje cijevi"], ["Rule / caliper", "Ravnalo / pomično mjerilo"], ["From the BB start plane used by the model to the muzzle crown along the bore axis.", "Od početne ravnine BB-a koju koristi model do krune cijevi duž osi provrta."]],
+        ["barrelDiameter", ["Inner-barrel diameter", "Promjer unutarnje cijevi"], ["Certified plug gauges", "Umjereni mjerni trnovi"], ["Measure the bore rather than relying only on the nominal 6.01/6.03/6.05 marking; check more than one location when possible.", "Mjerite provrt umjesto oslanjanja samo na oznaku 6,01/6,03/6,05; po mogućnosti provjerite više mjesta."]],
+        ["bbDiameter", ["Actual BB diameter", "Stvarni promjer BB-a"], ["Micrometer", "Mikrometar"], ["Measure several BBs in multiple orientations with low force and use a representative mean.", "Izmjerite više BB-a u više smjerova uz malu silu i koristite reprezentativni prosjek."]],
+        ["bbMass", ["BB mass", "Masa BB-a"], ["0.001 g scale", "Vaga 0,001 g"], ["Weigh a batch and divide by the count; packet labels are useful provenance but not a measurement.", "Izvažite skupinu i podijelite s brojem kuglica; oznaka na pakiranju korisna je kao izvor, ali nije mjerenje."]]
+      ]
+    },
+    {
+      title: ["Spring & seats", "Opruga i oslonci"],
+      note: ["Length mode and direct-compression mode describe the same installed spring in different ways; do not mix their reference planes.", "Način s duljinama i način s izravnim stlačenjem opisuju istu ugrađenu oprugu na različite načine; nemojte miješati njihove referentne ravnine."],
+      rows: [
+        ["springFreeLength", ["Unloaded spring length", "Slobodna duljina opruge"], ["Rule / caliper", "Ravnalo / pomično mjerilo"], ["Axial end-to-end length before the simulated cut, with no load on the spring.", "Uzdužna duljina od kraja do kraja prije simuliranog reza, bez opterećenja opruge."]],
+        ["springInstalledLength", ["Front seat distance", "Prednji razmak oslonaca"], ["Depth measurement", "Mjerenje dubine"], ["Spring-seat distance at the rigid-head plane before an added bumper. The model subtracts bumper thickness once.", "Razmak oslonaca opruge na ravnini krute glave prije dodatne gumice. Model jednom oduzima debljinu gumice."]],
+        ["springCutLength", ["Free length removed", "Uklonjena slobodna duljina"], ["Before / after", "Prije / poslije"], ["Difference in unloaded axial length, not the wire length that was cut away.", "Razlika nestlačene uzdužne duljine, ne duljina uklonjene žice."]],
+        ["springActiveCoils", ["Active coils before cutting", "Aktivni zavoji prije rezanja"], ["Count", "Brojanje"], ["Count coils that deflect under load; inactive closed end turns are not active coils.", "Brojite zavoje koji se deformiraju pod opterećenjem; zatvoreni krajnji zavoji nisu aktivni."]],
+        ["springRemovedCoils", ["Removed active coils", "Uklonjeni aktivni zavoji"], ["Count", "Brojanje"], ["Count only active turns removed. This is used for the uniform-coil stiffness estimate.", "Brojite samo uklonjene aktivne zavoje. To se koristi za procjenu krutosti jednolike opruge."]],
+        ["springSolidLength", ["Remaining solid height", "Preostala potpuno stisnuta duljina"], ["Bench measurement", "Mjerenje na stolu"], ["End-to-end height of the remaining spring at coil bind. Use a safe fixture; never measure inside a cocked assembly.", "Duljina preostale opruge od kraja do kraja pri potpunom stiskanju. Koristite siguran prihvat; nikada ne mjerite u zapetom sklopu."]],
+        ["springStiffness", ["Spring stiffness", "Krutost opruge"], ["Force curve", "Krivulja sile"], ["Fit the slope of measured force versus compression over the installed range. An M-rating is not a force curve.", "Prilagodite nagib izmjerene sile prema stlačenju u ugrađenom rasponu. Oznaka M nije krivulja sile."]],
+        ["springPreload", ["Front-contact compression", "Stlačenje pri prednjem kontaktu"], ["Geometry / force", "Geometrija / sila"], ["Direct-mode compression at the rigid-head plane before adding the bumper; length mode calculates it instead.", "Stlačenje u izravnom načinu na ravnini krute glave prije dodavanja gumice; način s duljinama ga računa."]],
+        ["springMass", ["Installed spring mass", "Masa ugrađene opruge"], ["Digital scale", "Digitalna vaga"], ["Weigh the remaining installed spring after any physical cut. Length alone does not determine its mass.", "Izvažite preostalu ugrađenu oprugu nakon fizičkog rezanja. Sama duljina ne određuje masu."]]
+      ]
+    }
+  ];
+
+  const MODEL_ROWS = [
+    ["pistonFriction", ["Piston sliding friction", "Klizno trenje pistona"], ["Bench force test", "Ispitivanje sile na stolu"]],
+    ["sealFriction", ["Pressure-dependent seal friction", "Trenje brtve ovisno o tlaku"], ["Fit / instrumented test", "Prilagodba / instrumentirano ispitivanje"]],
+    ["rearDamping", ["Rear vent / mechanical drag", "Stražnji otvor / mehanički otpor"], ["Fit / coast-down evidence", "Prilagodba / mjerenje usporavanja"]],
+    ["restitution", ["Bumper restitution", "Koeficijent odskoka gumice"], ["High-speed contact measurement", "Brzo mjerenje kontakta"]],
+    ["dischargeCoefficient", ["Head discharge coefficient Cd", "Koeficijent protoka glave Cd"], ["Flow bench or chrono fit", "Protočna klupa ili chrono prilagodba"]],
+    ["pistonLeak", ["Piston-seal leak area", "Površina curenja brtve pistona"], ["Leak-down fit", "Prilagodba pada tlaka"]],
+    ["nozzleLeak", ["Nozzle / hop leak area", "Površina curenja mlaznice / hopa"], ["Leak-down fit", "Prilagodba pada tlaka"]],
+    ["bbLeakCoefficient", ["BB-clearance leak coefficient", "Koeficijent curenja oko BB-a"], ["Calibration parameter", "Kalibracijski parametar"]],
+    ["bbBreakaway", ["Hop breakaway force", "Sila pokretanja kroz hop"], ["Force gauge", "Mjerač sile"]],
+    ["barrelDrag", ["Moving BB resistance", "Otpor gibanja BB-a"], ["Force / velocity experiment", "Pokus sile / brzine"]],
+    ["heatTransfer", ["Gas heat conductance", "Toplinska vodljivost plina"], ["Transient fit", "Prilagodba prijelaznog procesa"]],
+    ["ambientPressure", ["Atmospheric pressure", "Atmosferski tlak"], ["Barometer", "Barometar"]],
+    ["airTemperature", ["Air / wall temperature", "Temperatura zraka / stijenke"], ["Thermometer", "Termometar"]],
+    ["usefulFraction", ["Useful-energy threshold", "Prag korisne energije"], ["Analysis convention", "Dogovor analize"]],
+    ["decelThreshold", ["Strong-deceleration threshold", "Prag snažnog usporavanja"], ["Analysis convention", "Dogovor analize"]],
+    ["maxTime", ["Maximum modeled time", "Najdulje modelirano vrijeme"], ["Solver limit", "Granica rješavača"]]
+  ];
+
+  const PART_FIELDS = GROUPS.flatMap(group => group.rows.map(row => row[0]));
+
+  function fieldValue(p, key, t) {
+    const value = p[key];
+    if (!Number.isFinite(value)) return "—";
+    if (UNKNOWN_ZERO.has(key) && value === 0) return t("Unknown / not entered", "Nepoznato / nije uneseno");
+    const digits = DIGITS[key] ?? (Math.abs(value) < 1 && value !== 0 ? 2 : 1);
+    const shown = value.toFixed(digits);
+    const unit = UNITS[key];
+    if (unit === "turns") return `${shown} ${t("turns", "zavoja")}`;
+    return `${shown}${unit ? ` ${unit}` : ""}`;
+  }
+
+  function defs(id) {
+    return `<defs>
+      <linearGradient id="steel-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--line-bright)"/><stop offset=".48" stop-color="var(--text)"/><stop offset=".55" stop-color="var(--muted)"/><stop offset="1" stop-color="var(--line)"/></linearGradient>
+      <linearGradient id="dark-steel-${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="var(--panel-2)"/><stop offset=".5" stop-color="var(--line-bright)"/><stop offset="1" stop-color="var(--panel-2)"/></linearGradient>
+      <pattern id="rubber-${id}" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="color-mix(in srgb,var(--green) 20%,var(--panel))"/><path d="M-2 2L2-2M0 8L8 0M6 10L10 6" stroke="var(--green)" stroke-opacity=".32"/></pattern>
+      <marker id="arrow-${id}" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto-start-reverse"><path d="M0 0L7 3.5L0 7Z" fill="var(--cyan)"/></marker>
+    </defs>`;
+  }
+  function dimH(id, x1, x2, y, text) {
+    const mid = (x1 + x2) / 2;
+    return `<g class="parts-dimension"><line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" marker-start="url(#arrow-${id})" marker-end="url(#arrow-${id})"/><text x="${mid}" y="${y - 7}" text-anchor="middle">${esc(text)}</text></g>`;
+  }
+  function dimV(id, x, y1, y2, text, anchor = "start") {
+    const tx = anchor === "end" ? x - 10 : x + 10;
+    return `<g class="parts-dimension"><line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" marker-start="url(#arrow-${id})" marker-end="url(#arrow-${id})"/><text x="${tx}" y="${(y1 + y2) / 2 + 4}" text-anchor="${anchor}">${esc(text)}</text></g>`;
+  }
+
+  function airPathSvg(p, t) {
+    const id = "airpath", scale = 6.2, center = 205, face = 320;
+    const bumperWidth = number(p.bumperThickness) * scale;
+    const headWidth = number(p.headLength) * scale;
+    const nozzleWidth = number(p.nozzleLength) * scale;
+    const bumperEnd = face + bumperWidth, headEnd = bumperEnd + headWidth, nozzleEnd = headEnd + nozzleWidth;
+    const pinEnd = face + number(p.airbrakeLength) * scale;
+    const taperStart = Math.max(face, pinEnd - number(p.airbrakeTaper) * scale);
+    const shaftHeight = clamp(number(p.airbrakeDiameter) * 10, 8, 76);
+    const tipHeight = clamp(number(p.airbrakeTipDiameter) * 10, 2, shaftHeight);
+    const bumperHole = clamp(number(p.bumperBore) * 10, 14, 100);
+    const headHole = clamp(number(p.headBore) * 10, 14, 100);
+    const nozzleHole = clamp(number(p.nozzleBore) * 10, 14, 100);
+    const cylinderHalf = clamp(number(p.cylinderBore) * 3.8, 72, 105);
+    let zone;
+    if (!(p.airbrakeLength > 0)) zone = t("No airbrake pin enabled", "Pin zračne kočnice nije uključen");
+    else if (p.airbrakeLength <= p.bumperThickness) zone = t("Pin tip ends inside the bumper", "Vrh pina završava unutar gumice");
+    else if (p.airbrakeLength <= p.bumperThickness + p.headLength) zone = t("Pin tip ends in the metal receiving bore", "Vrh pina završava u metalnom ulaznom provrtu");
+    else if (p.airbrakeLength <= p.bumperThickness + p.headLength + p.nozzleLength) zone = t("Pin tip reaches the downstream nozzle", "Vrh pina doseže izlazni kanal mlaznice");
+    else zone = t("Pin extends beyond the entered head/nozzle stack", "Pin se proteže izvan unesenog sklopa glave/mlaznice");
+    const pin = p.airbrakeLength > 0 ? `<path class="parts-pin" d="M${face} ${center - shaftHeight / 2}H${taperStart}L${pinEnd} ${center - tipHeight / 2}V${center + tipHeight / 2}L${taperStart} ${center + shaftHeight / 2}H${face}Z"/>` : "";
+    const bumper = p.bumperThickness > 0 ? `<path class="parts-rubber" d="M${face} 125H${bumperEnd}V${center - bumperHole / 2}H${face}ZM${face} ${center + bumperHole / 2}H${bumperEnd}V285H${face}Z"/>` : `<line class="parts-absent" x1="${face}" y1="125" x2="${face}" y2="285"/>`;
+    return `<div class="parts-figure parts-figure-wide">
+      <div class="parts-figure-heading"><div><h3>${t("Airbrake-to-head fit at first contact", "Odnos pina i glave pri prvom kontaktu")}</h3><p>${t("This contact-state cutaway shows whether the entered pin stops in the bumper, receiving bore or nozzle.", "Ovaj presjek u stanju kontakta pokazuje završava li uneseni pin u gumici, ulaznom provrtu ili mlaznici.")}</p></div><strong>${esc(zone)}</strong></div>
+      <svg class="parts-svg" viewBox="0 0 1160 425" role="img" aria-label="${esc(t("Cutaway of piston, airbrake, bumper, cylinder head, nozzle and barrel with current dimensions", "Presjek pistona, pina, gumice, glave cilindra, mlaznice i cijevi s trenutačnim dimenzijama"))}">
+        <title>${esc(zone)}</title>${defs(id)}
+        <line class="parts-centerline" x1="34" y1="${center}" x2="1130" y2="${center}"/>
+        <path class="parts-cylinder-wall" d="M45 ${center - cylinderHalf - 16}H${face}V${center - cylinderHalf}H45ZM45 ${center + cylinderHalf + 16}H${face}V${center + cylinderHalf}H45Z"/>
+        <rect class="parts-piston" x="100" y="${center - cylinderHalf + 8}" width="220" height="${2 * cylinderHalf - 16}" rx="11"/>
+        <rect class="parts-piston-face" x="302" y="${center - cylinderHalf + 2}" width="18" height="${2 * cylinderHalf - 4}" rx="4"/>
+        ${bumper}
+        <path class="parts-head" d="M${bumperEnd} 112H${headEnd}V${center - headHole / 2}H${bumperEnd}ZM${bumperEnd} ${center + headHole / 2}H${headEnd}V298H${bumperEnd}Z"/>
+        <path class="parts-nozzle" d="M${headEnd} 151H${nozzleEnd}V${center - nozzleHole / 2}H${headEnd}ZM${headEnd} ${center + nozzleHole / 2}H${nozzleEnd}V259H${headEnd}Z"/>
+        <path class="parts-barrel" d="M${nozzleEnd} 169H1130V${center - clamp(number(p.barrelDiameter) * 6, 18, 58) / 2}H${nozzleEnd}ZM${nozzleEnd} ${center + clamp(number(p.barrelDiameter) * 6, 18, 58) / 2}H1130V241H${nozzleEnd}Z"/>
+        ${pin}
+        <g class="parts-component-labels"><text x="190" y="99">${esc(t("PISTON", "PISTON"))}</text><text x="${face + Math.max(4, bumperWidth) / 2}" y="101" text-anchor="middle">${esc(t("BUMPER", "GUMICA"))}</text><text x="${(bumperEnd + headEnd) / 2}" y="88" text-anchor="middle">${esc(t("RECEIVING BORE", "ULAZNI PROVRT"))}</text><text x="${(headEnd + nozzleEnd) / 2}" y="139" text-anchor="middle">${esc(t("NOZZLE", "MLAZNICA"))}</text><text x="${Math.min(1110, nozzleEnd + 95)}" y="158">${esc(t("BARREL", "CIJEV"))}</text></g>
+        ${p.airbrakeLength > 0 ? dimH(id, face, pinEnd, 61, `${t("pin projection", "izbočenje pina")} ${fieldValue(p, "airbrakeLength", t)}`) : ""}
+        ${p.bumperThickness > 0 ? dimH(id, face, bumperEnd, 327, `${t("bumper", "gumica")} ${fieldValue(p, "bumperThickness", t)}`) : ""}
+        ${dimH(id, bumperEnd, headEnd, 354, `${t("receiving length", "duljina provrta")} ${fieldValue(p, "headLength", t)}`)}
+        ${dimH(id, headEnd, nozzleEnd, 381, `${t("nozzle length", "duljina mlaznice")} ${fieldValue(p, "nozzleLength", t)}`)}
+        ${dimV(id, 68, center - cylinderHalf, center + cylinderHalf, `Ø ${fieldValue(p, "cylinderBore", t)}`)}
+        ${dimV(id, bumperEnd + headWidth * .48, center - headHole / 2, center + headHole / 2, `${t("head", "glava")} Ø ${fieldValue(p, "headBore", t)}`)}
+        ${p.bumperThickness > 0 ? `<g class="parts-leader"><path d="M${face + Math.max(3, bumperWidth / 2)} ${center - bumperHole / 2}L${face + 38} 118"/><text x="${face + 43}" y="113">${esc(`${t("bumper ID", "ID gumice")} Ø ${fieldValue(p, "bumperBore", t)}`)}</text></g>` : ""}
+        ${p.airbrakeLength > 0 ? `<g class="parts-leader"><path d="M${face + Math.min(70, number(p.airbrakeLength) * scale * .35)} ${center + shaftHeight / 2}L${face + 85} 306"/><text x="${face + 91}" y="311">${esc(`${t("shaft", "tijelo")} Ø ${fieldValue(p, "airbrakeDiameter", t)} · ${t("tip", "vrh")} Ø ${fieldValue(p, "airbrakeTipDiameter", t)}`)}</text></g>` : ""}
+      </svg>
+      <p class="parts-scale-note">${t("Axial lengths in the head stack share one scale. Bore diameters and small clearances are enlarged independently so they remain visible; the numeric labels are the exact current inputs.", "Uzdužne duljine u sklopu glave imaju zajedničko mjerilo. Promjeri provrta i mali zazori zasebno su uvećani radi vidljivosti; brojčane oznake točni su trenutačni ulazi.")}</p>
+    </div>`;
+  }
+
+  function cylinderSvg(p, t) {
+    const id = "cylinder", left = 76, right = 486, center = 134;
+    const contact = right - clamp(number(p.bumperThickness) / Math.max(1, number(p.strokeLength)) * (right - left), 0, 100);
+    const boreHalf = clamp(number(p.cylinderBore) * 2.1, 42, 64);
+    const g = P.geometry(p, 0, 0);
+    return `<div class="parts-figure"><div class="parts-figure-heading"><div><h3>${t("Cylinder, piston & travel", "Cilindar, piston i hod")}</h3><p>${t("Nominal stroke ends at the rigid head plane; an added bumper moves first contact rearward.", "Nominalni hod završava na ravnini krute glave; dodatna gumica pomiče prvi kontakt unatrag.")}</p></div></div>
+      <svg class="parts-svg" viewBox="0 0 560 285" role="img" aria-label="${esc(t("Cylinder cutaway with bore, nominal stroke and effective contact travel", "Presjek cilindra s provrtom, nominalnim hodom i efektivnim hodom do kontakta"))}">${defs(id)}
+        <line class="parts-centerline" x1="35" y1="${center}" x2="520" y2="${center}"/>
+        <path class="parts-cylinder-wall" d="M35 ${center - boreHalf - 14}H505V${center - boreHalf}H35ZM35 ${center + boreHalf + 14}H505V${center + boreHalf}H35Z"/>
+        <rect class="parts-piston" x="43" y="${center - boreHalf + 7}" width="${left - 43 + 18}" height="${2 * boreHalf - 14}" rx="8"/><rect class="parts-piston-face" x="${left}" y="${center - boreHalf + 2}" width="14" height="${2 * boreHalf - 4}" rx="3"/>
+        ${p.bumperThickness > 0 ? `<rect class="parts-rubber" x="${contact}" y="${center - boreHalf}" width="${right - contact}" height="${2 * boreHalf}"/>` : ""}<line class="parts-contact-plane" x1="${contact}" y1="${center - boreHalf - 8}" x2="${contact}" y2="${center + boreHalf + 8}"/><line class="parts-rigid-plane" x1="${right}" y1="${center - boreHalf - 8}" x2="${right}" y2="${center + boreHalf + 8}"/>
+        <text class="parts-part-label" x="56" y="${center + 5}">${esc(fieldValue(p, "pistonMass", t))}</text>
+        <text class="parts-caption" x="${contact - 8}" y="57" text-anchor="end">${esc(t("first contact", "prvi kontakt"))}</text><text class="parts-caption" x="${right}" y="76" text-anchor="end">${esc(t("rigid head plane", "ravnina krute glave"))}</text>
+        ${dimH(id, left, contact, 35, `${t("effective travel", "efektivni hod")} ${(p.strokeLength - p.bumperThickness).toFixed(1)} mm`)}
+        ${dimH(id, left, right, 243, `${t("nominal stroke", "nominalni hod")} ${fieldValue(p, "strokeLength", t)}`)}
+        ${dimV(id, 523, center - boreHalf, center + boreHalf, `Ø ${fieldValue(p, "cylinderBore", t)}`, "end")}
+      </svg><p class="parts-scale-note">${t("Current effective swept volume", "Trenutačni efektivni radni volumen")}: <strong>${(g.sweptVolume * 1e6).toFixed(2)} cm³</strong>. ${t("The bumper is drawn as an undeformed spacer; compression shape is unknown.", "Gumica je nacrtana kao nedeformirani odstojnik; oblik pod stlačenjem nije poznat.")}</p></div>`;
+  }
+
+  function barrelSvg(p, t) {
+    const id = "barrel", center = 137, bore = clamp(number(p.barrelDiameter) * 4, 18, 34), bb = clamp(number(p.bbDiameter) / Math.max(number(p.barrelDiameter), .1) * bore, 12, bore - 1);
+    const radial = Math.max(0, (p.barrelDiameter - p.bbDiameter) / 2);
+    return `<div class="parts-figure"><div class="parts-figure-heading"><div><h3>${t("Inner barrel & BB clearance", "Unutarnja cijev i zazor BB-a")}</h3><p>${t("The end view enlarges the very small annular gap so the two diameters are distinguishable.", "Pogled s kraja uvećava vrlo mali prstenasti zazor kako bi se dva promjera mogla razlikovati.")}</p></div></div>
+      <svg class="parts-svg" viewBox="0 0 560 285" role="img" aria-label="${esc(t("Inner barrel with length, bore diameter, BB diameter and radial clearance", "Unutarnja cijev s duljinom, promjerom provrta, promjerom BB-a i radijalnim zazorom"))}">${defs(id)}
+        <path class="parts-barrel" d="M45 102H515V${center - bore / 2}H45ZM45 ${center + bore / 2}H515V172H45Z"/><line class="parts-centerline" x1="30" y1="${center}" x2="530" y2="${center}"/>
+        <circle class="parts-bb" cx="87" cy="${center}" r="${bb / 2}"/><path class="parts-motion" d="M113 ${center}H190" marker-end="url(#arrow-${id})"/>
+        ${dimH(id, 45, 515, 225, `${t("barrel length", "duljina cijevi")} ${fieldValue(p, "barrelLength", t)}`)}
+        <circle class="parts-endview-outer" cx="428" cy="61" r="40"/><circle class="parts-endview-bore" cx="428" cy="61" r="27"/><circle class="parts-bb" cx="428" cy="61" r="${clamp(number(p.bbDiameter) / Math.max(number(p.barrelDiameter), .1) * 24, 15, 23.5)}"/>
+        <g class="parts-leader"><path d="M428 34L470 17"/><text x="474" y="20">${esc(`Ø ${fieldValue(p, "barrelDiameter", t)}`)}</text><path d="M428 61L472 77"/><text x="476" y="82">${esc(`BB Ø ${fieldValue(p, "bbDiameter", t)}`)}</text></g>
+        <text class="parts-part-label" x="87" y="${center + 5}" text-anchor="middle">BB</text>
+      </svg><p class="parts-scale-note">${t("Entered radial clearance", "Uneseni radijalni zazor")}: <strong>${radial.toFixed(3)} mm</strong> · ${t("diametral difference", "razlika promjera")}: <strong>${Math.max(0, p.barrelDiameter - p.bbDiameter).toFixed(3)} mm</strong>. ${t("This is geometry, not a measured leakage rate.", "To je geometrija, ne izmjerena stopa curenja.")}</p></div>`;
+  }
+
+  function springPath(x1, x2, center, amplitude, turns) {
+    const count = Math.max(5, Math.min(18, Math.round(turns || 11))), step = (x2 - x1) / count;
+    let path = `M${x1} ${center}`;
+    for (let index = 0; index < count; index++) {
+      const x = x1 + index * step;
+      path += `C${x + step * .22} ${center - amplitude},${x + step * .28} ${center - amplitude},${x + step * .5} ${center}C${x + step * .72} ${center + amplitude},${x + step * .78} ${center + amplitude},${x + step} ${center}`;
+    }
+    return path;
+  }
+
+  function springSvg(p, t) {
+    const id = "spring", spring = P.springState(p), lengthMode = p.springLengthMode === 1;
+    const coils = p.springActiveCoils > 0 ? p.springActiveCoils - p.springRemovedCoils : 11;
+    const activeText = lengthMode ? t("Length mode active", "Aktivan način s duljinama") : t("Direct compression mode", "Izravni način stlačenja");
+    const currentFree = spring.freeLength === null ? null : spring.freeLength;
+    return `<div class="parts-figure"><div class="parts-figure-heading"><div><h3>${t("Spring, seats & cut reference", "Opruga, oslonci i referenca reza")}</h3><p>${esc(activeText)}. ${t("The drawing identifies reference lengths; coil geometry itself is not modeled.", "Crtež označuje referentne duljine; sama geometrija zavoja nije modelirana.")}</p></div></div>
+      <svg class="parts-svg" viewBox="0 0 560 285" role="img" aria-label="${esc(t("Spring between rear and front seats with current free length, compression and cut values", "Opruga između stražnjeg i prednjeg oslonca s trenutačnom slobodnom duljinom, stlačenjem i vrijednostima reza"))}">${defs(id)}
+        <line class="parts-spring-seat" x1="42" y1="57" x2="42" y2="210"/><line class="parts-spring-seat" x1="515" y1="57" x2="515" y2="210"/>
+        <path class="parts-spring" d="${springPath(52, 505, 133, 42, coils)}"/><line class="parts-centerline" x1="30" y1="133" x2="527" y2="133"/>
+        <text class="parts-caption" x="42" y="43" text-anchor="middle">${esc(t("rear seat", "stražnji oslonac"))}</text><text class="parts-caption" x="515" y="43" text-anchor="middle">${esc(t("front seat", "prednji oslonac"))}</text>
+        ${dimH(id, 42, 515, 236, lengthMode ? `${t("entered seat distance", "uneseni razmak oslonaca")} ${fieldValue(p, "springInstalledLength", t)}` : `${t("front compression", "prednje stlačenje")} ${spring.preload.toFixed(1)} mm`)}
+        ${p.springCutLength > 0 ? `<g class="parts-cut"><line x1="430" y1="76" x2="430" y2="190"/><text x="422" y="69" text-anchor="end">${esc(`${t("simulated cut", "simulirani rez")} ${fieldValue(p, "springCutLength", t)}`)}</text></g>` : ""}
+        <text class="parts-part-label" x="278" y="138" text-anchor="middle">${esc(`${spring.stiffness.toFixed(1)} N/m`)}</text>
+      </svg><p class="parts-scale-note">${lengthMode ? `${t("Resulting free length", "Dobivena slobodna duljina")}: <strong>${currentFree === null ? "—" : currentFree.toFixed(1) + " mm"}</strong> · ${t("contact / cocked compression", "stlačenje pri kontaktu / zapeto")}: <strong>${spring.preload.toFixed(1)} / ${spring.cockedCompression.toFixed(1)} mm</strong>.` : `${t("Length fields are inactive; the model uses the entered direct compression", "Polja duljina nisu aktivna; model koristi uneseno izravno stlačenje")}: <strong>${fieldValue(p, "springPreload", t)}</strong>.`} ${t("Do not infer force from the drawing; use a measured force curve when available.", "Ne izvodite silu iz crteža; koristite izmjerenu krivulju sile kada je dostupna.")}</p></div>`;
+  }
+
+  function measurementGroup(group, p, t) {
+    return `<section class="parts-measure-group"><div class="parts-measure-heading"><h3>${label(group.title, t)}</h3><p>${label(group.note, t)}</p></div><div class="parts-measure-list">${group.rows.map(([key, names, method, help]) => `<article class="parts-measurement" data-field="${key}"><div class="parts-measure-name"><strong>${label(names, t)}</strong><output>${esc(fieldValue(p, key, t))}</output></div><span class="parts-method">${label(method, t)}</span><p>${label(help, t)}</p></article>`).join("")}</div></section>`;
+  }
+
+  function modelRows(p, t) {
+    return MODEL_ROWS.map(([key, names, method]) => `<tr data-field="${key}"><th scope="row">${label(names, t)}</th><td class="mono">${esc(fieldValue(p, key, t))}</td><td>${label(method, t)}</td></tr>`).join("");
+  }
+
+  function markup(raw, t = (en => en)) {
+    const p = P.normalize(raw);
+    return `<section class="panel parts-atlas" aria-labelledby="partsAtlasTitle">
+      <div class="parts-atlas-heading"><div><span class="parts-eyebrow">${t("Dynamic measurement atlas", "Dinamički mjerni atlas")}</span><h2 id="partsAtlasTitle">${t("Parts & measurement references", "Dijelovi i reference mjerenja")}</h2><p>${t("Every number and diagram below follows the current setup. Use the drawings to identify the intended feature, then record the real measurement—not a value estimated from the illustration.", "Svaki broj i dijagram u nastavku prati trenutačnu konfiguraciju. Crtež koristite za prepoznavanje tražene značajke, a zatim zabilježite stvarno mjerenje — ne vrijednost procijenjenu sa slike.")}</p></div><span class="tag geometry">${t("current setup", "trenutačna konfiguracija")}</span></div>
+      <div class="parts-safety" role="note"><strong>${t("Before measuring", "Prije mjerenja")}</strong><span>${t("Unload and fully decock the replica. Remove spring load and disassemble according to the manufacturer before placing tools inside the cylinder or spring assembly.", "Ispraznite i potpuno otpustite repliku. Uklonite opterećenje opruge i rastavite prema uputama proizvođača prije stavljanja alata u cilindar ili sklop opruge.")}</span></div>
+      <div class="parts-diagrams">${airPathSvg(p, t)}<div class="parts-figure-grid">${cylinderSvg(p, t)}${barrelSvg(p, t)}${springSvg(p, t)}</div></div>
+      <div class="parts-measurement-intro"><h2>${t("What each setup value means", "Što znači svaka vrijednost konfiguracije")}</h2><p>${t("The method labels distinguish dimensions you can measure directly from quantities that need a fixture, calculation or calibration.", "Oznake metoda razlikuju dimenzije koje možete izravno izmjeriti od veličina koje traže prihvat, izračun ili kalibraciju.")}</p></div>
+      <div class="parts-measure-groups">${GROUPS.map(group => measurementGroup(group, p, t)).join("")}</div>
+      <details class="parts-model-parameters" data-preserve-open><summary>${t("Model, bench-test and environmental inputs — not ordinary part dimensions", "Ulazi modela, ispitivanja i okoliša — nisu obične dimenzije dijelova")}</summary><p>${t("These inputs still affect the simulation, but a caliper cannot establish them. Treat unmeasured values as assumptions and use the stated evidence route or chrono calibration where applicable.", "Ovi ulazi i dalje utječu na simulaciju, ali ih pomično mjerilo ne može odrediti. Neizmjerene vrijednosti tretirajte kao pretpostavke i koristite navedeni način provjere ili chrono kalibraciju gdje je primjenjivo.")}</p><div class="table-wrap"><table class="parts-parameter-table"><thead><tr><th>${t("Parameter", "Parametar")}</th><th>${t("Current input", "Trenutačni ulaz")}</th><th>${t("How to establish it", "Kako ga odrediti")}</th></tr></thead><tbody>${modelRows(p, t)}</tbody></table></div></details>
+      <p class="parts-cavity-note">${t("For dead and breech volumes, prefer dimensions from a disassembled dry component or a safe bench displacement method. Do not introduce liquid into an assembled replica, cylinder, hop unit or barrel.", "Za preostali volumen i volumen komore prednost dajte dimenzijama rastavljene suhe komponente ili sigurnoj metodi istiskivanja na stolu. Ne unosite tekućinu u sastavljenu repliku, cilindar, hop jedinicu ili cijev.")}</p>
+    </section>`;
+  }
+
+  const api = { markup, fieldValue, PART_FIELDS, MODEL_FIELDS: MODEL_ROWS.map(row => row[0]) };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.PneumaticParts = api;
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
+
 /* Presentation only. Geometry and timing come from the solver/playback modules.
    Light, particles and trails are schematic cues, not a fluid/acoustic solution. */
 (function (root) {
@@ -2469,7 +2817,7 @@
 (() => {
   "use strict";
   const P = globalThis.PneumaticPhysics, C = globalThis.PneumaticCalibration, O = globalThis.PneumaticOptimizer, B = globalThis.PneumaticPlayback;
-  const I = globalThis.PneumaticInsights;
+  const I = globalThis.PneumaticInsights, Parts = globalThis.PneumaticParts;
   const $ = id => document.getElementById(id), finite = Number.isFinite;
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   let language = "en";
@@ -2840,6 +3188,7 @@
       <section class="panel timing-card"><div class="timing-head"><strong>${verdict}</strong><span>${fmt(delta, 2, "ms")}</span></div><p class="small-note">${t("The amber event is measured from the modeled acceleration after entry—not proof that all slowing is caused by the pin. Compression can slow a piston without an airbrake. Green marks a chosen share of maximum BB energy before exit, not a universal optimum.", "Jantarni događaj temelji se na modeliranom ubrzanju nakon ulaska — nije dokaz da je sve usporavanje uzrokovano pinom. Kompresija može usporiti piston i bez kočnice. Zelena označuje odabrani udio najveće energije BB-a prije izlaska, ne univerzalni optimum.")}</p><div class="event-list">${events().map(([key, label, cls]) => `<button type="button" data-event="${key}" class="${cls}" ${s[key] === null ? "disabled" : ""}>${label}<br><span class="mono">${stamp(s[key])}</span></button>`).join("")}</div></section>
       <section class="panel stage"><div class="stage-toolbar"><button class="primary-button" type="button" id="playButton">${t("Fire / play", "Opali / pokreni")}</button><button class="secondary-button" id="resetButton" type="button">${t("Reset", "Početak")}</button><input id="scrubber" aria-label="${t("Shot time", "Vrijeme opaljenja")}" type="range" min="0" max="1000" value="${fraction * 1000}"><span id="clock" class="clock mono"></span></div><canvas id="mechanism" role="img" aria-label="${t("Schematic piston, bumper, airbrake and BB positions; live numeric values below", "Shematski položaji pistona, odbojne gumice, pina i BB-a; brojčane vrijednosti ispod")}"></canvas><div id="phaseText" class="stage-status" aria-live="off"></div><div id="liveStrip" class="live-strip"></div><p class="results-note">${t("Schematic cutaway. The green pad is the entered bumper; its contact highlight is symbolic because rubber deformation is not resolved. Glow indicates modeled pressure; particles and trails illustrate flow and motion, not gas dynamics or sound. Every cue pauses with model time.", "Shematski presjek. Zelena gumica prikazuje uneseni odbojnik; isticanje pri kontaktu simbolično je jer deformacija gume nije razriješena. Sjaj označuje modelirani tlak; čestice i tragovi ilustriraju protok i gibanje, ne dinamiku plina ni zvuk. Sve se pauzira s vremenom modela.")}</p></section>
       <section class="panel graphs"><div class="graphs-header"><div><h2>${t("Shot traces", "Krivulje opaljenja")}</h2><p>${t("Pressure: amber cylinder, cyan behind BB. Events: green energy threshold, dashed amber slowing, cyan exit. Negative values remain visible.", "Tlak: jantarni cilindar, cijan iza BB-a. Događaji: zeleni prag energije, isprekidano jantarno usporavanje, cijan izlazak. Negativne vrijednosti ostaju vidljive.")}</p></div></div><div class="chart-grid">${[["pressureChart", t("Pressure vs time", "Tlak kroz vrijeme"), "bar(g)"], ["pistonChart", t("Piston velocity vs time", "Brzina pistona kroz vrijeme"), "m/s"], ["bbChart", t("BB velocity vs time", "Brzina BB-a kroz vrijeme"), "m/s"]].map(([id, label, units]) => `<div class="chart"><div class="chart-title"><span>${label}</span><span>${units} / ms</span></div><canvas id="${id}" role="img" aria-label="${label}; ${t("numeric values in live readouts; export full trace below", "brojčane vrijednosti u prikazu uživo; izvoz cijele krivulje ispod")}"></canvas></div>`).join("")}</div></section>
+      ${Parts.markup(p, t)}
       ${I.soundMarkup(s, baseline, t, fmt)}
       ${I.feedbackMarkup(changeComparison, s, baseline, p, provenance, fields, t, fmt)}
       <section class="panel insight"><div class="panel-heading"><h2>${t("Energy, verification and uncertainty", "Energija, provjera i nesigurnost")}</h2><span class="tag unknown">${t("not experimentally validated", "nije eksperimentalno potvrđeno")}</span></div><div class="assumption-grid"><span>${t("Maximum BB energy observed", "Najveća opažena energija BB-a")}</span><strong>${fmt(s.maxBbEnergy, 3, "J")}</strong><span>${t("Energy lost before exit", "Energija izgubljena prije izlaska")}</span><strong>${fmt(s.bbEnergyLoss, 3, "J")}</strong><span>${t("Positive / negative net BB work", "Pozitivan / negativan neto rad na BB-u")}</span><strong>${fmt(s.positiveBbWork, 3)} / ${fmt(s.negativeBbWork, 3, "J")}</strong><span>${t("Energy balance residual", "Odstupanje energetske bilance")}</span><strong>${fmt(s.energyResidual * 1000, 4, "mJ")}</strong><span>${t("Gas mass residual", "Odstupanje bilance mase plina")}</span><strong>${s.massResidual.toExponential(2)} kg</strong><span>${t("Ambient barrel sound-crossing scale", "Vrijeme prolaza zvuka kroz cijev pri okolišnim uvjetima")}</span><strong>${stamp(s.soundCrossingTime)}</strong></div>

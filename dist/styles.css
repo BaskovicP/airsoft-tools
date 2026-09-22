@@ -1241,6 +1241,81 @@
       .feedback-footer { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
       .feedback-footer p { max-width:680px; margin:0; }
       .feedback-footer button { flex:0 0 auto; }
+      /* Parts: dynamic, measurement-first technical atlas. The drawings identify
+         reference planes and bores; numeric labels remain the source of truth. */
+      .parts-atlas { padding:20px; overflow:hidden; }
+      .parts-atlas-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding-bottom:18px; border-bottom:1px solid var(--line); }
+      .parts-atlas-heading h2 { margin-top:5px; font-size:1.35rem; }
+      .parts-atlas-heading p { max-width:820px; margin:8px 0 0; color:var(--muted); font-size:.95rem; line-height:1.6; }
+      .parts-eyebrow { color:var(--cyan); font:700 .75rem var(--mono); letter-spacing:.1em; text-transform:uppercase; }
+      .parts-safety { display:grid; grid-template-columns:auto minmax(0,1fr); gap:12px; align-items:baseline; margin:16px 0; padding:13px 15px; border:1px solid color-mix(in srgb,var(--amber) 55%,var(--line)); border-radius:9px; background:color-mix(in srgb,var(--amber) 6%,var(--panel)); }
+      .parts-safety strong { color:var(--amber); }
+      .parts-safety span { color:var(--muted); font-size:.875rem; line-height:1.5; }
+      .parts-diagrams { display:grid; gap:14px; }
+      .parts-figure-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+      .parts-figure-grid .parts-figure:last-child { grid-column:1 / -1; }
+      .parts-figure { min-width:0; overflow:hidden; border:1px solid var(--line-bright); border-radius:12px; background:linear-gradient(145deg,#0a1318,#111d23 55%,#0a1217); }
+      .parts-figure-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; min-height:82px; padding:15px 16px 10px; border-bottom:1px solid var(--line); }
+      .parts-figure-heading h3 { margin:0; color:var(--text); font-size:1rem; }
+      .parts-figure-heading p { max-width:740px; margin:5px 0 0; color:var(--muted); font-size:.8rem; line-height:1.45; }
+      .parts-figure-heading > strong { flex:0 0 auto; max-width:290px; padding:6px 9px; border:1px solid color-mix(in srgb,var(--cyan) 55%,var(--line)); border-radius:999px; background:var(--cyan-dim); color:var(--cyan); font:650 .75rem var(--mono); line-height:1.35; text-align:center; }
+      .parts-svg { display:block; width:100%; height:auto; background:radial-gradient(circle at 45% 50%,rgba(93,228,231,.045),transparent 42%),linear-gradient(#0a1217,#0c161c); }
+      .parts-svg text { fill:var(--text); font-family:var(--mono); font-size:12px; }
+      .parts-svg .parts-centerline { stroke:var(--cyan); stroke-width:1; stroke-dasharray:7 7; opacity:.34; }
+      .parts-svg .parts-cylinder-wall { fill:var(--line); stroke:var(--line-bright); stroke-width:2; }
+      .parts-svg .parts-piston { fill:url(#steel-airpath); stroke:var(--text); stroke-opacity:.4; stroke-width:1.5; }
+      .parts-figure-grid .parts-svg .parts-piston { fill:url(#steel-cylinder); }
+      .parts-svg .parts-piston-face { fill:var(--line-bright); stroke:var(--cyan); stroke-opacity:.55; }
+      .parts-svg .parts-head { fill:url(#dark-steel-airpath); stroke:var(--muted); stroke-width:1.5; fill-rule:evenodd; }
+      .parts-svg .parts-nozzle,.parts-svg .parts-barrel { fill:var(--line-bright); stroke:var(--muted); stroke-width:1.25; fill-rule:evenodd; }
+      .parts-svg .parts-rubber { fill:url(#rubber-airpath); stroke:var(--green); stroke-width:1.5; fill-rule:evenodd; }
+      .parts-figure-grid .parts-svg .parts-rubber { fill:url(#rubber-cylinder); }
+      .parts-svg .parts-pin { fill:var(--amber); stroke:color-mix(in srgb,var(--amber) 60%,var(--text)); stroke-width:1.2; }
+      .parts-svg .parts-bb { fill:var(--text); stroke:var(--cyan); stroke-width:2; }
+      .parts-svg .parts-endview-outer { fill:var(--line); stroke:var(--line-bright); stroke-width:2; }
+      .parts-svg .parts-endview-bore { fill:#071014; stroke:var(--cyan); stroke-opacity:.55; stroke-width:1.5; }
+      .parts-svg .parts-dimension line { stroke:var(--cyan); stroke-width:1.2; }
+      .parts-svg .parts-dimension text { fill:var(--cyan); font-size:11px; }
+      .parts-svg .parts-leader path { fill:none; stroke:var(--amber); stroke-width:1; }
+      .parts-svg .parts-leader text { fill:var(--amber); font-size:11px; }
+      .parts-svg .parts-component-labels text,.parts-svg .parts-caption { fill:var(--muted); font-size:10px; letter-spacing:.08em; }
+      .parts-svg .parts-part-label { fill:var(--text); font-weight:700; }
+      .parts-svg .parts-absent { stroke:var(--green); stroke-width:3; stroke-dasharray:5 4; opacity:.65; }
+      .parts-svg .parts-contact-plane { stroke:var(--green); stroke-width:2; }
+      .parts-svg .parts-rigid-plane { stroke:var(--amber); stroke-width:2; stroke-dasharray:5 4; }
+      .parts-svg .parts-motion { fill:none; stroke:var(--cyan); stroke-width:2; }
+      .parts-svg .parts-spring-seat { stroke:var(--line-bright); stroke-width:8; }
+      .parts-svg .parts-spring { fill:none; stroke:var(--amber); stroke-width:8; stroke-linecap:round; filter:drop-shadow(0 0 7px rgba(255,191,105,.18)); }
+      .parts-svg .parts-cut line { stroke:var(--red); stroke-width:2; stroke-dasharray:5 4; }
+      .parts-svg .parts-cut text { fill:var(--red); font-size:11px; }
+      .parts-scale-note { margin:0; padding:11px 15px 14px; border-top:1px solid var(--line); color:var(--muted); font-size:.8rem; line-height:1.5; }
+      .parts-scale-note strong { color:var(--text); font-family:var(--mono); }
+      .parts-measurement-intro { margin:26px 0 13px; }
+      .parts-measurement-intro h2 { font-size:1.15rem; }
+      .parts-measurement-intro p { margin:7px 0 0; color:var(--muted); font-size:.875rem; line-height:1.5; }
+      .parts-measure-groups { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+      .parts-measure-group { min-width:0; padding:16px; border:1px solid var(--line); border-radius:11px; background:#0b151a; }
+      .parts-measure-heading { min-height:88px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+      .parts-measure-heading h3 { margin:0; color:var(--cyan); font-size:1rem; }
+      .parts-measure-heading p { margin:6px 0 0; color:var(--muted); font-size:.8rem; line-height:1.45; }
+      .parts-measure-list { display:grid; }
+      .parts-measurement { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:5px 12px; padding:13px 0; border-bottom:1px solid var(--line); }
+      .parts-measurement:last-child { border-bottom:0; padding-bottom:0; }
+      .parts-measure-name { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px 12px; }
+      .parts-measure-name strong { font-size:.875rem; line-height:1.4; }
+      .parts-measure-name output { color:var(--text); font:650 .84rem var(--mono); white-space:nowrap; }
+      .parts-method { grid-column:2; grid-row:1; align-self:start; padding:3px 6px; border:1px solid color-mix(in srgb,var(--green) 45%,var(--line)); border-radius:999px; color:var(--green); font:650 .68rem var(--mono); white-space:nowrap; }
+      .parts-measurement p { grid-column:1 / -1; margin:0; color:var(--muted); font-size:.78rem; line-height:1.5; }
+      .parts-model-parameters { margin-top:16px; padding:14px 16px; border:1px solid var(--line-bright); border-radius:10px; background:#0b151a; }
+      .parts-model-parameters > summary { padding:0; color:var(--text); font-size:.9rem; font-weight:650; }
+      .parts-model-parameters > p { margin:12px 0; color:var(--muted); font-size:.825rem; line-height:1.5; }
+      .parts-parameter-table { width:100%; border-collapse:collapse; font-size:.8rem; }
+      .parts-parameter-table th,.parts-parameter-table td { padding:9px 8px; border-top:1px solid var(--line); text-align:left; vertical-align:top; line-height:1.4; }
+      .parts-parameter-table thead th { border-top:0; color:var(--muted); font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; }
+      .parts-parameter-table tbody th { width:38%; font-weight:600; }
+      .parts-parameter-table td:nth-child(2) { width:20%; color:var(--cyan); white-space:nowrap; }
+      .parts-cavity-note { margin:14px 0 0; padding-left:12px; border-left:3px solid var(--amber); color:var(--muted); font-size:.8rem; line-height:1.5; }
       @media(max-width:1200px) { .sound-explanations .intensity-grid { grid-template-columns:1fr; } .change-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .action-steps { grid-template-columns:1fr; } .action-step p { min-height:0; } }
-      @media(max-width:680px) { .change-summary { grid-template-columns:1fr; } .change-metrics { grid-template-columns:1fr; } .feedback-heading,.feedback-footer { align-items:stretch; flex-direction:column; } .feedback-footer button { width:100%; } }
+      @media(max-width:900px) { .parts-figure-grid,.parts-measure-groups { grid-template-columns:1fr; } .parts-figure-grid .parts-figure:last-child { grid-column:auto; } }
+      @media(max-width:680px) { .change-summary { grid-template-columns:1fr; } .change-metrics { grid-template-columns:1fr; } .feedback-heading,.feedback-footer { align-items:stretch; flex-direction:column; } .feedback-footer button { width:100%; } .parts-atlas { padding:14px; } .parts-atlas-heading,.parts-figure-heading { align-items:stretch; flex-direction:column; } .parts-figure-heading > strong { max-width:none; align-self:flex-start; } .parts-safety { grid-template-columns:1fr; } .parts-measurement { grid-template-columns:1fr; } .parts-method { grid-column:1; grid-row:auto; justify-self:start; } }
       @media(max-width:500px) { .event-key { grid-template-columns:1fr; } .shot-timing { padding:12px 10px; } .sound-explainer,.setup-feedback { padding:14px; } }

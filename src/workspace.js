@@ -8,7 +8,7 @@
     ["losses", "Losses & environment", "Gubici i okoliš"], ["rifle", "Rifle presets", "Predlošci replika"],
     ["solver", "Timing & solver", "Vrijeme i rješavač"]
   ];
-  const VIEWS = [["shot", "Shot", "Hitac"], ["graphs", "Graphs", "Grafovi"], ["details", "Results", "Rezultati"], ["optimizer", "Optimize", "Optimizacija"], ["calibration", "Chrono", "Kronograf"]];
+  const VIEWS = [["shot", "Shot", "Hitac"], ["parts", "Parts", "Dijelovi"], ["graphs", "Graphs", "Grafovi"], ["details", "Results", "Rezultati"], ["optimizer", "Optimize", "Optimizacija"], ["calibration", "Chrono", "Kronograf"]];
   function mount(doc, state, t, onView) {
     const $ = id => doc.getElementById(id);
     const aside = doc.querySelector(".controls-panel"), main = doc.querySelector(".main");
@@ -52,7 +52,7 @@
       $("settingsCategory").value = state.category;
       main.querySelectorAll("[data-workspace-panel]").forEach(panel => { panel.hidden = panel.dataset.workspacePanel !== state.view; });
       // Pending/invalid status remains visible even in Optimize or Chrono.
-      if ($("resultContent")) $("resultContent").hidden = !["shot", "graphs", "details"].includes(state.view);
+      if ($("resultContent")) $("resultContent").hidden = !["shot", "parts", "graphs", "details"].includes(state.view);
       nav.querySelectorAll("button").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.workspaceView === state.view)));
     }
     function selectCategory(value) {
@@ -84,7 +84,7 @@
     };
   }
   function prepareResults(next, summaryHTML, caption, incomplete) {
-    const doc = next.ownerDocument, stage = next.querySelector(".stage"), graphs = next.querySelector(".graphs");
+    const doc = next.ownerDocument, stage = next.querySelector(".stage"), parts = next.querySelector(".parts-atlas"), graphs = next.querySelector(".graphs");
     const transport = stage.querySelector(".stage-toolbar"); transport.id = "workspace-transport"; transport.remove();
     const disclosure = (id, label) => {
       const details = doc.createElement("details"); details.id = id; details.className = "stage-disclosure"; details.setAttribute("data-preserve-open", "");
@@ -114,11 +114,12 @@
     }
     stage.append(live, help);
     stage.id = "workspace-shot"; stage.dataset.workspacePanel = "shot";
+    parts.id = "workspace-parts"; parts.dataset.workspacePanel = "parts";
     graphs.id = "workspace-graphs"; graphs.dataset.workspacePanel = "graphs";
     const details = doc.createElement("section"); details.id = "workspace-details"; details.dataset.workspacePanel = "details";
-    for (const child of Array.from(next.childNodes)) if (child !== stage && child !== graphs) details.append(child);
+    for (const child of Array.from(next.childNodes)) if (child !== stage && child !== parts && child !== graphs) details.append(child);
     const sound = details.querySelector("#soundExplanations"); if (sound) details.prepend(sound);
-    next.append(transport, stage, graphs, details);
+    next.append(transport, stage, parts, graphs, details);
   }
   const api = { mount, prepareResults, CATEGORIES, VIEWS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
