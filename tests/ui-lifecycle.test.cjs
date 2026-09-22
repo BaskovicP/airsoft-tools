@@ -108,6 +108,12 @@ test("parameter preset paths and live frames cannot rebuild the results shell", 
   assert.match(functionSource("setFrame"), /if \(!\$\("liveStrip"\)\.firstChild\)/);
 });
 
+test("Graphs renders the same live cutaway at the graph cursor time", () => {
+  assert.match(functionSource("updateResults"), /id="mechanismGraph"/);
+  assert.match(functionSource("setFrame"), /workspaceState\.view === "graphs"\) \{ drawMechanism\(f, "mechanismGraph"\); drawCharts\(f\.t\); \}/);
+  assert.match(functionSource("drawMechanism"), /canvasContext\(canvasId\)/);
+});
+
 test("impact explanation shortcut reveals Results and moves focus to the actual cards", () => {
   const { context: c, nodes } = harness(); let view, focused = false, feedbackFocused = false, revealed = false;
   c.workspace = { selectView: value => { view = value; } }; c.window = { innerWidth: 390 };
