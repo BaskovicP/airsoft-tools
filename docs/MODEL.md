@@ -125,6 +125,28 @@ The no-pin baseline keeps the same assembly mass and other inputs, removing pin 
 
 Sound-related comparison outputs remain first-contact piston speed/energy and inner-barrel exit pressure, gas inventory, actual atmospheric-outlet peak flow and mass discharged during the modeled interval. With a silencer installed, outlet flow is compared with the same setup with the silencer disabled; piston impact still uses the no-airbrake reference. The separate contact sequence is a mechanical event history, not an acoustic prediction. None is dB, acoustic intensity, certified suppressor performance or a universal hard/soft classification. Structural modes, microphone placement, rubber/packing properties and spring noise require measurements.
 
+### Acoustic-source estimator
+
+The acoustic estimator adds two explicitly separated source-energy terms without changing the mechanical solver. The piston term is the sum of kinetic energies immediately before every resolved contact episode. It is an incident mechanical energy pool, not energy already converted into airborne sound. The display also retains the modeled contact dissipation, force and duration where the compliant-contact model provides them.
+
+For each stored frame, the gas term evaluates the actual atmospheric outlet: the front-gas muzzle flow before BB exit and the barrel discharge afterward, or the silencer end-cap flow for an installed silencer. Available ideal expansion energy per unit discharged mass is
+
+```text
+eideal = cp T0 [1 − (pa/p0)^((γ−1)/γ)]    for p0 > pa
+Pideal = max(mdot, 0) eideal
+Eideal = integral Pideal dt
+```
+
+`Pideal` and `Eideal` are thermodynamic upper source pools based on isentropic expansion to atmosphere. They are not jet-noise power, microphone pressure, radiated acoustic energy or silencer dB attenuation. The time trace includes pre-exit displaced air where the control-volume solver predicts outward flow. Numerical integration uses the stored solver frames, so a finer output interval can refine the derived integral without altering the ODE solution.
+
+Uncalibrated comparisons use `10 log10(E/Ereference)` separately for incident contact energy and ideal outlet-expansion energy. These are logarithmic energy-ratio changes, not SPL differences. The two terms are not added into a universal loudness score because their unknown acoustic conversion efficiencies differ.
+
+Optional peak-dB records store the microphone distance and reading uncertainty with the complete shot snapshot. Eligible sound records require the same current-version confirmed measured geometry/masses and spring provenance used by mechanical calibration. Readings are normalized to one metre using `L1m = Lmeasured + 20 log10(r/1 m)`, an inverse-distance free-field approximation that is not valid in a strongly reflecting room or near-field geometry. The user must keep microphone, weighting/time mode, angle and environment consistent.
+
+One or two records fit only one combined empirical factor multiplying the sum of the two normalized source pools. With at least three sufficiently different source combinations, a nonnegative two-term regression may fit separate mechanical and gas response factors. Boundary solutions and poorly conditioned designs fall back to the combined factor. The displayed residual RMSE exists only when there are more measurements than fitted factors; it is not a confidence interval. Current setups more than roughly 2× beyond a calibrated source range are flagged as extrapolation.
+
+The resulting `dB @ 1 m` value is therefore a same-meter empirical peak-level estimate. It is not certified SPL and cannot recover stock/receiver radiation, spring vibration, directivity, reflections, microphone bandwidth or a frequency spectrum. Pulse-duration labels such as sharp click or long puff are time-domain descriptions only.
+
 The Results feedback layer does not add another physical law. It compares the current valid run with the previous valid run and reports signed differences in selected solver outputs. One-input comparisons are conditional A/B model results; multi-input comparisons are marked as combined and are not decomposed into invented per-input causes. Invalid runs do not become a comparison baseline.
 
 Action steps are deterministic interpretation rules, not a fitted controller or proof of an optimum. They use the timing verdict, availability of contact/exit, impact-energy and peak-outflow ratios against the same-setup no-airbrake reference, and measured/assumed provenance. Impact or flow below 85% is labeled lower, above 110% higher and the interval between broadly similar. Recommendations expose the relevant controls and the existing 95–105% energy-constrained optimizer; they do not predict dB or replace chrono/geometry measurements.

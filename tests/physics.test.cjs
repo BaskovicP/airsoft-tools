@@ -115,6 +115,13 @@ test('instrumented silencer pressure remains an optional calibration residual', 
   close(term.raw, .1); close(term.sigma, .02);
   assert.ok(Object.hasOwn(C.PARAMETER_SPECS, 'silencerDischargeCoefficient'));
 });
+test('optional acoustic readings and their solver-derived source snapshot survive cleaning', () => {
+  const row = C.cleanRecord({ bbMass: .46, fps: 330, soundPeakDb: 91.2, soundSigmaDb: 1.5, soundDistanceM: 2,
+    soundImpactSourceJ: .004, soundGasSourceJ: .013 });
+  assert.equal(row.soundPeakDb, 91.2); assert.equal(row.soundSigmaDb, 1.5); assert.equal(row.soundDistanceM, 2);
+  assert.equal(row.soundImpactSourceJ, .004); assert.equal(row.soundGasSourceJ, .013);
+  assert.equal(C.cleanRecord({ bbMass: .46, fps: 330, soundImpactSourceJ: -1 }).soundImpactSourceJ, null);
+});
 test('silencer outlet coefficient cannot be fitted from only unsilenced setups', async () => {
   const setup = P.normalize();
   const row = C.cleanRecord({ id: 'unsilenced', bbMass: setup.bbMass, fps: 330, role: 'train', setup, confirmed: true,

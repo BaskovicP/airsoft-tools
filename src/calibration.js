@@ -54,6 +54,9 @@
       peakCylinderBarG: optional(row.peakCylinderBarG, 0, 100), peakCylinderSigmaBar: optional(row.peakCylinderSigmaBar, .001, 20) || .05,
       peakSilencerBarG: optional(row.peakSilencerBarG, 0, 100), peakSilencerSigmaBar: optional(row.peakSilencerSigmaBar, .001, 20) || .05,
       peakBumperForceN: optional(row.peakBumperForceN, 0, 100000), peakBumperForceSigmaN: optional(row.peakBumperForceSigmaN, .01, 10000) || 5,
+      soundPeakDb: optional(row.soundPeakDb, 20, 180), soundSigmaDb: optional(row.soundSigmaDb, .1, 30) || 2,
+      soundDistanceM: optional(row.soundDistanceM, .05, 100),
+      soundImpactSourceJ: optional(row.soundImpactSourceJ, 0, 1000), soundGasSourceJ: optional(row.soundGasSourceJ, 0, 1000),
       role, setup, confirmed, provenance, notes: String(row.notes || "").slice(0, 2000), solverVersion: legacy ? null : String(row.solverVersion || ""),
       legacySetup: legacy || !setup || previousComplete ? row.setup || row.legacySetup || null : row.legacySetup || null };
   }

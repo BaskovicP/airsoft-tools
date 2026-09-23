@@ -79,6 +79,10 @@ Missing exits and contacts remain unavailable. A timeout does not become muzzle 
 
 Contact speed/kinetic energy, conditional bumper force/compression, and muzzle pressure/gas inventory/discharge replace arbitrary 0–100 sound indices. They are conditional model quantities—not perceived loudness, exact real-world Joules or dB.
 
+The Results and Graphs views also include a transparent **sound-source estimate**. It keeps piston-contact energy separate from an ideal isentropic expansion-energy/power term at the actual atmospheric outlet (the muzzle, or the silencer end cap when installed). Those are physically calculated source pools and relative energy-ratio changes—not acoustic energy at the listener and not a microphone waveform. Receiver/stock radiation, spring vibration, directionality, room reflections, microphone response, hearing weighting and frequency spectrum remain unknown.
+
+Calibration can optionally store a same-meter peak sound reading and microphone distance with each confirmed measured setup. Readings are normalized to one metre with a disclosed free-field distance assumption. One or two records provide only a combined empirical scale; at least three sufficiently varied records are required before the fit can try to separate mechanical-contact and airflow contributions. The resulting dB value is therefore a setup-specific empirical estimate, never a certified SPL prediction. The UI flags extrapolation outside the measured source ranges.
+
 ### Calibration and data
 
 - The supplied 0.46 g / 330 fps observation starts as reference-only with an unknown setup; its ≈2.327 J is derived, not an independent measurement.
@@ -86,6 +90,7 @@ Contact speed/kinetic energy, conditional bumper force/compression, and muzzle p
 - Explicitly confirm the shot's setup and independently measured geometry/masses and spring data before fitting.
 - Fit one to three selected bounded loss/contact parameters. Repeats improve repeatability information, not the number of identifiable parameters; the app requires at least as many distinct training setups as fitted parameters.
 - Optionally record piston-contact time, peak cylinder pressure, peak silencer pressure and peak bumper force to constrain internal behavior beyond chrono speed. Silencer outlet Cd can be selected as a fit parameter, but chrono speed alone cannot identify acoustic behavior.
+- Optionally record peak sound level, meter uncertainty and microphone distance. Use the same meter, placement, weighting, peak/hold mode and environment for comparable readings; the saved record keeps the solver-derived contact/gas source snapshot used by the sound fit.
 - Report training and held-out errors, observation counts, parameter-bound/weak-constraint warnings, and export the fit profile/residuals.
 - Preserve old v2 records as unverified references and discard old fitted coefficients.
 - Preserve complete v3.0–v4.0 setup snapshots when adding only historically missing/contact-flow/silencer defaults, including a v3.2 pad's former implicit head-bore-sized opening. Old versions remain excluded from new fits and their original snapshots stay in exports.
@@ -109,6 +114,7 @@ Searches are deterministic and capped at 60/120/240 combinations, can be cancell
 - `src/page.html`: shared page shell/styles;
 - `src/physics.js`: pure solver, also loadable by Node;
 - `src/calibration.js`: record validation, migration and bounded multi-parameter fitting;
+- `src/acoustics.js`: physical contact/outlet source terms plus optional empirical same-meter sound calibration;
 - `src/optimizer.js`: hardware-only search, locks, eligibility and tradeoff ranking;
 - `src/playback.js`: physical-time sampling, phase-paced playback and consistent drawing geometry;
 - `src/view.js`: keyed incremental DOM updates that preserve live canvases and readouts;
