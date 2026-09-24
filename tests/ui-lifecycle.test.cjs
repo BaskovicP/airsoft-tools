@@ -128,6 +128,19 @@ test("Graphs renders the same live cutaway at the graph cursor time", () => {
   assert.match(functionSource("drawMechanism"), /canvasContext\(canvasId\)/);
 });
 
+test("shot graphs mark first physical piston contact with a solid red line", () => {
+  const update = functionSource("updateResults"), chart = functionSource("drawCharts"), events = functionSource("contactEventLabel");
+  assert.match(update, /solid red first physical contact/);
+  assert.match(update, /puna crvena prvi fizički kontakt/);
+  assert.match(update, /graph-contact-key/);
+  assert.match(chart, /\["pistonHitTime", "#ff756f", 2\.8, \[\]\]/);
+  assert.match(chart, /if \(shot\[key\] === null\) continue/);
+  assert.match(events, /p\.bumperThickness > 0/);
+  assert.match(events, /First bumper contact/);
+  assert.match(events, /First rigid cylinder-head contact/);
+  assert.match(page, /\.event-list \.contact \{ border-color:var\(--red\); \}/);
+});
+
 test("Graphs and Results expose the same exact piston-contact sequence", () => {
   const update = functionSource("updateResults"), frame = functionSource("setFrame"), chart = functionSource("drawImpactChart");
   assert.match(update, /impactMarkup\(s, "impactGraph", "graphs"/);

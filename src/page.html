@@ -833,6 +833,22 @@
 
     .graphs-header p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
 
+    .graph-contact-key {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 8px;
+      padding: 5px 8px;
+      border: 1px solid rgba(255, 117, 111, .38);
+      border-radius: 7px;
+      background: rgba(255, 117, 111, .06);
+      color: #ffaaa6;
+      font-size: 10px;
+    }
+
+    .graph-contact-key > span { width: 3px; height: 15px; border-radius: 2px; background: var(--red); box-shadow: 0 0 7px rgba(255, 117, 111, .5); }
+    .graph-contact-key b { color: var(--text); font-weight: 500; }
+
     .graphs-mechanism {
       margin-bottom: 16px;
       overflow: hidden;
@@ -1220,6 +1236,7 @@
       .event-list button:disabled { opacity:.5; cursor:default; }
       .event-list .useful { border-color:var(--green); }
       .event-list .brake { border-color:var(--amber); }
+      .event-list .contact { border-color:var(--red); }
       .lab-warning { padding:14px 18px; border:1px solid var(--amber); border-radius:12px; font-size:.95rem; line-height:1.55; margin:16px 0; }
       .lab-warning.error { border-color:#ff7585; color:#ffbec5; }
       #mechanism { display:block; width:100%; height:330px; background:linear-gradient(180deg,rgba(7,16,23,.15),rgba(7,16,23,.65)); border-top:1px solid #263d49; border-bottom:1px solid #263d49; }
