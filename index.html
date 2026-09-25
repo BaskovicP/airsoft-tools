@@ -116,7 +116,8 @@
 
     .tool-grid {
       display: grid;
-      grid-template-columns: minmax(0, 760px);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
     }
 
     .tool-card {
@@ -1163,6 +1164,7 @@
       .tool-hub { width: min(100% - 24px, 1180px); padding-top: 18px; }
       .hub-content { align-content: start; padding-top: 72px; }
       .hub-count { margin-top: 42px; }
+      .tool-grid { grid-template-columns: 1fr; }
       .tool-card { grid-template-columns: 60px minmax(0, 1fr); min-height: 0; padding: 22px; }
       .tool-icon { width: 60px; height: 60px; border-radius: 15px; }
       .tool-icon svg { width: 34px; height: 34px; }
@@ -1549,15 +1551,106 @@
       .parts-parameter-table tbody th { width:38%; font-weight:600; }
       .parts-parameter-table td:nth-child(2) { width:20%; color:var(--cyan); white-space:nowrap; }
       .parts-cavity-note { margin:14px 0 0; padding-left:12px; border-left:3px solid var(--amber); color:var(--muted); font-size:.8rem; line-height:1.5; }
+      .chrono-app { width:min(1180px,calc(100% - 32px)); }
+      .chrono-app .lab-header { margin-bottom:18px; }
+      .chrono-app .lab-header .eyebrow { margin:8px 0 5px; }
+      .chrono-intro { margin-bottom:16px; padding:18px 20px; border-left:3px solid var(--cyan); }
+      .chrono-intro p { max-width:900px; margin:0; color:var(--muted); font-size:.95rem; line-height:1.65; }
+      .chrono-input-grid,.chrono-summary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+      .chrono-input-card { min-width:0; padding:20px; }
+      .chrono-input-card .panel-heading { align-items:flex-start; }
+      .chrono-input-card h2,.chrono-summary-card h2,.chrono-chart-panel h2,.chrono-comparison h2 { margin:0; font-size:1.1rem; }
+      .chrono-input-card > label { display:block; margin-top:15px; color:var(--muted); font-size:.82rem; }
+      .chrono-input-card textarea { min-height:220px; margin-top:7px; resize:vertical; font-family:var(--mono); font-variant-numeric:tabular-nums; line-height:1.5; }
+      .chrono-settings { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:17px; }
+      .chrono-settings label { color:var(--muted); font-size:.78rem; }
+      .chrono-settings input,.chrono-settings select { width:100%; min-height:40px; margin-top:6px; }
+      .chrono-number { display:grid; grid-template-columns:minmax(0,1fr) 34px; align-items:center; }
+      .chrono-number input { border-radius:8px 0 0 8px; }
+      .chrono-number b { display:grid; min-height:40px; margin-top:6px; place-items:center; border:1px solid var(--line); border-left:0; border-radius:0 8px 8px 0; background:var(--panel-2); color:var(--muted); font:600 .75rem var(--mono); }
+      .chrono-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:16px 0; padding:14px 16px; }
+      .chrono-toolbar-options { display:flex; align-items:center; flex-wrap:wrap; gap:12px 18px; }
+      .chrono-toolbar-options label { display:flex; align-items:center; gap:9px; color:var(--muted); font-size:.82rem; line-height:1.4; }
+      .chrono-toolbar-options label:first-child { display:grid; gap:5px; }
+      .chrono-toolbar-options select { min-height:38px; min-width:180px; }
+      .chrono-toolbar > div:last-child { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+      .chrono-summary-grid { margin-top:16px; }
+      .chrono-summary-card { padding:18px; }
+      .chrono-summary-card .panel-heading { align-items:flex-start; }
+      .chrono-empty { min-height:80px; margin:18px 0 0; color:var(--muted); line-height:1.55; }
+      .chrono-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:15px; }
+      .chrono-metric { min-width:0; padding:12px; border:1px solid var(--line); border-radius:9px; background:#0b1419; }
+      .chrono-metric span,.chrono-metric small { display:block; color:var(--muted); font-size:.72rem; line-height:1.4; }
+      .chrono-metric strong { display:block; margin:5px 0; color:var(--text); font:650 .95rem var(--mono); overflow-wrap:anywhere; }
+      .chrono-warning { margin:12px 0 0; padding:10px 12px; border-left:3px solid var(--amber); background:rgba(255,191,105,.06); color:var(--muted); font-size:.78rem; line-height:1.5; }
+      .chrono-comparison { margin-top:16px; padding:20px; border-color:color-mix(in srgb,var(--amber) 45%,var(--line)); background:linear-gradient(120deg,rgba(255,191,105,.07),transparent 50%),var(--panel); }
+      .chrono-comparison-values { display:grid; grid-template-columns:auto 1fr auto 1fr; gap:10px; align-items:baseline; margin-top:16px; }
+      .chrono-comparison-values strong { color:var(--amber); font:700 1.35rem var(--mono); }
+      .chrono-comparison-values span,.chrono-comparison p { color:var(--muted); font-size:.82rem; line-height:1.55; }
+      .chrono-index { margin-top:17px; padding:16px; border:1px solid var(--line-bright); border-radius:12px; background:#0a1318; }
+      .chrono-verdict { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:15px 17px; border:1px solid var(--line); border-left:5px solid var(--line-bright); border-radius:10px; background:var(--panel); }
+      .chrono-verdict[data-winner="a"] { border-left-color:var(--cyan); background:linear-gradient(90deg,rgba(93,228,231,.1),transparent 42%),var(--panel); }
+      .chrono-verdict[data-winner="b"] { border-left-color:var(--amber); background:linear-gradient(90deg,rgba(255,191,105,.1),transparent 42%),var(--panel); }
+      .chrono-verdict span,.chrono-verdict small { display:block; color:var(--muted); font-size:.72rem; letter-spacing:.04em; text-transform:uppercase; }
+      .chrono-verdict strong { display:block; margin:5px 0; font-size:clamp(1.15rem,2.3vw,1.55rem); }
+      .chrono-verdict > b { display:grid; width:54px; height:54px; flex:0 0 auto; place-items:center; border:2px solid var(--line-bright); border-radius:50%; color:var(--text); font:800 1.45rem var(--mono); }
+      .chrono-verdict[data-winner="a"] > b { border-color:var(--cyan); color:var(--cyan); }
+      .chrono-verdict[data-winner="b"] > b { border-color:var(--amber); color:var(--amber); }
+      .chrono-score-pair { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:15px; }
+      .chrono-score-pair > div { display:grid; grid-template-columns:1fr auto; gap:7px 12px; align-items:end; padding:13px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
+      .chrono-score-pair > div.is-overall-winner { border-color:var(--green); box-shadow:inset 0 0 0 1px rgba(110,231,168,.12); }
+      .chrono-score-pair span { color:var(--muted); font-size:.78rem; }
+      .chrono-score-pair strong { color:var(--cyan); font:750 1.8rem var(--mono); line-height:1; }
+      .chrono-score-pair [data-series="b"] strong { color:var(--amber); }
+      .chrono-score-pair i { grid-column:1 / -1; height:6px; overflow:hidden; border-radius:99px; background:#1f2c33; }
+      .chrono-score-pair i b { display:block; height:100%; border-radius:inherit; background:var(--cyan); }
+      .chrono-score-pair [data-series="b"] i b { background:var(--amber); }
+      .chrono-category-head,.chrono-category-row { display:grid; grid-template-columns:minmax(210px,1.6fr) minmax(105px,.8fr) minmax(105px,.8fr) 72px; gap:10px; align-items:center; }
+      .chrono-category-head { margin-top:16px; padding:0 12px 7px; color:var(--muted); font-size:.68rem; letter-spacing:.06em; text-transform:uppercase; }
+      .chrono-category-head span:not(:first-child) { text-align:center; }
+      .chrono-category-list { overflow:hidden; border:1px solid var(--line); border-radius:10px; }
+      .chrono-category-row { min-height:66px; padding:9px 12px; border-bottom:1px solid var(--line); background:#0e181d; }
+      .chrono-category-row:last-child { border-bottom:0; }
+      .chrono-category-row > span strong,.chrono-category-row > span small { display:block; }
+      .chrono-category-row > span strong { font-size:.84rem; }
+      .chrono-category-row > span small { margin-top:3px; color:var(--muted); font-size:.67rem; }
+      .chrono-category-row > b { padding:9px 7px; border:1px solid transparent; border-radius:7px; color:var(--muted); font:650 .83rem var(--mono); text-align:center; }
+      .chrono-category-row > b.is-category-winner { border-color:var(--green); background:rgba(110,231,168,.08); color:var(--text); }
+      .chrono-category-row > em { justify-self:center; min-width:40px; padding:6px 8px; border-radius:999px; background:var(--line); color:var(--text); font:800 .78rem var(--mono); text-align:center; }
+      .chrono-category-row[data-winner="a"] > em { background:var(--cyan-dim); color:var(--cyan); }
+      .chrono-category-row[data-winner="b"] > em { background:var(--amber-dim); color:var(--amber); }
+      .chrono-score-details { margin-top:12px; border:0; background:transparent; }
+      .chrono-score-details > summary { padding:7px 0; color:var(--muted); font-size:.75rem; }
+      .chrono-score-details p { margin:5px 0 0; color:var(--muted); font-size:.74rem; line-height:1.55; }
+      .chrono-output-note { margin-top:15px; padding-top:14px; border-top:1px solid var(--line); }
+      .chrono-output-note > strong { font-size:.84rem; }
+      .chrono-output-note .chrono-comparison-values { margin-top:9px; }
+      .chrono-chart-panel { margin-top:16px; overflow:hidden; }
+      .chrono-chart-panel .panel-heading { align-items:flex-start; padding:17px 18px 0; }
+      .chrono-chart-panel .panel-heading p { margin:6px 0 0; color:var(--muted); font-size:.76rem; }
+      .chrono-legend { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; color:var(--muted); font-size:.72rem; }
+      .chrono-legend span::before { display:inline-block; width:8px; height:8px; margin-right:5px; border-radius:50%; background:var(--cyan); content:""; }
+      .chrono-legend [data-series="b"]::before { background:var(--amber); }
+      .chrono-legend .outlier-key::before { background:var(--red); }
+      .chrono-chart { display:block; width:100%; height:auto; min-height:220px; }
+      .chrono-grid line { stroke:var(--line); stroke-width:1; }
+      .chrono-grid text,.chrono-chart > text { fill:var(--muted); font:11px var(--mono); }
+      .chrono-mean { stroke-width:1.2; stroke-dasharray:7 5; opacity:.8; }
+      .chrono-tables { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:16px; }
+      .chrono-table { min-width:0; }
+      .chrono-table > summary { padding:15px 17px; }
+      .chrono-table .table-wrap { max-height:430px; margin:0; overflow:auto; padding:0 12px 12px; }
+      .chrono-table tr.is-outlier td { background:rgba(255,117,111,.07); color:#ffc2bf; }
+      .chrono-app .method-note { margin-bottom:0; }
       @media(max-width:1200px) { .sound-explanations .intensity-grid { grid-template-columns:1fr; } .change-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .action-steps { grid-template-columns:1fr; } .action-step p { min-height:0; } .acoustic-disclosure { grid-template-columns:1fr; } }
-      @media(max-width:900px) { .parts-figure-grid,.parts-measure-groups { grid-template-columns:1fr; } .parts-figure-grid .parts-figure:last-child { grid-column:auto; } }
-      @media(max-width:680px) { .change-summary { grid-template-columns:1fr; } .change-metrics { grid-template-columns:1fr; } .feedback-heading,.feedback-footer { align-items:stretch; flex-direction:column; } .feedback-footer button { width:100%; } .parts-atlas { padding:14px; } .parts-atlas-heading,.parts-figure-heading { align-items:stretch; flex-direction:column; } .parts-figure-heading > strong { max-width:none; align-self:flex-start; } .parts-safety { grid-template-columns:1fr; } .parts-measurement { grid-template-columns:1fr; } .parts-method { grid-column:1; grid-row:auto; justify-self:start; } }
+      @media(max-width:900px) { .parts-figure-grid,.parts-measure-groups,.chrono-input-grid,.chrono-summary-grid,.chrono-tables { grid-template-columns:1fr; } .parts-figure-grid .parts-figure:last-child { grid-column:auto; } .chrono-toolbar { align-items:stretch; flex-direction:column; } .chrono-toolbar > div:last-child { justify-content:flex-start; } }
+      @media(max-width:680px) { .change-summary { grid-template-columns:1fr; } .change-metrics { grid-template-columns:1fr; } .feedback-heading,.feedback-footer { align-items:stretch; flex-direction:column; } .feedback-footer button { width:100%; } .parts-atlas { padding:14px; } .parts-atlas-heading,.parts-figure-heading { align-items:stretch; flex-direction:column; } .parts-figure-heading > strong { max-width:none; align-self:flex-start; } .parts-safety { grid-template-columns:1fr; } .parts-measurement { grid-template-columns:1fr; } .parts-method { grid-column:1; grid-row:auto; justify-self:start; } .chrono-comparison-values { grid-template-columns:auto 1fr; } .chrono-metrics,.chrono-score-pair { grid-template-columns:1fr; } .chrono-category-head { display:none; } .chrono-category-row { grid-template-columns:1fr 1fr 48px; gap:7px; } .chrono-category-row > span { grid-column:1 / -1; } }
       @media(max-width:500px) { .event-key { grid-template-columns:1fr; } .shot-timing { padding:12px 10px; } .sound-explainer,.setup-feedback,.acoustic-estimator { padding:14px; } .acoustic-heading { display:block; } .acoustic-heading .tag { margin-top:10px; } .acoustic-grid { grid-template-columns:1fr; } }
     </style>
 </head>
 <body>
   <div id="root"></div>
-  <noscript>This local physics lab requires JavaScript. / Ovaj lokalni laboratorij zahtijeva JavaScript.</noscript>
+  <noscript>These local airsoft tools require JavaScript. / Ovi lokalni airsoft alati zahtijevaju JavaScript.</noscript>
   <script>/* Pure, dependency-free conservative lumped model. See docs/MODEL.md. */
 (function (root) {
   "use strict";
@@ -3794,11 +3887,166 @@
 })(typeof globalThis !== "undefined" ? globalThis : this);
 
 
+/* Pure chrono-string parsing and statistics shared by the browser UI and tests. */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.ChronoAnalyzer = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const FPS_PER_MPS = 3.280839895013123;
+  const finite = Number.isFinite;
+  const mean = values => values.reduce((sum, value) => sum + value, 0) / values.length;
+  const median = values => quantile(values, .5);
+
+  function quantile(values, fraction) {
+    if (!values.length) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    const position = (sorted.length - 1) * fraction;
+    const lower = Math.floor(position), upper = Math.ceil(position);
+    return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
+  }
+
+  function parseReadings(text, limit = 500) {
+    const values = [], invalid = [];
+    const lines = String(text ?? "").replace(/\r/g, "").split("\n");
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      let tokens;
+      if (/[;\t\s]/.test(line)) tokens = line.split(/[;\t\s]+/).filter(Boolean);
+      else if (/^[+-]?\d+(?:,\d+)$/.test(line)) tokens = [line.replace(",", ".")];
+      else tokens = line.split(",").filter(Boolean);
+      for (const token of tokens) {
+        if (values.length >= limit) return { values, invalid, truncated: true };
+        const normalized = token.replace(",", ".");
+        const value = Number(normalized);
+        if (finite(value)) values.push(value);
+        else invalid.push(token);
+      }
+    }
+    return { values, invalid, truncated: false };
+  }
+
+  function toMps(value, unit) { return unit === "mps" ? value : value / FPS_PER_MPS; }
+  function toFps(value, unit) { return unit === "mps" ? value * FPS_PER_MPS : value; }
+  function energyJ(massGrams, speedMps) { return .5 * massGrams / 1000 * speedMps ** 2; }
+
+  function statistics(rows) {
+    if (!rows.length) return null;
+    const speeds = rows.map(row => row.fps), energies = rows.map(row => row.energy);
+    const average = mean(speeds), energyAverage = mean(energies);
+    const variance = rows.length > 1 ? speeds.reduce((sum, value) => sum + (value - average) ** 2, 0) / (rows.length - 1) : 0;
+    const energyVariance = rows.length > 1 ? energies.reduce((sum, value) => sum + (value - energyAverage) ** 2, 0) / (rows.length - 1) : 0;
+    let slope = 0;
+    if (rows.length > 1) {
+      const xAverage = mean(rows.map(row => row.index));
+      const denominator = rows.reduce((sum, row) => sum + (row.index - xAverage) ** 2, 0);
+      if (denominator) slope = rows.reduce((sum, row) => sum + (row.index - xAverage) * (row.fps - average), 0) / denominator;
+    }
+    return {
+      count: rows.length,
+      meanFps: average,
+      medianFps: median(speeds),
+      minFps: Math.min(...speeds),
+      maxFps: Math.max(...speeds),
+      spreadFps: Math.max(...speeds) - Math.min(...speeds),
+      sampleSdFps: Math.sqrt(variance),
+      cvPercent: average ? Math.sqrt(variance) / average * 100 : null,
+      meanEnergyJ: energyAverage,
+      minEnergyJ: Math.min(...energies),
+      maxEnergyJ: Math.max(...energies),
+      spreadEnergyJ: Math.max(...energies) - Math.min(...energies),
+      sampleSdEnergyJ: Math.sqrt(energyVariance),
+      slopeFpsPerShot: slope,
+      trendFps: slope * Math.max(0, rows.length - 1)
+    };
+  }
+
+  function analyze(values, massGrams, unit = "fps", excludeOutliers = true) {
+    if (!finite(massGrams) || massGrams <= 0 || massGrams > 2) throw new Error("mass");
+    if (!Array.isArray(values)) throw new Error("readings");
+    const rejected = [];
+    const rows = values.map((value, index) => ({ value, index: index + 1 })).filter(row => {
+      const mps = toMps(row.value, unit);
+      if (!finite(row.value) || row.value <= 0 || mps > 1000) { rejected.push(row); return false; }
+      row.mps = mps; row.fps = toFps(row.value, unit); row.energy = energyJ(massGrams, mps); row.outlier = false;
+      return true;
+    });
+    if (rows.length >= 5) {
+      const speeds = rows.map(row => row.fps), q1 = quantile(speeds, .25), q3 = quantile(speeds, .75), iqr = q3 - q1;
+      const low = q1 - 1.5 * iqr, high = q3 + 1.5 * iqr;
+      rows.forEach(row => { row.outlier = iqr > 1e-12 ? row.fps < low || row.fps > high : Math.abs(row.fps - q1) > 1e-12; });
+    }
+    const filteredRows = rows.filter(row => !row.outlier);
+    const all = statistics(rows), filtered = statistics(filteredRows);
+    return {
+      unit, massGrams, rows, rejected, all, filtered,
+      outlierCount: rows.length - filteredRows.length,
+      active: excludeOutliers && filtered ? filtered : all,
+      excludingOutliers: Boolean(excludeOutliers && filtered && rows.length !== filteredRows.length)
+    };
+  }
+
+  function compare(first, second) {
+    if (!first?.active || !second?.active) return null;
+    const deltaJ = second.active.meanEnergyJ - first.active.meanEnergyJ;
+    return {
+      deltaJ,
+      percent: first.active.meanEnergyJ ? deltaJ / first.active.meanEnergyJ * 100 : null,
+      speedDeltaFps: second.active.meanFps - first.active.meanFps
+    };
+  }
+
+  const SCORE_WEIGHTS = {
+    consistency: { cv: .55, spread: .30, drift: .15, speed: 0, energy: 0 },
+    balanced: { cv: .30, spread: .20, drift: .15, speed: .15, energy: .20 },
+    output: { cv: .15, spread: .10, drift: .10, speed: .25, energy: .40 }
+  };
+
+  function relativePair(a, b, higherIsBetter) {
+    if (!finite(a) || !finite(b)) return { a: 0, b: 0 };
+    if (Math.abs(a - b) < 1e-12) return { a: 100, b: 100 };
+    if (higherIsBetter) {
+      const best = Math.max(a, b);
+      return best <= 0 ? { a: 100, b: 100 } : { a: Math.max(0, a / best * 100), b: Math.max(0, b / best * 100) };
+    }
+    const best = Math.min(a, b);
+    if (best <= 0) return { a: a === best ? 100 : 0, b: b === best ? 100 : 0 };
+    return { a: best / a * 100, b: best / b * 100 };
+  }
+
+  function comparisonScores(first, second, priority = "balanced") {
+    if (!first?.active || !second?.active) return null;
+    const weights = SCORE_WEIGHTS[priority] || SCORE_WEIGHTS.balanced;
+    const a = first.active, b = second.active;
+    const values = {
+      cv: { a: a.cvPercent, b: b.cvPercent, higherIsBetter: false },
+      spread: { a: a.meanFps ? a.spreadFps / a.meanFps * 100 : null, b: b.meanFps ? b.spreadFps / b.meanFps * 100 : null, higherIsBetter: false },
+      drift: { a: a.meanFps ? Math.abs(a.trendFps) / a.meanFps * 100 : null, b: b.meanFps ? Math.abs(b.trendFps) / b.meanFps * 100 : null, higherIsBetter: false },
+      speed: { a: a.meanFps, b: b.meanFps, higherIsBetter: true },
+      energy: { a: a.meanEnergyJ, b: b.meanEnergyJ, higherIsBetter: true }
+    };
+    const metrics = {};
+    for (const [key, metric] of Object.entries(values)) {
+      const score = relativePair(metric.a, metric.b, metric.higherIsBetter);
+      metrics[key] = { ...metric, score, weight: weights[key], winner: Math.abs(metric.a - metric.b) < 1e-12 ? "tie" : metric.higherIsBetter ? metric.a > metric.b ? "a" : "b" : metric.a < metric.b ? "a" : "b" };
+    }
+    const score = side => Object.values(metrics).reduce((sum, metric) => sum + metric.score[side] * metric.weight, 0);
+    const scores = { a: score("a"), b: score("b") };
+    return { priority: SCORE_WEIGHTS[priority] ? priority : "balanced", weights, metrics, scores, winner: Math.abs(scores.a - scores.b) < .05 ? "tie" : scores.a > scores.b ? "a" : "b" };
+  }
+
+  return { FPS_PER_MPS, SCORE_WEIGHTS, parseReadings, toMps, toFps, energyJ, statistics, analyze, compare, comparisonScores };
+});
+
+
 /* UI shared by the generated standalone file and Cloudflare build. */
 (() => {
   "use strict";
   const P = globalThis.PneumaticPhysics, C = globalThis.PneumaticCalibration, A = globalThis.PneumaticAcoustics, O = globalThis.PneumaticOptimizer, B = globalThis.PneumaticPlayback;
-  const I = globalThis.PneumaticInsights, Parts = globalThis.PneumaticParts;
+  const I = globalThis.PneumaticInsights, Parts = globalThis.PneumaticParts, Chrono = globalThis.ChronoAnalyzer;
   const $ = id => document.getElementById(id), finite = Number.isFinite;
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   let language = "en";
@@ -3818,6 +4066,12 @@
   const chartCache = new Map();
   const workspaceState = { category: "geometry", view: "shot", categoryScroll: {}, viewScroll: {} };
   let workspace = null;
+  const chronoState = {
+    excludeOutliers: true,
+    priority: "balanced",
+    a: { text: "330\n329\n331\n330\n328\n330\n329\n331\n330\n329", unit: "fps", mass: .4 },
+    b: { text: "", unit: "fps", mass: .46 }
+  };
   const fields = {
     cylinderBore: ["Cylinder internal diameter", "Unutarnji promjer cilindra", "mm", 15, 35, .01],
     strokeLength: ["Nominal piston stroke before added bumper", "Nominalni hod pistona prije dodatne gumice", "mm", 20, 150, .1],
@@ -4004,15 +4258,146 @@
   }
   function group(en, hr, keys, help = "") { return `<section class="control-group"><p class="group-label">${t(en, hr)}</p>${keys.map(field).join("")}${help ? `<p class="field-help">${help}</p>` : ""}</section>`; }
   function provenanceControl(key, en, hr) { return `<label class="provenance"><input type="checkbox" data-provenance="${key}" ${provenance[key] === "measured" ? "checked" : ""}>${t(en, hr)}</label>`; }
+  function chronoSeries(key) {
+    const state = chronoState[key], parsed = Chrono.parseReadings(state.text);
+    let result = null, error = null;
+    if (parsed.values.length) {
+      try { result = Chrono.analyze(parsed.values, Number(state.mass), state.unit, chronoState.excludeOutliers); }
+      catch (caught) { error = caught.message; }
+    }
+    return { key, state, parsed, result, error };
+  }
+  function chronoInputMarkup(key, optional) {
+    const state = chronoState[key], label = key.toUpperCase();
+    return `<section class="panel chrono-input-card"><div class="panel-heading"><div><p class="eyebrow">${t(`String ${label}`, `Serija ${label}`)}</p><h2>${optional ? t("Comparison string", "Usporedna serija") : t("Primary string", "Glavna serija")}</h2></div>${optional ? `<span class="tag unknown">${t("optional", "neobavezno")}</span>` : ""}</div>
+      <div class="chrono-settings"><label>${t("BB mass", "Masa BB-a")}<span class="chrono-number"><input id="chronoMass${label}" type="number" min=".05" max="2" step=".01" value="${state.mass}"><b>g</b></span></label><label>${t("Velocity unit", "Jedinica brzine")}<select id="chronoUnit${label}"><option value="fps" ${state.unit === "fps" ? "selected" : ""}>fps</option><option value="mps" ${state.unit === "mps" ? "selected" : ""}>m/s</option></select></label></div>
+      <label for="chronoText${label}">${t("Velocity readings", "Očitanja brzine")}</label><textarea id="chronoText${label}" rows="11" spellcheck="false" placeholder="330\n329\n331">${esc(state.text)}</textarea>
+      <p class="small-note">${t("Paste only the velocity column. Use one reading per line, or separate values with spaces, commas or semicolons. A lone decimal comma is recognized.", "Zalijepite samo stupac brzine. Unesite jedno očitanje po retku ili odvojite vrijednosti razmacima, zarezima ili točkama sa zarezom. Prepoznaje se decimalni zarez u pojedinačnoj vrijednosti.")}</p></section>`;
+  }
+  function chronoMetric(label, value, note = "") {
+    return `<div class="chrono-metric"><span>${label}</span><strong>${value}</strong>${note ? `<small>${note}</small>` : ""}</div>`;
+  }
+  function chronoChartMarkup(series) {
+    const available = series.filter(item => item.result?.rows.length);
+    if (!available.length) return "";
+    const width = 900, height = 270, left = 58, right = 22, top = 24, bottom = 42;
+    const values = available.flatMap(item => item.result.rows.map(row => row.fps));
+    let low = Math.min(...values), high = Math.max(...values), span = high - low;
+    if (span < 2) { low -= 1; high += 1; span = 2; } else { low -= span * .12; high += span * .12; span = high - low; }
+    const maxCount = Math.max(...available.map(item => item.result.rows.length));
+    const x = index => left + (maxCount === 1 ? .5 : index / (maxCount - 1)) * (width - left - right);
+    const y = value => top + (high - value) / span * (height - top - bottom);
+    const grid = Array.from({ length: 4 }, (_, index) => {
+      const value = low + span * index / 3, yy = y(value);
+      return `<line x1="${left}" x2="${width - right}" y1="${yy}" y2="${yy}"/><text x="${left - 9}" y="${yy + 4}" text-anchor="end">${value.toFixed(1)}</text>`;
+    }).join("");
+    const colors = { a: "#5de4e7", b: "#ffbf69" };
+    const plots = available.map(item => {
+      const rows = item.result.rows, color = colors[item.key];
+      const points = rows.map((row, index) => `${x(index)},${y(row.fps)}`).join(" ");
+      const dots = rows.map((row, index) => `<circle cx="${x(index)}" cy="${y(row.fps)}" r="${row.outlier ? 5 : 3.5}" fill="${row.outlier ? "#ff756f" : color}"${row.outlier ? ' stroke="#fff" stroke-width="1"' : ""}/>`).join("");
+      const meanY = y(item.result.active.meanFps);
+      return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2"/><line class="chrono-mean" x1="${left}" x2="${width - right}" y1="${meanY}" y2="${meanY}" stroke="${color}"/>${dots}`;
+    }).join("");
+    return `<section class="panel chrono-chart-panel"><div class="panel-heading"><div><h2>${t("Shot sequence", "Slijed hitaca")}</h2><p>${t("Velocity in fps · dashed lines show the active mean", "Brzina u fps · isprekidane crte prikazuju aktivni prosjek")}</p></div><div class="chrono-legend">${available.map(item => `<span data-series="${item.key}">${t("String", "Serija")} ${item.key.toUpperCase()}</span>`).join("")}<span class="outlier-key">${t("Potential outlier", "Moguće odstupanje")}</span></div></div><svg class="chrono-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(t("Chronograph velocity by shot", "Brzina kronografa po hicu"))}"><g class="chrono-grid">${grid}</g>${plots}<text x="${left}" y="${height - 10}">1</text><text x="${width - right}" y="${height - 10}" text-anchor="end">${maxCount} ${t("shots", "hitaca")}</text></svg></section>`;
+  }
+  function chronoTableMarkup(item) {
+    if (!item.result?.rows.length) return "";
+    const label = item.key.toUpperCase();
+    return `<details class="panel chrono-table"><summary>${t(`String ${label} shot data`, `Podaci hitaca serije ${label}`)}</summary><div class="table-wrap"><table><thead><tr><th>#</th><th>${t("Entered", "Uneseno")}</th><th>fps</th><th>m/s</th><th>J</th><th>${t("Review", "Provjera")}</th></tr></thead><tbody>${item.result.rows.map(row => `<tr class="${row.outlier ? "is-outlier" : ""}"><td>${row.index}</td><td>${fmt(row.value, 2)} ${item.state.unit === "mps" ? "m/s" : "fps"}</td><td>${fmt(row.fps, 1)}</td><td>${fmt(row.mps, 2)}</td><td>${fmt(row.energy, 3)}</td><td>${row.outlier ? t("Potential outlier", "Moguće odstupanje") : "—"}</td></tr>`).join("")}</tbody></table></div></details>`;
+  }
+  function chronoSummaryMarkup(item) {
+    const label = item.key.toUpperCase(), result = item.result;
+    if (!result) return `<section class="panel chrono-summary-card"><div class="panel-heading"><h2>${t(`String ${label}`, `Serija ${label}`)}</h2></div><p class="chrono-empty">${item.error === "mass" ? t("Enter a BB mass from 0.05 to 2.00 g.", "Unesite masu BB-a od 0,05 do 2,00 g.") : t("Paste velocity readings to analyze this string.", "Zalijepite očitanja brzine za analizu ove serije.")}</p></section>`;
+    const s = result.active, excluded = result.excludingOutliers ? t(`${result.outlierCount} flagged shot${result.outlierCount === 1 ? "" : "s"} excluded from these headline values`, `${result.outlierCount} označenih hitaca isključeno je iz ovih glavnih vrijednosti`) : t("All valid shots included", "Uključeni su svi valjani hici");
+    return `<section class="panel chrono-summary-card"><div class="panel-heading"><div><p class="eyebrow">${t(`String ${label}`, `Serija ${label}`)}</p><h2>${s.count} ${t(s.count === 1 ? "valid shot" : "valid shots", s.count === 1 ? "valjan hitac" : "valjanih hitaca")}</h2></div><span class="tag ${result.outlierCount ? "heuristic" : "measured"}">${result.outlierCount ? `${result.outlierCount} ${t("flagged", "označeno")}` : t("no flags", "bez oznaka")}</span></div><div class="chrono-metrics">
+      ${chronoMetric(t("Mean velocity", "Prosječna brzina"), `${fmt(s.meanFps, 1, "fps")} / ${fmt(s.meanFps / Chrono.FPS_PER_MPS, 2, "m/s")}`, excluded)}
+      ${chronoMetric(t("Mean energy", "Prosječna energija"), fmt(s.meanEnergyJ, 3, "J"), `${fmt(s.minEnergyJ, 3)}–${fmt(s.maxEnergyJ, 3)} J`)}
+      ${chronoMetric(t("Extreme spread", "Ukupni raspon"), fmt(s.spreadFps, 1, "fps"), fmt(s.spreadEnergyJ, 3, "J"))}
+      ${chronoMetric(t("Sample standard deviation", "Standardna devijacija uzorka"), fmt(s.sampleSdFps, 2, "fps"), fmt(s.sampleSdEnergyJ, 3, "J"))}
+      ${chronoMetric(t("Coefficient of variation", "Koeficijent varijacije"), fmt(s.cvPercent, 2, "%"), t("SD ÷ mean velocity", "SD ÷ prosječna brzina"))}
+      ${chronoMetric(t("Estimated sequence trend", "Procijenjeni trend serije"), `${s.trendFps >= 0 ? "+" : ""}${fmt(s.trendFps, 1, "fps")}`, `${fmt(s.slopeFpsPerShot, 2)} ${t("fps per shot", "fps po hicu")}`)}
+    </div>${item.parsed.invalid.length || result.rejected.length || item.parsed.truncated ? `<p class="chrono-warning">${t("Ignored", "Zanemareno")}: ${item.parsed.invalid.length} ${t("non-numeric tokens", "nenumeričkih vrijednosti")}, ${result.rejected.length} ${t("invalid or implausible speeds", "nevaljanih ili nevjerojatnih brzina")}${item.parsed.truncated ? ` · ${t("only the first 500 readings were used", "korišteno je samo prvih 500 očitanja")}` : ""}.</p>` : ""}</section>`;
+  }
+  function chronoScoreMarkup(scores) {
+    const names = {
+      cv: t("Consistency · lower CV", "Ujednačenost · niži CV"),
+      spread: t("Tighter extreme spread", "Uži ukupni raspon"),
+      drift: t("Lower sequence drift", "Manji trend serije"),
+      speed: t("Higher mean speed", "Veća prosječna brzina"),
+      energy: t("Higher mean energy", "Veća prosječna energija")
+    };
+    const values = {
+      cv: metric => `${fmt(metric.a, 2, "%")} / ${fmt(metric.b, 2, "%")}`,
+      spread: metric => `${fmt(metric.a, 2, "%")} / ${fmt(metric.b, 2, "%")}`,
+      drift: metric => `${fmt(metric.a, 2, "%")} / ${fmt(metric.b, 2, "%")}`,
+      speed: metric => `${fmt(metric.a, 1, "fps")} / ${fmt(metric.b, 1, "fps")}`,
+      energy: metric => `${fmt(metric.a, 3, "J")} / ${fmt(metric.b, 3, "J")}`
+    };
+    const profile = scores.priority === "consistency" ? t("Consistency-first", "Prednost ujednačenosti") : scores.priority === "output" ? t("Higher-output", "Veći izlaz") : t("Balanced", "Uravnoteženo");
+    const leader = scores.winner === "tie" ? t("Overall tie", "Ukupno izjednačeno") : t(`String ${scores.winner.toUpperCase()} is better overall`, `Serija ${scores.winner.toUpperCase()} ukupno je bolja`);
+    const weightText = Object.entries(scores.weights).filter(([, weight]) => weight > 0).map(([key, weight]) => `${names[key].split(" · ")[0]} ${Math.round(weight * 100)}%`).join(" · ");
+    const decisions = Object.values(scores.metrics), aWins = decisions.filter(metric => metric.winner === "a").length, bWins = decisions.filter(metric => metric.winner === "b").length, ties = decisions.filter(metric => metric.winner === "tie").length;
+    return `<div class="chrono-index"><div class="chrono-verdict" data-winner="${scores.winner}"><div><span>${t("Quick verdict", "Brzi rezultat")}</span><strong>${leader}</strong><small>${t(`A wins ${aWins} · B wins ${bWins}${ties ? ` · ${ties} tied` : ""}`, `A bolja u ${aWins} · B bolja u ${bWins}${ties ? ` · izjednačeno ${ties}` : ""}`)}</small></div><b>${scores.winner === "tie" ? "=" : scores.winner.toUpperCase()}</b></div><div class="chrono-score-pair"><div data-series="a" class="${scores.winner === "a" ? "is-overall-winner" : ""}"><span>${t("Overall index · String", "Ukupni indeks · Serija")} A</span><strong>${fmt(scores.scores.a, 1)}</strong><i><b style="width:${scores.scores.a}%"></b></i></div><div data-series="b" class="${scores.winner === "b" ? "is-overall-winner" : ""}"><span>${t("Overall index · String", "Ukupni indeks · Serija")} B</span><strong>${fmt(scores.scores.b, 1)}</strong><i><b style="width:${scores.scores.b}%"></b></i></div></div><div class="chrono-category-head"><span>${t("Category", "Kategorija")}</span><span>A</span><span>B</span><span>${t("Better", "Bolja")}</span></div><div class="chrono-category-list">${Object.entries(scores.metrics).map(([key, metric]) => `<div class="chrono-category-row" data-winner="${metric.winner}"><span><strong>${names[key]}</strong><small>${metric.higherIsBetter ? t("higher is better", "više je bolje") : t("lower is better", "niže je bolje")}${metric.weight ? ` · ${Math.round(metric.weight * 100)}% ${t("weight", "ponder")}` : ""}</small></span><b class="value-a ${metric.winner === "a" ? "is-category-winner" : ""}">${values[key](metric).split(" / ")[0]}</b><b class="value-b ${metric.winner === "b" ? "is-category-winner" : ""}">${values[key](metric).split(" / ")[1]}</b><em>${metric.winner === "tie" ? t("Tie", "Isto") : metric.winner.toUpperCase()}</em></div>`).join("")}</div><details class="chrono-score-details"><summary>${t("How the overall index is calculated", "Kako se računa ukupni indeks")}</summary><p>${t(`${profile} weights: ${weightText}. Each category is scored relative to the better of these two strings. The index compares A with B only; it is not an absolute replica rating or field-limit verdict.`, `${profile} ponderi: ${weightText}. Svaka se kategorija boduje u odnosu na bolju od ove dvije serije. Indeks uspoređuje samo A i B; nije apsolutna ocjena replike ni odluka o dopuštenju na terenu.`)}</p></details></div>`;
+  }
+  function updateChronoResults() {
+    const target = $("chronoResults");
+    if (!target) return;
+    const series = [chronoSeries("a"), chronoSeries("b")], comparison = Chrono.compare(series[0].result, series[1].result), scores = Chrono.comparisonScores(series[0].result, series[1].result, chronoState.priority);
+    let comparisonMarkup = "";
+    if (comparison) {
+      const positive = comparison.deltaJ > 0, nearlySame = Math.abs(comparison.percent) < 1;
+      const sameMass = Number(series[0].state.mass) === Number(series[1].state.mass);
+      comparisonMarkup = `<section class="panel chrono-comparison"><div class="panel-heading"><div><p class="eyebrow">${t("A versus B", "A prema B")}</p><h2>${t("Quick comparison", "Brza usporedba")}</h2></div><span class="tag measured">${scores.winner === "tie" ? t("Tie", "Izjednačeno") : `${t("Winner", "Bolja")}: ${scores.winner.toUpperCase()}`}</span></div>${chronoScoreMarkup(scores)}<div class="chrono-output-note"><strong>${sameMass ? t("Output difference", "Razlika izlaza") : t("Joule-creep check", "Provjera joule creepa")}</strong><div class="chrono-comparison-values"><strong>${comparison.deltaJ >= 0 ? "+" : ""}${fmt(comparison.deltaJ, 3, "J")}</strong><span>${t("mean energy", "prosječna energija")}</span><strong>${comparison.speedDeltaFps >= 0 ? "+" : ""}${fmt(comparison.speedDeltaFps, 1, "fps")}</strong><span>${t("mean speed", "prosječna brzina")}</span></div><p>${!sameMass ? t(`${positive ? "A positive" : "A negative"} energy difference can be evidence of ${positive ? "joule creep" : "joule drop"} only when both strings come from the same unchanged replica and comparable conditions.`, `${positive ? "Pozitivna" : "Negativna"} razlika energije može upućivati na ${positive ? "joule creep" : "pad energije"} samo ako su obje serije izmjerene na istoj nepromijenjenoj replici i u usporedivim uvjetima.`) : t("Both strings use the same BB mass, so this is not a BB-mass joule-creep test.", "Obje serije koriste istu masu BB-a, pa ovo nije provjera joule creepa između masa BB-a.")}</p></div></section>`;
+    }
+    target.innerHTML = `${comparisonMarkup}<div class="chrono-summary-grid">${series.map(chronoSummaryMarkup).join("")}</div>${chronoChartMarkup(series)}<div class="chrono-tables">${series.map(chronoTableMarkup).join("")}</div><section class="method-note"><strong>${t("How the statistics work", "Kako statistika radi")}</strong><p>${t("Energy is calculated independently for every shot as ½mv². Sample SD uses n−1. Potential outliers require at least five valid readings and use Tukey's 1.5×IQR fences. Flags are review prompts, not proof of a bad shot; use the checkbox above to include them. The trend is an ordinary least-squares line across shot order and can reveal warm-up or cooldown drift, but it does not establish a cause.", "Energija se za svaki hitac zasebno računa kao ½mv². Standardna devijacija uzorka koristi n−1. Za označavanje mogućih odstupanja potrebno je najmanje pet valjanih očitanja i koriste se Tukeyeve granice 1,5×IQR. Oznake su poziv na provjeru, a ne dokaz lošeg hica; uključite ih potvrdnim okvirom iznad. Trend je pravac najmanjih kvadrata kroz redoslijed hitaca i može pokazati zagrijavanje ili hlađenje, ali ne utvrđuje uzrok.")}</p></section>`;
+  }
+  function chronoExportData() {
+    const series = [chronoSeries("a"), chronoSeries("b")];
+    return { schemaVersion: 1, exportedAt: new Date().toISOString(), outlierMethod: "Tukey 1.5×IQR; minimum 5 readings", excludeFlaggedFromHeadlines: chronoState.excludeOutliers, comparisonPriority: chronoState.priority, comparisonIndex: Chrono.comparisonScores(series[0].result, series[1].result, chronoState.priority), strings: series.map(item => ({ id: item.key.toUpperCase(), massGrams: item.state.mass, enteredUnit: item.state.unit, parsed: item.parsed, analysis: item.result })) };
+  }
+  function chronoCsv() {
+    const rows = [["series", "shot", "entered_unit", "entered_speed", "fps", "m_s", "joules", "potential_outlier"]];
+    for (const item of [chronoSeries("a"), chronoSeries("b")]) for (const row of item.result?.rows || []) rows.push([item.key.toUpperCase(), row.index, item.state.unit, row.value, row.fps, row.mps, row.energy, row.outlier]);
+    return rows.map(row => row.join(",")).join("\n") + "\n";
+  }
+  function downloadText(name, content, type) {
+    const blob = new Blob([content], { type }), url = URL.createObjectURL(blob), link = document.createElement("a");
+    link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function renderChrono() {
+    workspace = null;
+    $("root").innerHTML = `<main class="app chrono-app"><header class="lab-header"><div><a href="#">${t("← All tools", "← Svi alati")}</a><p class="eyebrow">${t("Measured data", "Izmjereni podaci")}</p><h1>${t("Chrono String Analyzer", "Analizator serije kronografa")}</h1></div>${languageSwitch()}</header><section class="panel chrono-intro"><p>${t("Paste chronograph readings to inspect velocity and energy consistency, flag unusual shots, reveal sequence drift, and compare two BB weights for possible joule creep. Everything runs locally in your browser.", "Zalijepite očitanja kronografa za provjeru ujednačenosti brzine i energije, označavanje neobičnih hitaca, otkrivanje trenda serije i usporedbu dviju masa BB-a radi mogućeg joule creepa. Sve se izvodi lokalno u pregledniku.")}</p></section><div class="chrono-input-grid">${chronoInputMarkup("a", false)}${chronoInputMarkup("b", true)}</div><section class="panel chrono-toolbar"><div class="chrono-toolbar-options"><label><span>${t("Comparison priority", "Prioritet usporedbe")}</span><select id="chronoPriority"><option value="balanced" ${chronoState.priority === "balanced" ? "selected" : ""}>${t("Balanced", "Uravnoteženo")}</option><option value="consistency" ${chronoState.priority === "consistency" ? "selected" : ""}>${t("Consistency first", "Prednost ujednačenosti")}</option><option value="output" ${chronoState.priority === "output" ? "selected" : ""}>${t("Higher output", "Veći izlaz")}</option></select></label><label><input id="chronoExclude" type="checkbox" ${chronoState.excludeOutliers ? "checked" : ""}>${t("Exclude flagged potential outliers from headline statistics", "Isključi označena moguća odstupanja iz glavne statistike")}</label></div><div><button class="secondary-button" id="chronoExample" type="button">${t("Load comparison example", "Učitaj primjer usporedbe")}</button><button class="secondary-button" id="chronoClear" type="button">${t("Clear", "Očisti")}</button><button class="secondary-button" id="chronoJson" type="button">${t("Export JSON", "Izvezi JSON")}</button><button class="primary-button" id="chronoCsv" type="button">${t("Export CSV", "Izvezi CSV")}</button></div></section><div id="chronoResults" aria-live="polite"></div></main>`;
+    bindLanguage(); bindChrono(); updateChronoResults();
+  }
+  function bindChrono() {
+    for (const key of ["a", "b"]) {
+      const label = key.toUpperCase();
+      $("chronoText" + label).addEventListener("input", event => { chronoState[key].text = event.target.value; updateChronoResults(); });
+      $("chronoMass" + label).addEventListener("input", event => { chronoState[key].mass = event.target.value; updateChronoResults(); });
+      $("chronoUnit" + label).addEventListener("change", event => { chronoState[key].unit = event.target.value; updateChronoResults(); });
+    }
+    $("chronoExclude").addEventListener("change", event => { chronoState.excludeOutliers = event.target.checked; updateChronoResults(); });
+    $("chronoPriority").addEventListener("change", event => { chronoState.priority = event.target.value; updateChronoResults(); });
+    $("chronoExample").addEventListener("click", () => {
+      chronoState.a = { text: "401\n399\n400\n398\n402\n400\n399\n401\n400\n398", unit: "fps", mass: .2 };
+      chronoState.b = { text: "331\n330\n329\n332\n330\n331\n329\n330\n331\n330", unit: "fps", mass: .4 };
+      renderChrono();
+    });
+    $("chronoClear").addEventListener("click", () => { chronoState.a.text = ""; chronoState.b.text = ""; renderChrono(); });
+    $("chronoJson").addEventListener("click", () => downloadText("airsoft-chrono-analysis.json", JSON.stringify(chronoExportData(), null, 2), "application/json"));
+    $("chronoCsv").addEventListener("click", () => downloadText("airsoft-chrono-shots.csv", chronoCsv(), "text/csv;charset=utf-8"));
+  }
   function render() {
     workspace?.rememberScroll();
     stop();
-    const lab = location.hash === "#pneumatic-timing";
+    const lab = location.hash === "#pneumatic-timing", chrono = location.hash === "#chrono-analyzer";
     document.documentElement.lang = language;
-    document.title = lab ? t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera") : "Airsoft Tools";
+    document.title = lab ? t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera") : chrono ? t("Chrono String Analyzer", "Analizator serije kronografa") : "Airsoft Tools";
+    if (chrono) { renderChrono(); return; }
     if (!lab) {
       workspace = null;
-      $("root").innerHTML = `<main class="tool-hub"><div class="hub-shell"><nav class="hub-nav"><div class="hub-brand"><span class="hub-brand-mark">AT</span><span>Airsoft Tools</span></div>${languageSwitch()}</nav><div class="hub-content"><div class="hub-intro"><p class="eyebrow">${t("Interactive workshop", "Interaktivna radionica")}</p><h1>Airsoft Tools</h1><p>${t("Explore the mechanics behind your setup.", "Istražite mehaniku svoje konfiguracije.")}</p></div><p class="hub-count">${t("1 tool available", "Dostupan je 1 alat")}</p><div class="tool-grid"><a class="tool-card" href="#pneumatic-timing"><span class="tool-icon" aria-hidden="true">↝</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h2><p>${t("Explore airflow, piston motion and BB timing. Compare measured setups and calibrate with chrono data.", "Istražite protok zraka, gibanje pistona i BB-a. Usporedite izmjerene konfiguracije i kalibrirajte kronografom.")}</p></span><span class="tool-arrow">→</span></a></div><p class="hub-footnote">${t("More tools will appear here later.", "Novi alati bit će dodani kasnije.")}</p></div></div></main>`;
+      $("root").innerHTML = `<main class="tool-hub"><div class="hub-shell"><nav class="hub-nav"><div class="hub-brand"><span class="hub-brand-mark">AT</span><span>Airsoft Tools</span></div>${languageSwitch()}</nav><div class="hub-content"><div class="hub-intro"><p class="eyebrow">${t("Interactive workshop", "Interaktivna radionica")}</p><h1>Airsoft Tools</h1><p>${t("Explore the mechanics behind your setup.", "Istražite mehaniku svoje konfiguracije.")}</p></div><p class="hub-count">${t("2 tools available", "Dostupna su 2 alata")}</p><div class="tool-grid"><a class="tool-card" href="#pneumatic-timing"><span class="tool-icon" aria-hidden="true">↝</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h2><p>${t("Explore airflow, piston motion and BB timing. Compare measured setups and calibrate with chrono data.", "Istražite protok zraka, gibanje pistona i BB-a. Usporedite izmjerene konfiguracije i kalibrirajte kronografom.")}</p></span><span class="tool-arrow">→</span></a><a class="tool-card" href="#chrono-analyzer"><span class="tool-icon" aria-hidden="true">▥</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Chrono String Analyzer", "Analizator serije kronografa")}</h2><p>${t("Inspect consistency, energy spread, unusual shots and possible joule creep from pasted chrono readings.", "Provjerite ujednačenost, raspon energije, neobične hice i mogući joule creep iz zalijepljenih očitanja kronografa.")}</p></span><span class="tool-arrow">→</span></a></div><p class="hub-footnote">${t("Private by design: calculations stay in this browser.", "Privatno po dizajnu: izračuni ostaju u ovom pregledniku.")}</p></div></div></main>`;
       bindLanguage(); return;
     }
     $("root").innerHTML = `<main class="app tuning-app"><header class="lab-header"><div><a href="#">${t("← All tools", "← Svi alati")}</a><h1>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h1></div>${languageSwitch()}</header>
@@ -4756,6 +5141,10 @@
   if (location.hash === "#pneumatic-timing") { shot = P.simulate(p); lastValidShot = shot.valid ? shot : null; baseline = P.simulate({ ...p, airbrakeLength: 0, airbrakeTaper: 0 }); }
   render();
 })();
-</script>
+
+  if (!globalThis.PneumaticPhysics && location.protocol === "file:") {
+    location.replace(new URL("../index.html" + location.hash, location.href).href);
+  }
+  </script>
 </body>
 </html>

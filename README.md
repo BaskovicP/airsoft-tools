@@ -1,6 +1,10 @@
 # Airsoft Tools
 
-Standalone English/Croatian tools for exploring spring-airsoft pneumatic timing. Open `index.html` directly—no server, account, network access or runtime dependencies are required. The first screen is a tool menu; the pneumatic timing lab is its first tool.
+Standalone English/Croatian airsoft tools that run entirely in the browser. Open `index.html` directly—no server, account, network access or runtime dependencies are required. The first screen is a tool menu.
+
+## Chrono String Analyzer
+
+Paste one or two chronograph strings in fps or m/s to calculate per-shot energy, mean velocity and energy, extreme spread, sample standard deviation, coefficient of variation and shot-order trend. Potential outliers are conservatively flagged with Tukey's 1.5×IQR rule and remain visible even when excluded from headline statistics. Head-to-head mode reports winners for consistency, spread, drift, speed and energy, plus a transparent relative index with balanced, consistency-first and higher-output priorities. Comparing different BB masses also reports the change in mean energy as a possible joule-creep indicator, with JSON and CSV export. Data remains local to the browser.
 
 ## Physics model v4.1
 

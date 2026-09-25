@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   const P = globalThis.PneumaticPhysics, C = globalThis.PneumaticCalibration, A = globalThis.PneumaticAcoustics, O = globalThis.PneumaticOptimizer, B = globalThis.PneumaticPlayback;
-  const I = globalThis.PneumaticInsights, Parts = globalThis.PneumaticParts;
+  const I = globalThis.PneumaticInsights, Parts = globalThis.PneumaticParts, Chrono = globalThis.ChronoAnalyzer;
   const $ = id => document.getElementById(id), finite = Number.isFinite;
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   let language = "en";
@@ -22,6 +22,12 @@
   const chartCache = new Map();
   const workspaceState = { category: "geometry", view: "shot", categoryScroll: {}, viewScroll: {} };
   let workspace = null;
+  const chronoState = {
+    excludeOutliers: true,
+    priority: "balanced",
+    a: { text: "330\n329\n331\n330\n328\n330\n329\n331\n330\n329", unit: "fps", mass: .4 },
+    b: { text: "", unit: "fps", mass: .46 }
+  };
   const fields = {
     cylinderBore: ["Cylinder internal diameter", "Unutarnji promjer cilindra", "mm", 15, 35, .01],
     strokeLength: ["Nominal piston stroke before added bumper", "Nominalni hod pistona prije dodatne gumice", "mm", 20, 150, .1],
@@ -208,15 +214,146 @@
   }
   function group(en, hr, keys, help = "") { return `<section class="control-group"><p class="group-label">${t(en, hr)}</p>${keys.map(field).join("")}${help ? `<p class="field-help">${help}</p>` : ""}</section>`; }
   function provenanceControl(key, en, hr) { return `<label class="provenance"><input type="checkbox" data-provenance="${key}" ${provenance[key] === "measured" ? "checked" : ""}>${t(en, hr)}</label>`; }
+  function chronoSeries(key) {
+    const state = chronoState[key], parsed = Chrono.parseReadings(state.text);
+    let result = null, error = null;
+    if (parsed.values.length) {
+      try { result = Chrono.analyze(parsed.values, Number(state.mass), state.unit, chronoState.excludeOutliers); }
+      catch (caught) { error = caught.message; }
+    }
+    return { key, state, parsed, result, error };
+  }
+  function chronoInputMarkup(key, optional) {
+    const state = chronoState[key], label = key.toUpperCase();
+    return `<section class="panel chrono-input-card"><div class="panel-heading"><div><p class="eyebrow">${t(`String ${label}`, `Serija ${label}`)}</p><h2>${optional ? t("Comparison string", "Usporedna serija") : t("Primary string", "Glavna serija")}</h2></div>${optional ? `<span class="tag unknown">${t("optional", "neobavezno")}</span>` : ""}</div>
+      <div class="chrono-settings"><label>${t("BB mass", "Masa BB-a")}<span class="chrono-number"><input id="chronoMass${label}" type="number" min=".05" max="2" step=".01" value="${state.mass}"><b>g</b></span></label><label>${t("Velocity unit", "Jedinica brzine")}<select id="chronoUnit${label}"><option value="fps" ${state.unit === "fps" ? "selected" : ""}>fps</option><option value="mps" ${state.unit === "mps" ? "selected" : ""}>m/s</option></select></label></div>
+      <label for="chronoText${label}">${t("Velocity readings", "Očitanja brzine")}</label><textarea id="chronoText${label}" rows="11" spellcheck="false" placeholder="330\n329\n331">${esc(state.text)}</textarea>
+      <p class="small-note">${t("Paste only the velocity column. Use one reading per line, or separate values with spaces, commas or semicolons. A lone decimal comma is recognized.", "Zalijepite samo stupac brzine. Unesite jedno očitanje po retku ili odvojite vrijednosti razmacima, zarezima ili točkama sa zarezom. Prepoznaje se decimalni zarez u pojedinačnoj vrijednosti.")}</p></section>`;
+  }
+  function chronoMetric(label, value, note = "") {
+    return `<div class="chrono-metric"><span>${label}</span><strong>${value}</strong>${note ? `<small>${note}</small>` : ""}</div>`;
+  }
+  function chronoChartMarkup(series) {
+    const available = series.filter(item => item.result?.rows.length);
+    if (!available.length) return "";
+    const width = 900, height = 270, left = 58, right = 22, top = 24, bottom = 42;
+    const values = available.flatMap(item => item.result.rows.map(row => row.fps));
+    let low = Math.min(...values), high = Math.max(...values), span = high - low;
+    if (span < 2) { low -= 1; high += 1; span = 2; } else { low -= span * .12; high += span * .12; span = high - low; }
+    const maxCount = Math.max(...available.map(item => item.result.rows.length));
+    const x = index => left + (maxCount === 1 ? .5 : index / (maxCount - 1)) * (width - left - right);
+    const y = value => top + (high - value) / span * (height - top - bottom);
+    const grid = Array.from({ length: 4 }, (_, index) => {
+      const value = low + span * index / 3, yy = y(value);
+      return `<line x1="${left}" x2="${width - right}" y1="${yy}" y2="${yy}"/><text x="${left - 9}" y="${yy + 4}" text-anchor="end">${value.toFixed(1)}</text>`;
+    }).join("");
+    const colors = { a: "#5de4e7", b: "#ffbf69" };
+    const plots = available.map(item => {
+      const rows = item.result.rows, color = colors[item.key];
+      const points = rows.map((row, index) => `${x(index)},${y(row.fps)}`).join(" ");
+      const dots = rows.map((row, index) => `<circle cx="${x(index)}" cy="${y(row.fps)}" r="${row.outlier ? 5 : 3.5}" fill="${row.outlier ? "#ff756f" : color}"${row.outlier ? ' stroke="#fff" stroke-width="1"' : ""}/>`).join("");
+      const meanY = y(item.result.active.meanFps);
+      return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2"/><line class="chrono-mean" x1="${left}" x2="${width - right}" y1="${meanY}" y2="${meanY}" stroke="${color}"/>${dots}`;
+    }).join("");
+    return `<section class="panel chrono-chart-panel"><div class="panel-heading"><div><h2>${t("Shot sequence", "Slijed hitaca")}</h2><p>${t("Velocity in fps · dashed lines show the active mean", "Brzina u fps · isprekidane crte prikazuju aktivni prosjek")}</p></div><div class="chrono-legend">${available.map(item => `<span data-series="${item.key}">${t("String", "Serija")} ${item.key.toUpperCase()}</span>`).join("")}<span class="outlier-key">${t("Potential outlier", "Moguće odstupanje")}</span></div></div><svg class="chrono-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(t("Chronograph velocity by shot", "Brzina kronografa po hicu"))}"><g class="chrono-grid">${grid}</g>${plots}<text x="${left}" y="${height - 10}">1</text><text x="${width - right}" y="${height - 10}" text-anchor="end">${maxCount} ${t("shots", "hitaca")}</text></svg></section>`;
+  }
+  function chronoTableMarkup(item) {
+    if (!item.result?.rows.length) return "";
+    const label = item.key.toUpperCase();
+    return `<details class="panel chrono-table"><summary>${t(`String ${label} shot data`, `Podaci hitaca serije ${label}`)}</summary><div class="table-wrap"><table><thead><tr><th>#</th><th>${t("Entered", "Uneseno")}</th><th>fps</th><th>m/s</th><th>J</th><th>${t("Review", "Provjera")}</th></tr></thead><tbody>${item.result.rows.map(row => `<tr class="${row.outlier ? "is-outlier" : ""}"><td>${row.index}</td><td>${fmt(row.value, 2)} ${item.state.unit === "mps" ? "m/s" : "fps"}</td><td>${fmt(row.fps, 1)}</td><td>${fmt(row.mps, 2)}</td><td>${fmt(row.energy, 3)}</td><td>${row.outlier ? t("Potential outlier", "Moguće odstupanje") : "—"}</td></tr>`).join("")}</tbody></table></div></details>`;
+  }
+  function chronoSummaryMarkup(item) {
+    const label = item.key.toUpperCase(), result = item.result;
+    if (!result) return `<section class="panel chrono-summary-card"><div class="panel-heading"><h2>${t(`String ${label}`, `Serija ${label}`)}</h2></div><p class="chrono-empty">${item.error === "mass" ? t("Enter a BB mass from 0.05 to 2.00 g.", "Unesite masu BB-a od 0,05 do 2,00 g.") : t("Paste velocity readings to analyze this string.", "Zalijepite očitanja brzine za analizu ove serije.")}</p></section>`;
+    const s = result.active, excluded = result.excludingOutliers ? t(`${result.outlierCount} flagged shot${result.outlierCount === 1 ? "" : "s"} excluded from these headline values`, `${result.outlierCount} označenih hitaca isključeno je iz ovih glavnih vrijednosti`) : t("All valid shots included", "Uključeni su svi valjani hici");
+    return `<section class="panel chrono-summary-card"><div class="panel-heading"><div><p class="eyebrow">${t(`String ${label}`, `Serija ${label}`)}</p><h2>${s.count} ${t(s.count === 1 ? "valid shot" : "valid shots", s.count === 1 ? "valjan hitac" : "valjanih hitaca")}</h2></div><span class="tag ${result.outlierCount ? "heuristic" : "measured"}">${result.outlierCount ? `${result.outlierCount} ${t("flagged", "označeno")}` : t("no flags", "bez oznaka")}</span></div><div class="chrono-metrics">
+      ${chronoMetric(t("Mean velocity", "Prosječna brzina"), `${fmt(s.meanFps, 1, "fps")} / ${fmt(s.meanFps / Chrono.FPS_PER_MPS, 2, "m/s")}`, excluded)}
+      ${chronoMetric(t("Mean energy", "Prosječna energija"), fmt(s.meanEnergyJ, 3, "J"), `${fmt(s.minEnergyJ, 3)}–${fmt(s.maxEnergyJ, 3)} J`)}
+      ${chronoMetric(t("Extreme spread", "Ukupni raspon"), fmt(s.spreadFps, 1, "fps"), fmt(s.spreadEnergyJ, 3, "J"))}
+      ${chronoMetric(t("Sample standard deviation", "Standardna devijacija uzorka"), fmt(s.sampleSdFps, 2, "fps"), fmt(s.sampleSdEnergyJ, 3, "J"))}
+      ${chronoMetric(t("Coefficient of variation", "Koeficijent varijacije"), fmt(s.cvPercent, 2, "%"), t("SD ÷ mean velocity", "SD ÷ prosječna brzina"))}
+      ${chronoMetric(t("Estimated sequence trend", "Procijenjeni trend serije"), `${s.trendFps >= 0 ? "+" : ""}${fmt(s.trendFps, 1, "fps")}`, `${fmt(s.slopeFpsPerShot, 2)} ${t("fps per shot", "fps po hicu")}`)}
+    </div>${item.parsed.invalid.length || result.rejected.length || item.parsed.truncated ? `<p class="chrono-warning">${t("Ignored", "Zanemareno")}: ${item.parsed.invalid.length} ${t("non-numeric tokens", "nenumeričkih vrijednosti")}, ${result.rejected.length} ${t("invalid or implausible speeds", "nevaljanih ili nevjerojatnih brzina")}${item.parsed.truncated ? ` · ${t("only the first 500 readings were used", "korišteno je samo prvih 500 očitanja")}` : ""}.</p>` : ""}</section>`;
+  }
+  function chronoScoreMarkup(scores) {
+    const names = {
+      cv: t("Consistency · lower CV", "Ujednačenost · niži CV"),
+      spread: t("Tighter extreme spread", "Uži ukupni raspon"),
+      drift: t("Lower sequence drift", "Manji trend serije"),
+      speed: t("Higher mean speed", "Veća prosječna brzina"),
+      energy: t("Higher mean energy", "Veća prosječna energija")
+    };
+    const values = {
+      cv: metric => `${fmt(metric.a, 2, "%")} / ${fmt(metric.b, 2, "%")}`,
+      spread: metric => `${fmt(metric.a, 2, "%")} / ${fmt(metric.b, 2, "%")}`,
+      drift: metric => `${fmt(metric.a, 2, "%")} / ${fmt(metric.b, 2, "%")}`,
+      speed: metric => `${fmt(metric.a, 1, "fps")} / ${fmt(metric.b, 1, "fps")}`,
+      energy: metric => `${fmt(metric.a, 3, "J")} / ${fmt(metric.b, 3, "J")}`
+    };
+    const profile = scores.priority === "consistency" ? t("Consistency-first", "Prednost ujednačenosti") : scores.priority === "output" ? t("Higher-output", "Veći izlaz") : t("Balanced", "Uravnoteženo");
+    const leader = scores.winner === "tie" ? t("Overall tie", "Ukupno izjednačeno") : t(`String ${scores.winner.toUpperCase()} is better overall`, `Serija ${scores.winner.toUpperCase()} ukupno je bolja`);
+    const weightText = Object.entries(scores.weights).filter(([, weight]) => weight > 0).map(([key, weight]) => `${names[key].split(" · ")[0]} ${Math.round(weight * 100)}%`).join(" · ");
+    const decisions = Object.values(scores.metrics), aWins = decisions.filter(metric => metric.winner === "a").length, bWins = decisions.filter(metric => metric.winner === "b").length, ties = decisions.filter(metric => metric.winner === "tie").length;
+    return `<div class="chrono-index"><div class="chrono-verdict" data-winner="${scores.winner}"><div><span>${t("Quick verdict", "Brzi rezultat")}</span><strong>${leader}</strong><small>${t(`A wins ${aWins} · B wins ${bWins}${ties ? ` · ${ties} tied` : ""}`, `A bolja u ${aWins} · B bolja u ${bWins}${ties ? ` · izjednačeno ${ties}` : ""}`)}</small></div><b>${scores.winner === "tie" ? "=" : scores.winner.toUpperCase()}</b></div><div class="chrono-score-pair"><div data-series="a" class="${scores.winner === "a" ? "is-overall-winner" : ""}"><span>${t("Overall index · String", "Ukupni indeks · Serija")} A</span><strong>${fmt(scores.scores.a, 1)}</strong><i><b style="width:${scores.scores.a}%"></b></i></div><div data-series="b" class="${scores.winner === "b" ? "is-overall-winner" : ""}"><span>${t("Overall index · String", "Ukupni indeks · Serija")} B</span><strong>${fmt(scores.scores.b, 1)}</strong><i><b style="width:${scores.scores.b}%"></b></i></div></div><div class="chrono-category-head"><span>${t("Category", "Kategorija")}</span><span>A</span><span>B</span><span>${t("Better", "Bolja")}</span></div><div class="chrono-category-list">${Object.entries(scores.metrics).map(([key, metric]) => `<div class="chrono-category-row" data-winner="${metric.winner}"><span><strong>${names[key]}</strong><small>${metric.higherIsBetter ? t("higher is better", "više je bolje") : t("lower is better", "niže je bolje")}${metric.weight ? ` · ${Math.round(metric.weight * 100)}% ${t("weight", "ponder")}` : ""}</small></span><b class="value-a ${metric.winner === "a" ? "is-category-winner" : ""}">${values[key](metric).split(" / ")[0]}</b><b class="value-b ${metric.winner === "b" ? "is-category-winner" : ""}">${values[key](metric).split(" / ")[1]}</b><em>${metric.winner === "tie" ? t("Tie", "Isto") : metric.winner.toUpperCase()}</em></div>`).join("")}</div><details class="chrono-score-details"><summary>${t("How the overall index is calculated", "Kako se računa ukupni indeks")}</summary><p>${t(`${profile} weights: ${weightText}. Each category is scored relative to the better of these two strings. The index compares A with B only; it is not an absolute replica rating or field-limit verdict.`, `${profile} ponderi: ${weightText}. Svaka se kategorija boduje u odnosu na bolju od ove dvije serije. Indeks uspoređuje samo A i B; nije apsolutna ocjena replike ni odluka o dopuštenju na terenu.`)}</p></details></div>`;
+  }
+  function updateChronoResults() {
+    const target = $("chronoResults");
+    if (!target) return;
+    const series = [chronoSeries("a"), chronoSeries("b")], comparison = Chrono.compare(series[0].result, series[1].result), scores = Chrono.comparisonScores(series[0].result, series[1].result, chronoState.priority);
+    let comparisonMarkup = "";
+    if (comparison) {
+      const positive = comparison.deltaJ > 0, nearlySame = Math.abs(comparison.percent) < 1;
+      const sameMass = Number(series[0].state.mass) === Number(series[1].state.mass);
+      comparisonMarkup = `<section class="panel chrono-comparison"><div class="panel-heading"><div><p class="eyebrow">${t("A versus B", "A prema B")}</p><h2>${t("Quick comparison", "Brza usporedba")}</h2></div><span class="tag measured">${scores.winner === "tie" ? t("Tie", "Izjednačeno") : `${t("Winner", "Bolja")}: ${scores.winner.toUpperCase()}`}</span></div>${chronoScoreMarkup(scores)}<div class="chrono-output-note"><strong>${sameMass ? t("Output difference", "Razlika izlaza") : t("Joule-creep check", "Provjera joule creepa")}</strong><div class="chrono-comparison-values"><strong>${comparison.deltaJ >= 0 ? "+" : ""}${fmt(comparison.deltaJ, 3, "J")}</strong><span>${t("mean energy", "prosječna energija")}</span><strong>${comparison.speedDeltaFps >= 0 ? "+" : ""}${fmt(comparison.speedDeltaFps, 1, "fps")}</strong><span>${t("mean speed", "prosječna brzina")}</span></div><p>${!sameMass ? t(`${positive ? "A positive" : "A negative"} energy difference can be evidence of ${positive ? "joule creep" : "joule drop"} only when both strings come from the same unchanged replica and comparable conditions.`, `${positive ? "Pozitivna" : "Negativna"} razlika energije može upućivati na ${positive ? "joule creep" : "pad energije"} samo ako su obje serije izmjerene na istoj nepromijenjenoj replici i u usporedivim uvjetima.`) : t("Both strings use the same BB mass, so this is not a BB-mass joule-creep test.", "Obje serije koriste istu masu BB-a, pa ovo nije provjera joule creepa između masa BB-a.")}</p></div></section>`;
+    }
+    target.innerHTML = `${comparisonMarkup}<div class="chrono-summary-grid">${series.map(chronoSummaryMarkup).join("")}</div>${chronoChartMarkup(series)}<div class="chrono-tables">${series.map(chronoTableMarkup).join("")}</div><section class="method-note"><strong>${t("How the statistics work", "Kako statistika radi")}</strong><p>${t("Energy is calculated independently for every shot as ½mv². Sample SD uses n−1. Potential outliers require at least five valid readings and use Tukey's 1.5×IQR fences. Flags are review prompts, not proof of a bad shot; use the checkbox above to include them. The trend is an ordinary least-squares line across shot order and can reveal warm-up or cooldown drift, but it does not establish a cause.", "Energija se za svaki hitac zasebno računa kao ½mv². Standardna devijacija uzorka koristi n−1. Za označavanje mogućih odstupanja potrebno je najmanje pet valjanih očitanja i koriste se Tukeyeve granice 1,5×IQR. Oznake su poziv na provjeru, a ne dokaz lošeg hica; uključite ih potvrdnim okvirom iznad. Trend je pravac najmanjih kvadrata kroz redoslijed hitaca i može pokazati zagrijavanje ili hlađenje, ali ne utvrđuje uzrok.")}</p></section>`;
+  }
+  function chronoExportData() {
+    const series = [chronoSeries("a"), chronoSeries("b")];
+    return { schemaVersion: 1, exportedAt: new Date().toISOString(), outlierMethod: "Tukey 1.5×IQR; minimum 5 readings", excludeFlaggedFromHeadlines: chronoState.excludeOutliers, comparisonPriority: chronoState.priority, comparisonIndex: Chrono.comparisonScores(series[0].result, series[1].result, chronoState.priority), strings: series.map(item => ({ id: item.key.toUpperCase(), massGrams: item.state.mass, enteredUnit: item.state.unit, parsed: item.parsed, analysis: item.result })) };
+  }
+  function chronoCsv() {
+    const rows = [["series", "shot", "entered_unit", "entered_speed", "fps", "m_s", "joules", "potential_outlier"]];
+    for (const item of [chronoSeries("a"), chronoSeries("b")]) for (const row of item.result?.rows || []) rows.push([item.key.toUpperCase(), row.index, item.state.unit, row.value, row.fps, row.mps, row.energy, row.outlier]);
+    return rows.map(row => row.join(",")).join("\n") + "\n";
+  }
+  function downloadText(name, content, type) {
+    const blob = new Blob([content], { type }), url = URL.createObjectURL(blob), link = document.createElement("a");
+    link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function renderChrono() {
+    workspace = null;
+    $("root").innerHTML = `<main class="app chrono-app"><header class="lab-header"><div><a href="#">${t("← All tools", "← Svi alati")}</a><p class="eyebrow">${t("Measured data", "Izmjereni podaci")}</p><h1>${t("Chrono String Analyzer", "Analizator serije kronografa")}</h1></div>${languageSwitch()}</header><section class="panel chrono-intro"><p>${t("Paste chronograph readings to inspect velocity and energy consistency, flag unusual shots, reveal sequence drift, and compare two BB weights for possible joule creep. Everything runs locally in your browser.", "Zalijepite očitanja kronografa za provjeru ujednačenosti brzine i energije, označavanje neobičnih hitaca, otkrivanje trenda serije i usporedbu dviju masa BB-a radi mogućeg joule creepa. Sve se izvodi lokalno u pregledniku.")}</p></section><div class="chrono-input-grid">${chronoInputMarkup("a", false)}${chronoInputMarkup("b", true)}</div><section class="panel chrono-toolbar"><div class="chrono-toolbar-options"><label><span>${t("Comparison priority", "Prioritet usporedbe")}</span><select id="chronoPriority"><option value="balanced" ${chronoState.priority === "balanced" ? "selected" : ""}>${t("Balanced", "Uravnoteženo")}</option><option value="consistency" ${chronoState.priority === "consistency" ? "selected" : ""}>${t("Consistency first", "Prednost ujednačenosti")}</option><option value="output" ${chronoState.priority === "output" ? "selected" : ""}>${t("Higher output", "Veći izlaz")}</option></select></label><label><input id="chronoExclude" type="checkbox" ${chronoState.excludeOutliers ? "checked" : ""}>${t("Exclude flagged potential outliers from headline statistics", "Isključi označena moguća odstupanja iz glavne statistike")}</label></div><div><button class="secondary-button" id="chronoExample" type="button">${t("Load comparison example", "Učitaj primjer usporedbe")}</button><button class="secondary-button" id="chronoClear" type="button">${t("Clear", "Očisti")}</button><button class="secondary-button" id="chronoJson" type="button">${t("Export JSON", "Izvezi JSON")}</button><button class="primary-button" id="chronoCsv" type="button">${t("Export CSV", "Izvezi CSV")}</button></div></section><div id="chronoResults" aria-live="polite"></div></main>`;
+    bindLanguage(); bindChrono(); updateChronoResults();
+  }
+  function bindChrono() {
+    for (const key of ["a", "b"]) {
+      const label = key.toUpperCase();
+      $("chronoText" + label).addEventListener("input", event => { chronoState[key].text = event.target.value; updateChronoResults(); });
+      $("chronoMass" + label).addEventListener("input", event => { chronoState[key].mass = event.target.value; updateChronoResults(); });
+      $("chronoUnit" + label).addEventListener("change", event => { chronoState[key].unit = event.target.value; updateChronoResults(); });
+    }
+    $("chronoExclude").addEventListener("change", event => { chronoState.excludeOutliers = event.target.checked; updateChronoResults(); });
+    $("chronoPriority").addEventListener("change", event => { chronoState.priority = event.target.value; updateChronoResults(); });
+    $("chronoExample").addEventListener("click", () => {
+      chronoState.a = { text: "401\n399\n400\n398\n402\n400\n399\n401\n400\n398", unit: "fps", mass: .2 };
+      chronoState.b = { text: "331\n330\n329\n332\n330\n331\n329\n330\n331\n330", unit: "fps", mass: .4 };
+      renderChrono();
+    });
+    $("chronoClear").addEventListener("click", () => { chronoState.a.text = ""; chronoState.b.text = ""; renderChrono(); });
+    $("chronoJson").addEventListener("click", () => downloadText("airsoft-chrono-analysis.json", JSON.stringify(chronoExportData(), null, 2), "application/json"));
+    $("chronoCsv").addEventListener("click", () => downloadText("airsoft-chrono-shots.csv", chronoCsv(), "text/csv;charset=utf-8"));
+  }
   function render() {
     workspace?.rememberScroll();
     stop();
-    const lab = location.hash === "#pneumatic-timing";
+    const lab = location.hash === "#pneumatic-timing", chrono = location.hash === "#chrono-analyzer";
     document.documentElement.lang = language;
-    document.title = lab ? t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera") : "Airsoft Tools";
+    document.title = lab ? t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera") : chrono ? t("Chrono String Analyzer", "Analizator serije kronografa") : "Airsoft Tools";
+    if (chrono) { renderChrono(); return; }
     if (!lab) {
       workspace = null;
-      $("root").innerHTML = `<main class="tool-hub"><div class="hub-shell"><nav class="hub-nav"><div class="hub-brand"><span class="hub-brand-mark">AT</span><span>Airsoft Tools</span></div>${languageSwitch()}</nav><div class="hub-content"><div class="hub-intro"><p class="eyebrow">${t("Interactive workshop", "Interaktivna radionica")}</p><h1>Airsoft Tools</h1><p>${t("Explore the mechanics behind your setup.", "Istražite mehaniku svoje konfiguracije.")}</p></div><p class="hub-count">${t("1 tool available", "Dostupan je 1 alat")}</p><div class="tool-grid"><a class="tool-card" href="#pneumatic-timing"><span class="tool-icon" aria-hidden="true">↝</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h2><p>${t("Explore airflow, piston motion and BB timing. Compare measured setups and calibrate with chrono data.", "Istražite protok zraka, gibanje pistona i BB-a. Usporedite izmjerene konfiguracije i kalibrirajte kronografom.")}</p></span><span class="tool-arrow">→</span></a></div><p class="hub-footnote">${t("More tools will appear here later.", "Novi alati bit će dodani kasnije.")}</p></div></div></main>`;
+      $("root").innerHTML = `<main class="tool-hub"><div class="hub-shell"><nav class="hub-nav"><div class="hub-brand"><span class="hub-brand-mark">AT</span><span>Airsoft Tools</span></div>${languageSwitch()}</nav><div class="hub-content"><div class="hub-intro"><p class="eyebrow">${t("Interactive workshop", "Interaktivna radionica")}</p><h1>Airsoft Tools</h1><p>${t("Explore the mechanics behind your setup.", "Istražite mehaniku svoje konfiguracije.")}</p></div><p class="hub-count">${t("2 tools available", "Dostupna su 2 alata")}</p><div class="tool-grid"><a class="tool-card" href="#pneumatic-timing"><span class="tool-icon" aria-hidden="true">↝</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h2><p>${t("Explore airflow, piston motion and BB timing. Compare measured setups and calibrate with chrono data.", "Istražite protok zraka, gibanje pistona i BB-a. Usporedite izmjerene konfiguracije i kalibrirajte kronografom.")}</p></span><span class="tool-arrow">→</span></a><a class="tool-card" href="#chrono-analyzer"><span class="tool-icon" aria-hidden="true">▥</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Chrono String Analyzer", "Analizator serije kronografa")}</h2><p>${t("Inspect consistency, energy spread, unusual shots and possible joule creep from pasted chrono readings.", "Provjerite ujednačenost, raspon energije, neobične hice i mogući joule creep iz zalijepljenih očitanja kronografa.")}</p></span><span class="tool-arrow">→</span></a></div><p class="hub-footnote">${t("Private by design: calculations stay in this browser.", "Privatno po dizajnu: izračuni ostaju u ovom pregledniku.")}</p></div></div></main>`;
       bindLanguage(); return;
     }
     $("root").innerHTML = `<main class="app tuning-app"><header class="lab-header"><div><a href="#">${t("← All tools", "← Svi alati")}</a><h1>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h1></div>${languageSwitch()}</header>
