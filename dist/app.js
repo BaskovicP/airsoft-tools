@@ -2389,11 +2389,248 @@
 });
 
 
+/* Pure BB-weight comparison model shared by the browser UI and tests. */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.BBWeightAdvisor = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const COMMON_WEIGHTS = Object.freeze([.20, .23, .25, .28, .30, .32, .36, .40, .43, .45, .48, .50]);
+  const PRIORITY_WEIGHTS = Object.freeze({
+    balanced: Object.freeze({ flightTimeS: .15, retainedEnergyJ: .25, windDriftM: .25, expectedRangeM: .25, costPerMagazine: .10 }),
+    range: Object.freeze({ flightTimeS: .10, retainedEnergyJ: .20, windDriftM: .30, expectedRangeM: .35, costPerMagazine: .05 }),
+    budget: Object.freeze({ flightTimeS: .30, retainedEnergyJ: .15, windDriftM: .10, expectedRangeM: .10, costPerMagazine: .35 })
+  });
+  const HIGHER_IS_BETTER = Object.freeze({ flightTimeS: false, retainedEnergyJ: true, windDriftM: false, expectedRangeM: true, costPerMagazine: false });
+  const DIAMETER_M = .00595;
+  const AREA_M2 = Math.PI * DIAMETER_M ** 2 / 4;
+  const AIR_DENSITY = 1.225;
+  const SPHERE_CD = .47;
+  const GRAVITY = 9.80665;
+  const FPS_PER_MPS = 3.280839895013123;
+
+  function finitePositive(value) { return Number.isFinite(value) && value > 0; }
+  function dragConstant(massKg) { return .5 * AIR_DENSITY * SPHERE_CD * AREA_M2 / massKg; }
+
+  function simulateToDistance(massKg, muzzleSpeedMps, distanceM, windMps) {
+    const drag = dragConstant(massKg);
+    let x = 0, lateral = 0, vx = muzzleSpeedMps, vy = 0, time = 0;
+    const dt = .00075;
+    while (x < distanceM && time < 8 && vx > .5) {
+      const previousX = x, previousLateral = lateral, previousVx = vx, previousVy = vy, previousTime = time;
+      const relativeX = vx, relativeY = vy - windMps, relativeSpeed = Math.hypot(relativeX, relativeY);
+      vx += -drag * relativeSpeed * relativeX * dt;
+      vy += -drag * relativeSpeed * relativeY * dt;
+      x += vx * dt;
+      lateral += vy * dt;
+      time += dt;
+      if (x >= distanceM) {
+        const fraction = Math.max(0, Math.min(1, (distanceM - previousX) / Math.max(1e-12, x - previousX)));
+        time = previousTime + dt * fraction;
+        lateral = previousLateral + (lateral - previousLateral) * fraction;
+        vx = previousVx + (vx - previousVx) * fraction;
+        vy = previousVy + (vy - previousVy) * fraction;
+        x = distanceM;
+      }
+    }
+    const speedMps = Math.hypot(vx, vy);
+    return { reached: x >= distanceM, flightTimeS: time, windDriftM: Math.abs(lateral), retainedSpeedMps: speedMps, retainedEnergyJ: .5 * massKg * speedMps ** 2 };
+  }
+
+  function estimateRange(massKg, muzzleSpeedMps, weightGrams, hopLimitGrams) {
+    const drag = dragConstant(massKg);
+    const supported = weightGrams <= hopLimitGrams + 1e-12;
+    const support = supported ? 1 : Math.max(.2, (hopLimitGrams / weightGrams) ** 2.3);
+    const launchAngle = 2 * Math.PI / 180;
+    const liftAtMuzzle = .97 * GRAVITY * support;
+    let x = 0, height = 1.5, vx = muzzleSpeedMps * Math.cos(launchAngle), vy = muzzleSpeedMps * Math.sin(launchAngle), time = 0;
+    const dt = .00075;
+    while (height > 0 && x < 200 && time < 6) {
+      const speed = Math.hypot(vx, vy);
+      if (speed < 3) break;
+      const lift = liftAtMuzzle * (speed / muzzleSpeedMps) ** 1.35;
+      vx += -drag * speed * vx * dt;
+      vy += (-GRAVITY - drag * speed * vy + lift) * dt;
+      x += vx * dt;
+      height += vy * dt;
+      time += dt;
+    }
+    return { expectedRangeM: x, hopSupported: supported, hopSupportRatio: support };
+  }
+
+  function metricScores(results, key) {
+    const eligible = key === "expectedRangeM" ? results.filter(row => row.hopSupported) : results;
+    const values = eligible.map(row => row[key]);
+    const low = Math.min(...values), high = Math.max(...values), span = high - low;
+    const scores = new Map();
+    for (const row of results) {
+      let score = span < 1e-12 ? 100 : HIGHER_IS_BETTER[key] ? (row[key] - low) / span * 100 : (high - row[key]) / span * 100;
+      if (key === "expectedRangeM" && !row.hopSupported) score = Math.min(score, 15 * row.hopSupportRatio);
+      scores.set(row.weightGrams, Math.max(0, Math.min(100, score)));
+    }
+    return scores;
+  }
+
+  function compare(options = {}) {
+    const muzzleEnergyJ = Number(options.muzzleEnergyJ ?? 2.3);
+    const targetDistanceM = Number(options.targetDistanceM ?? 50);
+    const windKmh = Number(options.windKmh ?? 10);
+    const hopLimitGrams = Number(options.hopLimitGrams ?? .48);
+    const magazineCapacity = Number(options.magazineCapacity ?? 50);
+    const packagePrice = Number(options.packagePrice ?? 25);
+    const packageMassGrams = Number(options.packageMassGrams ?? 1000);
+    const priority = PRIORITY_WEIGHTS[options.priority] ? options.priority : "balanced";
+    const weights = [...new Set((options.weights || COMMON_WEIGHTS).map(Number))].sort((a, b) => a - b);
+    if (!finitePositive(muzzleEnergyJ) || !finitePositive(targetDistanceM) || !Number.isFinite(windKmh) || windKmh < 0 || !finitePositive(hopLimitGrams) || !finitePositive(magazineCapacity) || !Number.isFinite(packagePrice) || packagePrice < 0 || !finitePositive(packageMassGrams) || !weights.length || weights.some(weight => !finitePositive(weight))) throw new Error("inputs");
+
+    const windMps = windKmh / 3.6;
+    const results = weights.map(weightGrams => {
+      const massKg = weightGrams / 1000;
+      const muzzleSpeedMps = Math.sqrt(2 * muzzleEnergyJ / massKg);
+      const target = simulateToDistance(massKg, muzzleSpeedMps, targetDistanceM, windMps);
+      const range = estimateRange(massKg, muzzleSpeedMps, weightGrams, hopLimitGrams);
+      const bbsPerPackage = packageMassGrams / weightGrams;
+      return {
+        weightGrams,
+        massKg,
+        muzzleSpeedMps,
+        muzzleSpeedFps: muzzleSpeedMps * FPS_PER_MPS,
+        ...target,
+        ...range,
+        bbsPerPackage,
+        costPerMagazine: packagePrice * magazineCapacity / bbsPerPackage
+      };
+    });
+
+    const metricKeys = Object.keys(PRIORITY_WEIGHTS[priority]);
+    const scores = Object.fromEntries(metricKeys.map(key => [key, metricScores(results, key)]));
+    for (const row of results) {
+      row.metricScores = Object.fromEntries(metricKeys.map(key => [key, scores[key].get(row.weightGrams)]));
+      row.overallScore = metricKeys.reduce((sum, key) => sum + row.metricScores[key] * PRIORITY_WEIGHTS[priority][key], 0);
+      if (!row.hopSupported) row.overallScore *= .55 + .35 * row.hopSupportRatio;
+    }
+    const eligible = results.filter(row => row.hopSupported);
+    const recommendation = (eligible.length ? eligible : results).reduce((best, row) => row.overallScore > best.overallScore ? row : best);
+    const categoryWinners = {};
+    for (const key of metricKeys) {
+      const pool = key === "expectedRangeM" && eligible.length ? eligible : results;
+      categoryWinners[key] = pool.reduce((best, row) => HIGHER_IS_BETTER[key] ? row[key] > best[key] ? row : best : row[key] < best[key] ? row : best);
+    }
+    return { inputs: { muzzleEnergyJ, targetDistanceM, windKmh, hopLimitGrams, magazineCapacity, packagePrice, packageMassGrams, priority }, results, recommendation, categoryWinners, priorityWeights: PRIORITY_WEIGHTS[priority] };
+  }
+
+  return { COMMON_WEIGHTS, PRIORITY_WEIGHTS, HIGHER_IS_BETTER, FPS_PER_MPS, simulateToDistance, estimateRange, compare };
+});
+
+
+/* Pure HPA tank and measured-consumption calculations shared by the UI and tests. */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.HPAAirEfficiency = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const PSI_PER_BAR = 14.5037738;
+  const ATM_PSI = 14.6959488;
+  const LITERS_PER_CUBIC_INCH = .016387064;
+  const COMMON_TANKS = Object.freeze([
+    Object.freeze({ name: "13 ci / 3000 psi", volumeCi: 13, fillPressurePsi: 3000 }),
+    Object.freeze({ name: "48 ci / 3000 psi", volumeCi: 48, fillPressurePsi: 3000 }),
+    Object.freeze({ name: "68 ci / 4500 psi", volumeCi: 68, fillPressurePsi: 4500 }),
+    Object.freeze({ name: "90 ci / 4500 psi", volumeCi: 90, fillPressurePsi: 4500 })
+  ]);
+
+  function finitePositive(value) { return Number.isFinite(value) && value > 0; }
+  function ciToLiters(value) { return value * LITERS_PER_CUBIC_INCH; }
+  function psiToBar(value) { return value / PSI_PER_BAR; }
+  function usableAirLiters(volumeCi, fillPressurePsi, minimumTankPressurePsi, deliveryEfficiency) {
+    if (fillPressurePsi <= minimumTankPressurePsi) return 0;
+    return ciToLiters(volumeCi) * (fillPressurePsi - minimumTankPressurePsi) / ATM_PSI * deliveryEfficiency;
+  }
+
+  function calculate(options = {}) {
+    const tankVolumeCi = Number(options.tankVolumeCi ?? 68);
+    const fillPressurePsi = Number(options.fillPressurePsi ?? 4500);
+    const regulatorPressurePsi = Number(options.regulatorPressurePsi ?? 100);
+    const regulatorHeadroomPsi = Number(options.regulatorHeadroomPsi ?? 200);
+    const deliveryEfficiencyPct = Number(options.deliveryEfficiencyPct ?? 90);
+    const barrelVolumeCm3 = Number(options.barrelVolumeCm3 ?? 10.5);
+    const referenceDwellMs = Number(options.referenceDwellMs ?? 1.2);
+    const targetDwellMs = Number(options.targetDwellMs ?? 1.2);
+    const measuredAirCm3PerShot = Number(options.measuredAirCm3PerShot ?? 300);
+    const measurementUncertaintyPct = Number(options.measurementUncertaintyPct ?? 10);
+    const values = [tankVolumeCi, fillPressurePsi, regulatorPressurePsi, regulatorHeadroomPsi, deliveryEfficiencyPct, barrelVolumeCm3, referenceDwellMs, targetDwellMs, measuredAirCm3PerShot];
+    if (values.some(value => !finitePositive(value)) || deliveryEfficiencyPct > 100 || !Number.isFinite(measurementUncertaintyPct) || measurementUncertaintyPct < 0 || measurementUncertaintyPct >= 100) throw new Error("inputs");
+
+    const deliveryEfficiency = deliveryEfficiencyPct / 100;
+    const minimumTankPressurePsi = regulatorPressurePsi + regulatorHeadroomPsi;
+    if (fillPressurePsi <= minimumTankPressurePsi) throw new Error("pressure");
+    const tankVolumeLiters = ciToLiters(tankVolumeCi);
+    const usableStandardAirLiters = usableAirLiters(tankVolumeCi, fillPressurePsi, minimumTankPressurePsi, deliveryEfficiency);
+    const idealBarrelAirCm3 = barrelVolumeCm3 * regulatorPressurePsi / ATM_PSI;
+    const dwellScale = targetDwellMs / referenceDwellMs;
+    const scaledMeasuredAirCm3 = measuredAirCm3PerShot * dwellScale;
+    const physicalFloorCm3 = idealBarrelAirCm3 * 1.05;
+    const adjustedAirCm3PerShot = Math.max(physicalFloorCm3, scaledMeasuredAirCm3);
+    const measurementBelowFloor = scaledMeasuredAirCm3 < physicalFloorCm3;
+    const uncertainty = measurementUncertaintyPct / 100;
+    const lowConsumption = Math.max(physicalFloorCm3, adjustedAirCm3PerShot * (1 - uncertainty));
+    const highConsumption = Math.max(physicalFloorCm3, adjustedAirCm3PerShot * (1 + uncertainty));
+    const usableAirCm3 = usableStandardAirLiters * 1000;
+    const usableShots = usableAirCm3 / adjustedAirCm3PerShot;
+    const shotsLow = usableAirCm3 / highConsumption;
+    const shotsHigh = usableAirCm3 / lowConsumption;
+    const barrelUtilizationPct = idealBarrelAirCm3 / adjustedAirCm3PerShot * 100;
+    const pressureDropPerShotPsi = adjustedAirCm3PerShot / 1000 * ATM_PSI / tankVolumeLiters / deliveryEfficiency;
+    const shotsPer1000Psi = 1000 / pressureDropPerShotPsi;
+    const excessAirCm3PerShot = Math.max(0, adjustedAirCm3PerShot - idealBarrelAirCm3);
+
+    const tankComparisons = COMMON_TANKS.map(tank => {
+      const usableLiters = usableAirLiters(tank.volumeCi, tank.fillPressurePsi, minimumTankPressurePsi, deliveryEfficiency);
+      return { ...tank, usableStandardAirLiters: usableLiters, usableShots: usableLiters * 1000 / adjustedAirCm3PerShot };
+    });
+    const dwellComparisons = [.9, 1, 1.1].map(multiplier => {
+      const dwellMs = targetDwellMs * multiplier;
+      const consumption = Math.max(physicalFloorCm3, measuredAirCm3PerShot * dwellMs / referenceDwellMs);
+      return { multiplier, dwellMs, airCm3PerShot: consumption, usableShots: usableAirCm3 / consumption };
+    });
+
+    return {
+      inputs: { tankVolumeCi, fillPressurePsi, regulatorPressurePsi, regulatorHeadroomPsi, deliveryEfficiencyPct, barrelVolumeCm3, referenceDwellMs, targetDwellMs, measuredAirCm3PerShot, measurementUncertaintyPct },
+      tankVolumeLiters,
+      minimumTankPressurePsi,
+      usablePressureDropPsi: fillPressurePsi - minimumTankPressurePsi,
+      usableStandardAirLiters,
+      idealBarrelAirCm3,
+      dwellScale,
+      scaledMeasuredAirCm3,
+      physicalFloorCm3,
+      adjustedAirCm3PerShot,
+      measurementBelowFloor,
+      usableShots,
+      shotsLow,
+      shotsHigh,
+      barrelUtilizationPct,
+      excessAirCm3PerShot,
+      pressureDropPerShotPsi,
+      shotsPer1000Psi,
+      tankComparisons,
+      dwellComparisons
+    };
+  }
+
+  return { PSI_PER_BAR, ATM_PSI, LITERS_PER_CUBIC_INCH, COMMON_TANKS, ciToLiters, psiToBar, usableAirLiters, calculate };
+});
+
+
 /* UI shared by the generated standalone file and Cloudflare build. */
 (() => {
   "use strict";
   const P = globalThis.PneumaticPhysics, C = globalThis.PneumaticCalibration, A = globalThis.PneumaticAcoustics, O = globalThis.PneumaticOptimizer, B = globalThis.PneumaticPlayback;
-  const I = globalThis.PneumaticInsights, Parts = globalThis.PneumaticParts, Chrono = globalThis.ChronoAnalyzer;
+  const I = globalThis.PneumaticInsights, Parts = globalThis.PneumaticParts, Chrono = globalThis.ChronoAnalyzer, BB = globalThis.BBWeightAdvisor, HPA = globalThis.HPAAirEfficiency;
   const $ = id => document.getElementById(id), finite = Number.isFinite;
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   let language = "en";
@@ -2418,6 +2655,30 @@
     priority: "balanced",
     a: { text: "330\n329\n331\n330\n328\n330\n329\n331\n330\n329", unit: "fps", mass: .4 },
     b: { text: "", unit: "fps", mass: .46 }
+  };
+  const bbState = {
+    muzzleEnergyJ: 2.3,
+    targetDistanceM: 50,
+    windKmh: 10,
+    hopLimitGrams: .48,
+    magazineCapacity: 50,
+    packagePrice: 25,
+    packageMassGrams: 1000,
+    currency: "€",
+    priority: "balanced",
+    weights: [...BB.COMMON_WEIGHTS]
+  };
+  const hpaState = {
+    tankVolumeCi: 68,
+    fillPressurePsi: 4500,
+    regulatorPressurePsi: 100,
+    regulatorHeadroomPsi: 200,
+    deliveryEfficiencyPct: 90,
+    barrelVolumeCm3: 10.5,
+    referenceDwellMs: 1.2,
+    targetDwellMs: 1.2,
+    measuredAirCm3PerShot: 300,
+    measurementUncertaintyPct: 10
   };
   const fields = {
     cylinderBore: ["Cylinder internal diameter", "Unutarnji promjer cilindra", "mm", 15, 35, .01],
@@ -2735,16 +2996,132 @@
     $("chronoJson").addEventListener("click", () => downloadText("airsoft-chrono-analysis.json", JSON.stringify(chronoExportData(), null, 2), "application/json"));
     $("chronoCsv").addEventListener("click", () => downloadText("airsoft-chrono-shots.csv", chronoCsv(), "text/csv;charset=utf-8"));
   }
+  const bbMetricCopy = {
+    flightTimeS: ["Fastest to target", "Najbrže do cilja", "Lower flight time", "Kraće vrijeme leta"],
+    retainedEnergyJ: ["Most retained energy", "Najviše preostale energije", "Higher energy at target", "Više energije na cilju"],
+    windDriftM: ["Least wind drift", "Najmanji otklon vjetra", "Less lateral drift", "Manji bočni otklon"],
+    expectedRangeM: ["Longest expected range", "Najveći očekivani domet", "Hop-supported estimate", "Procjena uz podršku hopa"],
+    costPerMagazine: ["Lowest cost per magazine", "Najniža cijena spremnika", "Using the entered package price", "Prema unesenoj cijeni pakiranja"]
+  };
+  function bbOptions() {
+    return {
+      muzzleEnergyJ: Number(bbState.muzzleEnergyJ), targetDistanceM: Number(bbState.targetDistanceM), windKmh: Number(bbState.windKmh),
+      hopLimitGrams: Number(bbState.hopLimitGrams), magazineCapacity: Number(bbState.magazineCapacity), packagePrice: Number(bbState.packagePrice),
+      packageMassGrams: Number(bbState.packageMassGrams), priority: bbState.priority, weights: bbState.weights
+    };
+  }
+  function bbAnalysis() {
+    try { return { result: BB.compare(bbOptions()), error: null }; }
+    catch (error) { return { result: null, error }; }
+  }
+  function bbMoney(value) { return `${esc(bbState.currency || "€")}${fmt(value, value < .1 ? 3 : 2)}`; }
+  function bbMetricValue(key, row, result) {
+    if (key === "flightTimeS") return fmt(row.flightTimeS, 3, "s");
+    if (key === "retainedEnergyJ") return `${fmt(row.retainedEnergyJ, 2, "J")} · ${fmt(row.retainedEnergyJ / result.inputs.muzzleEnergyJ * 100, 0, "%")}`;
+    if (key === "windDriftM") return fmt(row.windDriftM * 100, 1, "cm");
+    if (key === "expectedRangeM") return fmt(row.expectedRangeM, 0, "m");
+    return bbMoney(row.costPerMagazine);
+  }
+  function bbCategoryMarkup(key, result) {
+    const winner = result.categoryWinners[key], copy = bbMetricCopy[key];
+    return `<article class="bb-category-card"><span>${t(copy[0], copy[1])}</span><strong>${fmt(winner.weightGrams, 2, "g")}</strong><b>${bbMetricValue(key, winner, result)}</b><small>${t(copy[2], copy[3])}</small></article>`;
+  }
+  function bbResultsMarkup(result) {
+    const recommendation = result.recommendation;
+    const rows = result.results.map(row => {
+      const winner = key => result.categoryWinners[key].weightGrams === row.weightGrams ? " is-bb-winner" : "";
+      return `<tr class="${row.weightGrams === recommendation.weightGrams ? "is-recommended" : ""}"><th><strong>${fmt(row.weightGrams, 2, "g")}</strong>${row.weightGrams === recommendation.weightGrams ? `<span>${t("Best balance", "Najbolji omjer")}</span>` : ""}${!row.hopSupported ? `<span class="bb-hop-warning">${t("Over hop limit", "Iznad granice hopa")}</span>` : ""}</th><td>${fmt(row.muzzleSpeedFps, 0, "fps")}<small>${fmt(row.muzzleSpeedMps, 1, "m/s")}</small></td><td class="${winner("flightTimeS")}">${fmt(row.flightTimeS, 3, "s")}</td><td class="${winner("retainedEnergyJ")}">${fmt(row.retainedEnergyJ, 2, "J")}<small>${fmt(row.retainedEnergyJ / result.inputs.muzzleEnergyJ * 100, 0, "%")}</small></td><td class="${winner("windDriftM")}">${fmt(row.windDriftM * 100, 1, "cm")}</td><td class="${winner("expectedRangeM")}">${fmt(row.expectedRangeM, 0, "m")}</td><td class="${winner("costPerMagazine")}">${bbMoney(row.costPerMagazine)}</td><td><strong>${fmt(row.overallScore, 0)}</strong><small>/ 100</small></td></tr>`;
+    }).join("");
+    const priorityName = result.inputs.priority === "range" ? t("Range & wind", "Domet i vjetar") : result.inputs.priority === "budget" ? t("Speed & budget", "Brzina i budžet") : t("Balanced", "Uravnoteženo");
+    const nextLighter = [...result.results].reverse().find(row => row.weightGrams < recommendation.weightGrams);
+    const nextHeavier = result.results.find(row => row.weightGrams > recommendation.weightGrams && row.hopSupported);
+    return `<section class="panel bb-recommendation"><div><p class="eyebrow">${t("Recommendation", "Preporuka")}</p><h2>${fmt(recommendation.weightGrams, 2, "g")} ${t("is the best overall fit", "ima najbolji ukupni omjer")}</h2><p>${t(`Under the ${priorityName.toLowerCase()} priority, it balances target speed, retained energy, wind drift, modeled range and ammunition cost without exceeding the entered hop limit.`, `Uz prioritet „${priorityName.toLowerCase()}” najbolje usklađuje brzinu do cilja, preostalu energiju, otklon vjetra, modelirani domet i trošak streljiva bez prekoračenja unesene granice hopa.`)}</p></div><div class="bb-score"><strong>${fmt(recommendation.overallScore, 0)}</strong><span>/ 100</span></div></section>
+      <section class="bb-category-grid" aria-label="${esc(t("Category winners", "Pobjednici kategorija"))}">${Object.keys(bbMetricCopy).map(key => bbCategoryMarkup(key, result)).join("")}</section>
+      <section class="panel bb-tradeoffs"><h2>${t("Quick decision", "Brza odluka")}</h2><div>${nextLighter ? `<p><strong>${t("Choose lighter", "Odaberite lakši")} · ${fmt(nextLighter.weightGrams, 2, "g")}</strong>${t(" for higher muzzle speed and a lower magazine cost. At longer distance it may still arrive later because it loses speed faster.", " za veću početnu brzinu i niži trošak spremnika. Na većoj udaljenosti ipak može stići kasnije jer brže gubi brzinu.")}</p>` : ""}${nextHeavier ? `<p><strong>${t("Choose heavier", "Odaberite teži")} · ${fmt(nextHeavier.weightGrams, 2, "g")}</strong>${t(` for more wind resistance and retained energy, if your hop can lift it consistently.`, ` za bolju otpornost na vjetar i više preostale energije, ako ga vaš hop može pouzdano podići.`)}</p>` : `<p><strong>${t("At your hop limit", "Na granici vašeg hopa")}</strong>${t(" Heavier options are shown but excluded from the recommendation.", " Teže opcije su prikazane, ali isključene iz preporuke.")}</p>`}</div></section>
+      <section class="panel bb-table-panel"><div class="panel-heading"><div><h2>${t("All weights compared", "Usporedba svih masa")}</h2><p>${t(`At ${fmt(result.inputs.muzzleEnergyJ, 2, "J")}, ${fmt(result.inputs.targetDistanceM, 0, "m")} and ${fmt(result.inputs.windKmh, 0, "km/h")} crosswind`, `Pri ${fmt(result.inputs.muzzleEnergyJ, 2, "J")}, ${fmt(result.inputs.targetDistanceM, 0, "m")} i bočnom vjetru od ${fmt(result.inputs.windKmh, 0, "km/h")}`)}</p></div><span class="tag">${priorityName}</span></div><div class="table-wrap"><table class="bb-table"><thead><tr><th>${t("BB weight", "Masa BB-a")}</th><th>${t("Muzzle speed", "Početna brzina")}</th><th>${t("Flight time", "Vrijeme leta")}</th><th>${t("Energy at target", "Energija na cilju")}</th><th>${t("Wind drift", "Otklon vjetra")}</th><th>${t("Expected range", "Očekivani domet")}</th><th>${t("Cost / mag", "Trošak / spremnik")}</th><th>${t("Index", "Indeks")}</th></tr></thead><tbody>${rows}</tbody></table></div></section>
+      <details class="panel bb-method"><summary>${t("How these estimates work and where they stop", "Kako procjene rade i gdje prestaju vrijediti")}</summary><div><p>${t("Every weight starts with the same entered muzzle energy. Flight time, retained energy and crosswind drift use a point-mass sphere-drag estimate in standard-density air. Expected range adds a disclosed hop-lift approximation and a 2° launch angle; it is useful for comparison, not a promise of field range.", "Svaka masa počinje s istom unesenom energijom na ustima. Vrijeme leta, preostala energija i bočni otklon koriste procjenu otpora kugle u zraku standardne gustoće. Očekivani domet dodaje navedenu aproksimaciju hop uzgona i kut od 2°; koristan je za usporedbu, a ne kao jamstvo dometa na terenu.")}</p><p>${t("Actual results depend on BB diameter and finish, hop rubber, spin consistency, barrel alignment, temperature, altitude, gusts and shot angle. Cost assumes every weight uses the same entered package price and package mass; replace those values with the product you are considering.", "Stvarni rezultat ovisi o promjeru i površini BB-a, hop gumici, ponovljivosti spina, poravnanju cijevi, temperaturi, nadmorskoj visini, naletima vjetra i kutu hica. Trošak pretpostavlja jednaku unesenu cijenu i masu pakiranja za svaku masu; zamijenite ih podacima proizvoda koji razmatrate.")}</p></div></details>`;
+  }
+  function updateBbResults() {
+    if (!$("bbResults")) return;
+    const analysis = bbAnalysis();
+    $("bbResults").innerHTML = analysis.result ? bbResultsMarkup(analysis.result) : `<section class="panel chrono-warning">${t("Enter valid positive values and keep at least one BB weight selected.", "Unesite valjane pozitivne vrijednosti i ostavite odabranu barem jednu masu BB-a.")}</section>`;
+  }
+  function bbCsv() {
+    const analysis = bbAnalysis();
+    if (!analysis.result) return "";
+    const rows = [["weight_g", "muzzle_fps", "flight_time_s", "retained_energy_j", "wind_drift_m", "expected_range_m", "hop_supported", "cost_per_magazine", "overall_score"]];
+    for (const row of analysis.result.results) rows.push([row.weightGrams, row.muzzleSpeedFps, row.flightTimeS, row.retainedEnergyJ, row.windDriftM, row.expectedRangeM, row.hopSupported, row.costPerMagazine, row.overallScore]);
+    return rows.map(row => row.join(",")).join("\n") + "\n";
+  }
+  function renderBbAdvisor() {
+    workspace = null;
+    const numberField = (id, en, hr, value, min, max, step, unit) => `<label>${t(en, hr)}<span class="chrono-number"><input id="${id}" type="number" min="${min}" max="${max}" step="${step}" value="${value}"><b>${unit}</b></span></label>`;
+    $("root").innerHTML = `<main class="app chrono-app bb-app"><header class="lab-header"><div><a href="#">${t("← All tools", "← Svi alati")}</a><p class="eyebrow">${t("Ammunition choice", "Odabir streljiva")}</p><h1>${t("BB Weight Advisor", "Savjetnik za masu BB-a")}</h1></div>${languageSwitch()}</header><section class="panel chrono-intro"><p>${t("Compare common BB weights at the same muzzle energy. See which option reaches the target sooner, carries more energy, resists crosswind, offers the longest modeled range, and costs less per magazine.", "Usporedite uobičajene mase BB-a pri istoj energiji na ustima. Pogledajte koja opcija brže stiže do cilja, zadržava više energije, bolje odolijeva bočnom vjetru, nudi najveći modelirani domet i manje košta po spremniku.")}</p></section>
+      <section class="panel bb-controls"><div class="panel-heading"><div><h2>${t("Your setup and scenario", "Vaša konfiguracija i scenarij")}</h2><p>${t("Change any value—the recommendation updates immediately.", "Promijenite bilo koju vrijednost — preporuka se odmah osvježava.")}</p></div><div class="bb-actions"><button class="secondary-button" id="bbReset" type="button">${t("Reset", "Vrati")}</button><button class="primary-button" id="bbCsv" type="button">${t("Export CSV", "Izvezi CSV")}</button></div></div><div class="bb-control-grid">${numberField("bbEnergy", "Muzzle energy", "Energija na ustima", bbState.muzzleEnergyJ, .1, 10, .05, "J")}${numberField("bbDistance", "Target distance", "Udaljenost cilja", bbState.targetDistanceM, 5, 100, 1, "m")}${numberField("bbWind", "90° crosswind", "Bočni vjetar od 90°", bbState.windKmh, 0, 50, 1, "km/h")}${numberField("bbHopLimit", "Heaviest BB your hop lifts reliably", "Najteži BB koji hop pouzdano podiže", bbState.hopLimitGrams, .2, .69, .01, "g")}${numberField("bbMagazine", "Magazine capacity", "Kapacitet spremnika", bbState.magazineCapacity, 1, 1000, 1, "BB")}${numberField("bbPackagePrice", "Package price", "Cijena pakiranja", bbState.packagePrice, 0, 1000, .5, esc(bbState.currency || "€"))}${numberField("bbPackageMass", "Package mass", "Masa pakiranja", bbState.packageMassGrams, 50, 10000, 10, "g")}<label>${t("Recommendation priority", "Prioritet preporuke")}<select id="bbPriority"><option value="balanced" ${bbState.priority === "balanced" ? "selected" : ""}>${t("Balanced", "Uravnoteženo")}</option><option value="range" ${bbState.priority === "range" ? "selected" : ""}>${t("Range & wind", "Domet i vjetar")}</option><option value="budget" ${bbState.priority === "budget" ? "selected" : ""}>${t("Speed & budget", "Brzina i budžet")}</option></select></label></div><div class="bb-weight-picker"><span>${t("Weights to compare", "Mase za usporedbu")}</span><div>${BB.COMMON_WEIGHTS.map(weight => `<label><input type="checkbox" data-bb-weight="${weight}" ${bbState.weights.includes(weight) ? "checked" : ""}><span>${weight.toFixed(2)} g</span></label>`).join("")}</div></div><p class="small-note">${t("Cost uses the same package price and package mass for every weight. Enter the product values you want to compare; heavier BBs yield fewer shots from a mass-based package.", "Trošak koristi jednaku cijenu i masu pakiranja za svaku masu BB-a. Unesite podatke proizvoda koji uspoređujete; teži BB-i daju manje hitaca iz pakiranja određene mase.")}</p></section><div id="bbResults" aria-live="polite"></div></main>`;
+    bindLanguage();
+    const numeric = { bbEnergy: "muzzleEnergyJ", bbDistance: "targetDistanceM", bbWind: "windKmh", bbHopLimit: "hopLimitGrams", bbMagazine: "magazineCapacity", bbPackagePrice: "packagePrice", bbPackageMass: "packageMassGrams" };
+    for (const [id, key] of Object.entries(numeric)) $(id).addEventListener("input", event => { bbState[key] = event.target.value; updateBbResults(); });
+    $("bbPriority").addEventListener("change", event => { bbState.priority = event.target.value; updateBbResults(); });
+    document.querySelectorAll("[data-bb-weight]").forEach(input => input.addEventListener("change", event => {
+      const weight = Number(event.target.dataset.bbWeight);
+      if (event.target.checked) bbState.weights = [...new Set([...bbState.weights, weight])].sort((a, b) => a - b);
+      else if (bbState.weights.length > 1) bbState.weights = bbState.weights.filter(value => value !== weight);
+      else event.target.checked = true;
+      updateBbResults();
+    }));
+    $("bbReset").addEventListener("click", () => { Object.assign(bbState, { muzzleEnergyJ: 2.3, targetDistanceM: 50, windKmh: 10, hopLimitGrams: .48, magazineCapacity: 50, packagePrice: 25, packageMassGrams: 1000, priority: "balanced", weights: [...BB.COMMON_WEIGHTS] }); renderBbAdvisor(); });
+    $("bbCsv").addEventListener("click", () => downloadText("airsoft-bb-weight-comparison.csv", bbCsv(), "text/csv;charset=utf-8"));
+    updateBbResults();
+  }
+  function hpaOptions() {
+    return Object.fromEntries(Object.keys(hpaState).map(key => [key, Number(hpaState[key])]));
+  }
+  function hpaAnalysis() {
+    try { return { result: HPA.calculate(hpaOptions()), error: null }; }
+    catch (error) { return { result: null, error }; }
+  }
+  function hpaResultsMarkup(result) {
+    const wholeShots = Math.floor(result.usableShots), low = Math.floor(result.shotsLow), high = Math.floor(result.shotsHigh);
+    const pressureUsedPct = result.usablePressureDropPsi / result.inputs.fillPressurePsi * 100;
+    const tankRows = result.tankComparisons.map(row => `<tr><th>${row.name}</th><td>${fmt(HPA.ciToLiters(row.volumeCi), 2, "L")}</td><td>${fmt(row.usableStandardAirLiters, 0, "standard L")}</td><td><strong>${Math.floor(row.usableShots).toLocaleString("en-US")}</strong></td></tr>`).join("");
+    const dwellRows = result.dwellComparisons.map(row => `<article class="hpa-dwell-card" data-current="${row.multiplier === 1}"><span>${row.multiplier < 1 ? t("10% shorter", "10% kraće") : row.multiplier > 1 ? t("10% longer", "10% dulje") : t("Selected dwell", "Odabrani dwell")}</span><strong>${fmt(row.dwellMs, 2, "ms")}</strong><b>${Math.floor(row.usableShots).toLocaleString("en-US")} ${t("shots", "hitaca")}</b><small>${fmt(row.airCm3PerShot, 0, "scc / shot")}</small></article>`).join("");
+    return `<section class="panel hpa-hero"><div><p class="eyebrow">${t("Usable tank estimate", "Procjena uporabljivosti boce")}</p><h2>${wholeShots.toLocaleString("en-US")} ${t("usable shots", "uporabljivih hitaca")}</h2><p>${t(`Expected range: ${low.toLocaleString("en-US")}–${high.toLocaleString("en-US")} shots with ±${fmt(result.inputs.measurementUncertaintyPct, 0, "%")} consumption uncertainty.`, `Očekivani raspon: ${low.toLocaleString("en-US")}–${high.toLocaleString("en-US")} hitaca uz nesigurnost potrošnje od ±${fmt(result.inputs.measurementUncertaintyPct, 0, "%")}.`)}</p></div><div class="hpa-index"><span>${t("Barrel-charge utilization", "Iskorištenje punjenja cijevi")}</span><strong>${fmt(result.barrelUtilizationPct, 0, "%")}</strong><small>${t("ideal barrel charge ÷ measured air", "idealno punjenje cijevi ÷ izmjereni zrak")}</small></div></section>
+      <section class="hpa-kpi-grid"><article><span>${t("Usable standard air", "Uporabljivi standardni zrak")}</span><strong>${fmt(result.usableStandardAirLiters, 0, "L")}</strong><small>${fmt(result.usablePressureDropPsi, 0, "psi")} ${t("usable pressure span", "uporabljivog raspona tlaka")}</small></article><article><span>${t("Adjusted air per shot", "Prilagođeni zrak po hicu")}</span><strong>${fmt(result.adjustedAirCm3PerShot, 0, "scc")}</strong><small>${fmt(result.excessAirCm3PerShot, 0, "scc")} ${t("above barrel-charge floor", "iznad minimuma punjenja cijevi")}</small></article><article><span>${t("Minimum tank pressure", "Najniži tlak boce")}</span><strong>${fmt(result.minimumTankPressurePsi, 0, "psi")}</strong><small>${fmt(HPA.psiToBar(result.minimumTankPressurePsi), 1, "bar")} · ${t("output + headroom", "izlaz + rezerva")}</small></article><article><span>${t("Shots per 1000 psi", "Hitaca na 1000 psi")}</span><strong>${Math.floor(result.shotsPer1000Psi).toLocaleString("en-US")}</strong><small>${fmt(result.pressureDropPerShotPsi, 2, "psi / shot")}</small></article></section>
+      <section class="panel hpa-pressure"><div class="panel-heading"><div><h2>${t("Usable pressure window", "Uporabljivi raspon tlaka")}</h2><p>${t("The estimate stops when tank pressure reaches regulator output plus the entered headroom.", "Procjena završava kada tlak boce dosegne izlaz regulatora plus unesenu rezervu.")}</p></div><strong>${fmt(result.inputs.fillPressurePsi, 0, "psi")} → ${fmt(result.minimumTankPressurePsi, 0, "psi")}</strong></div><div class="hpa-pressure-bar"><i style="width:${Math.max(0, Math.min(100, pressureUsedPct))}%"></i></div><div class="hpa-pressure-labels"><span>${t("Full tank", "Puna boca")}</span><span>${t("Regulator reserve", "Rezerva regulatora")}</span></div></section>
+      ${result.measurementBelowFloor ? `<p class="chrono-warning">${t("The scaled measured consumption is below the air needed to charge the entered barrel volume at this regulator pressure. The estimate uses a conservative 5% margin above that physical floor. Check the measurement units, barrel volume and pressure.", "Prilagođena izmjerena potrošnja manja je od zraka potrebnog za punjenje unesene zapremnine cijevi pri ovom tlaku regulatora. Procjena koristi konzervativnu granicu 5% iznad tog fizičkog minimuma. Provjerite jedinice mjerenja, zapremninu cijevi i tlak.")}</p>` : ""}
+      <section class="hpa-two-column"><div class="panel hpa-comparison"><div class="panel-heading"><div><h2>${t("Same setup, common tanks", "Ista konfiguracija, uobičajene boce")}</h2><p>${t("Uses the same consumption, regulator reserve and delivery efficiency.", "Koristi istu potrošnju, rezervu regulatora i učinkovitost isporuke.")}</p></div></div><div class="table-wrap"><table><thead><tr><th>${t("Tank", "Boca")}</th><th>${t("Internal volume", "Unutarnji volumen")}</th><th>${t("Usable air", "Uporabljivi zrak")}</th><th>${t("Shots", "Hici")}</th></tr></thead><tbody>${tankRows}</tbody></table></div></div><div class="panel hpa-dwell"><div class="panel-heading"><div><h2>${t("Dwell sensitivity", "Osjetljivost na dwell")}</h2><p>${t("Linear what-if around the selected dwell, constrained by the barrel-charge floor.", "Linearna procjena oko odabranog dwella, ograničena minimumom punjenja cijevi.")}</p></div></div><div class="hpa-dwell-grid">${dwellRows}</div></div></section>
+      <details class="panel hpa-method"><summary>${t("Calculation assumptions and measurement guidance", "Pretpostavke izračuna i smjernice za mjerenje")}</summary><div><p>${t("Usable standard air is estimated with the ideal-gas pressure ratio between the fill pressure and the minimum pressure required by the regulator. Delivery efficiency covers regulator loss, cooling and air that is not practically recovered. The headline shot count divides that usable air by your measured standard cubic centimetres per shot.", "Uporabljivi standardni zrak procjenjuje se omjerom tlakova idealnog plina između tlaka punjenja i najmanjeg tlaka potrebnog regulatoru. Učinkovitost isporuke obuhvaća gubitke regulatora, hlađenje i zrak koji se praktično ne iskoristi. Glavni broj hitaca dijeli taj uporabljivi zrak s vašim izmjerenim standardnim kubičnim centimetrima po hicu.")}</p><p>${t("Measure consumption at the entered regulator pressure and reference dwell. The target dwell scales that measurement linearly; real valves can deviate near opening and closing thresholds. Barrel volume supplies only a physical comparison floor—it does not include engine chamber, hose, nozzle dead volume, leaks or post-BB over-volume. Do not exceed the tank, regulator or replica manufacturer's pressure ratings.", "Potrošnju izmjerite pri unesenom tlaku regulatora i referentnom dwellu. Ciljani dwell linearno skalira mjerenje; stvarni ventili mogu odstupati blizu pragova otvaranja i zatvaranja. Zapremnina cijevi daje samo fizički usporedni minimum — ne uključuje komoru mehanizma, crijevo, mrtvi volumen mlaznice, curenja ni zrak nakon BB-a. Ne prekoračujte dopuštene tlakove proizvođača boce, regulatora ili replike.")}</p></div></details>`;
+  }
+  function updateHpaResults() {
+    if (!$("hpaResults")) return;
+    const analysis = hpaAnalysis();
+    const pressureError = analysis.error?.message === "pressure";
+    $("hpaResults").innerHTML = analysis.result ? hpaResultsMarkup(analysis.result) : `<section class="panel chrono-warning">${pressureError ? t("Fill pressure must be higher than regulator pressure plus headroom.", "Tlak punjenja mora biti viši od tlaka regulatora plus rezerve.") : t("Enter valid positive values. Efficiency and uncertainty must remain below 100%.", "Unesite valjane pozitivne vrijednosti. Učinkovitost i nesigurnost moraju ostati ispod 100%.")}</section>`;
+  }
+  function renderHpa() {
+    workspace = null;
+    const numberField = (id, en, hr, value, min, max, step, unit, note = "") => `<label>${t(en, hr)}<span class="chrono-number"><input id="${id}" type="number" min="${min}" max="${max}" step="${step}" value="${value}"><b>${unit}</b></span>${note ? `<small>${note}</small>` : ""}</label>`;
+    $("root").innerHTML = `<main class="app chrono-app hpa-app"><header class="lab-header"><div><a href="#">${t("← All tools", "← Svi alati")}</a><p class="eyebrow">${t("Compressed-air planning", "Planiranje komprimiranog zraka")}</p><h1>${t("HPA Air-Efficiency Calculator", "Kalkulator učinkovitosti HPA zraka")}</h1></div>${languageSwitch()}</header><section class="panel chrono-intro"><p>${t("Estimate usable shots per tank from tank volume, fill pressure, regulator reserve, barrel volume, dwell and measured standard-air consumption. Use the result to plan fills and identify air-hungry settings—not to override equipment pressure limits.", "Procijenite uporabljive hice po boci iz zapremnine boce, tlaka punjenja, rezerve regulatora, zapremnine cijevi, dwella i izmjerene potrošnje standardnog zraka. Rezultat koristite za planiranje punjenja i prepoznavanje postavki velike potrošnje — ne za prekoračivanje dopuštenih tlakova opreme.")}</p></section>
+      <section class="panel hpa-controls"><div class="panel-heading"><div><h2>${t("Tank and air-use inputs", "Ulazi boce i potrošnje zraka")}</h2><p>${t("Measured scc per shot is the primary accuracy input.", "Izmjereni scc po hicu glavni je ulaz za točnost.")}</p></div><button class="secondary-button" id="hpaReset" type="button">${t("Reset", "Vrati")}</button></div><div class="hpa-presets"><span>${t("Tank presets", "Predlošci boca")}</span>${HPA.COMMON_TANKS.map((tank, index) => `<button type="button" data-hpa-tank="${index}">${tank.name}</button>`).join("")}</div><div class="hpa-control-grid">${numberField("hpaTankVolume", "Tank internal volume", "Unutarnja zapremnina boce", hpaState.tankVolumeCi, 1, 200, 1, "ci")}${numberField("hpaFillPressure", "Fill pressure", "Tlak punjenja", hpaState.fillPressurePsi, 100, 6000, 50, "psi")}${numberField("hpaRegPressure", "Regulator output pressure", "Izlazni tlak regulatora", hpaState.regulatorPressurePsi, 20, 250, 1, "psi")}${numberField("hpaHeadroom", "Regulator headroom / reserve", "Rezerva regulatora", hpaState.regulatorHeadroomPsi, 10, 1000, 10, "psi")}${numberField("hpaDeliveryEfficiency", "Tank-to-engine delivery efficiency", "Učinkovitost isporuke do mehanizma", hpaState.deliveryEfficiencyPct, 1, 100, 1, "%")}${numberField("hpaBarrelVolume", "Barrel / working volume", "Zapremnina cijevi / radnog prostora", hpaState.barrelVolumeCm3, .1, 100, .1, "cm³")}${numberField("hpaMeasuredAir", "Measured standard air per shot", "Izmjereni standardni zrak po hicu", hpaState.measuredAirCm3PerShot, 1, 5000, 5, "scc")}${numberField("hpaUncertainty", "Consumption uncertainty", "Nesigurnost potrošnje", hpaState.measurementUncertaintyPct, 0, 99, 1, "%")}${numberField("hpaReferenceDwell", "Reference dwell used for measurement", "Referentni dwell pri mjerenju", hpaState.referenceDwellMs, .1, 20, .05, "ms")}${numberField("hpaTargetDwell", "Dwell to estimate", "Dwell za procjenu", hpaState.targetDwellMs, .1, 20, .05, "ms")}</div><p class="small-note">${t("scc means standard cubic centimetres of free air. If your meter reports litres, multiply by 1000. Update the measured consumption whenever regulator pressure, engine, barrel or major tuning changes.", "scc znači standardni kubični centimetar slobodnog zraka. Ako mjerač prikazuje litre, pomnožite s 1000. Ažurirajte izmjerenu potrošnju kada promijenite tlak regulatora, mehanizam, cijev ili važnu postavku.")}</p></section><div id="hpaResults" aria-live="polite"></div></main>`;
+    bindLanguage();
+    const numeric = { hpaTankVolume: "tankVolumeCi", hpaFillPressure: "fillPressurePsi", hpaRegPressure: "regulatorPressurePsi", hpaHeadroom: "regulatorHeadroomPsi", hpaDeliveryEfficiency: "deliveryEfficiencyPct", hpaBarrelVolume: "barrelVolumeCm3", hpaMeasuredAir: "measuredAirCm3PerShot", hpaUncertainty: "measurementUncertaintyPct", hpaReferenceDwell: "referenceDwellMs", hpaTargetDwell: "targetDwellMs" };
+    for (const [id, key] of Object.entries(numeric)) $(id).addEventListener("input", event => { hpaState[key] = event.target.value; updateHpaResults(); });
+    document.querySelectorAll("[data-hpa-tank]").forEach(button => button.addEventListener("click", event => { const tank = HPA.COMMON_TANKS[Number(event.currentTarget.dataset.hpaTank)]; hpaState.tankVolumeCi = tank.volumeCi; hpaState.fillPressurePsi = tank.fillPressurePsi; renderHpa(); }));
+    $("hpaReset").addEventListener("click", () => { Object.assign(hpaState, { tankVolumeCi: 68, fillPressurePsi: 4500, regulatorPressurePsi: 100, regulatorHeadroomPsi: 200, deliveryEfficiencyPct: 90, barrelVolumeCm3: 10.5, referenceDwellMs: 1.2, targetDwellMs: 1.2, measuredAirCm3PerShot: 300, measurementUncertaintyPct: 10 }); renderHpa(); });
+    updateHpaResults();
+  }
   function render() {
     workspace?.rememberScroll();
     stop();
-    const lab = location.hash === "#pneumatic-timing", chrono = location.hash === "#chrono-analyzer";
+    const lab = location.hash === "#pneumatic-timing", chrono = location.hash === "#chrono-analyzer", bbAdvisor = location.hash === "#bb-weight-advisor", hpa = location.hash === "#hpa-efficiency";
     document.documentElement.lang = language;
-    document.title = lab ? t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera") : chrono ? t("Chrono String Analyzer", "Analizator serije kronografa") : "Airsoft Tools";
+    document.title = lab ? t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera") : chrono ? t("Chrono String Analyzer", "Analizator serije kronografa") : bbAdvisor ? t("BB Weight Advisor", "Savjetnik za masu BB-a") : hpa ? t("HPA Air-Efficiency Calculator", "Kalkulator učinkovitosti HPA zraka") : "Airsoft Tools";
     if (chrono) { renderChrono(); return; }
+    if (bbAdvisor) { renderBbAdvisor(); return; }
+    if (hpa) { renderHpa(); return; }
     if (!lab) {
       workspace = null;
-      $("root").innerHTML = `<main class="tool-hub"><div class="hub-shell"><nav class="hub-nav"><div class="hub-brand"><span class="hub-brand-mark">AT</span><span>Airsoft Tools</span></div>${languageSwitch()}</nav><div class="hub-content"><div class="hub-intro"><p class="eyebrow">${t("Interactive workshop", "Interaktivna radionica")}</p><h1>Airsoft Tools</h1><p>${t("Explore the mechanics behind your setup.", "Istražite mehaniku svoje konfiguracije.")}</p></div><p class="hub-count">${t("2 tools available", "Dostupna su 2 alata")}</p><div class="tool-grid"><a class="tool-card" href="#pneumatic-timing"><span class="tool-icon" aria-hidden="true">↝</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h2><p>${t("Explore airflow, piston motion and BB timing. Compare measured setups and calibrate with chrono data.", "Istražite protok zraka, gibanje pistona i BB-a. Usporedite izmjerene konfiguracije i kalibrirajte kronografom.")}</p></span><span class="tool-arrow">→</span></a><a class="tool-card" href="#chrono-analyzer"><span class="tool-icon" aria-hidden="true">▥</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Chrono String Analyzer", "Analizator serije kronografa")}</h2><p>${t("Inspect consistency, energy spread, unusual shots and possible joule creep from pasted chrono readings.", "Provjerite ujednačenost, raspon energije, neobične hice i mogući joule creep iz zalijepljenih očitanja kronografa.")}</p></span><span class="tool-arrow">→</span></a></div><p class="hub-footnote">${t("Private by design: calculations stay in this browser.", "Privatno po dizajnu: izračuni ostaju u ovom pregledniku.")}</p></div></div></main>`;
+      $("root").innerHTML = `<main class="tool-hub"><div class="hub-shell"><nav class="hub-nav"><div class="hub-brand"><span class="hub-brand-mark">AT</span><span>Airsoft Tools</span></div>${languageSwitch()}</nav><div class="hub-content"><div class="hub-intro"><p class="eyebrow">${t("Interactive workshop", "Interaktivna radionica")}</p><h1>Airsoft Tools</h1><p>${t("Explore the mechanics behind your setup.", "Istražite mehaniku svoje konfiguracije.")}</p></div><p class="hub-count">${t("4 tools available", "Dostupna su 4 alata")}</p><div class="tool-grid"><a class="tool-card" href="#pneumatic-timing"><span class="tool-icon" aria-hidden="true">↝</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h2><p>${t("Explore airflow, piston motion and BB timing. Compare measured setups and calibrate with chrono data.", "Istražite protok zraka, gibanje pistona i BB-a. Usporedite izmjerene konfiguracije i kalibrirajte kronografom.")}</p></span><span class="tool-arrow">→</span></a><a class="tool-card" href="#chrono-analyzer"><span class="tool-icon" aria-hidden="true">▥</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Chrono String Analyzer", "Analizator serije kronografa")}</h2><p>${t("Inspect consistency, energy spread, unusual shots and possible joule creep from pasted chrono readings.", "Provjerite ujednačenost, raspon energije, neobične hice i mogući joule creep iz zalijepljenih očitanja kronografa.")}</p></span><span class="tool-arrow">→</span></a><a class="tool-card" href="#bb-weight-advisor"><span class="tool-icon" aria-hidden="true">●</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("BB Weight Advisor", "Savjetnik za masu BB-a")}</h2><p>${t("Compare common BB weights for flight time, retained energy, wind resistance, modeled range and magazine cost.", "Usporedite uobičajene mase BB-a prema vremenu leta, preostaloj energiji, otpornosti na vjetar, modeliranom dometu i cijeni spremnika.")}</p></span><span class="tool-arrow">→</span></a><a class="tool-card" href="#hpa-efficiency"><span class="tool-icon" aria-hidden="true">◉</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("HPA Air-Efficiency Calculator", "Kalkulator učinkovitosti HPA zraka")}</h2><p>${t("Estimate usable shots from tank size, pressure reserve, barrel volume, dwell and measured air consumption.", "Procijenite uporabljive hice iz veličine boce, rezerve tlaka, zapremnine cijevi, dwella i izmjerene potrošnje zraka.")}</p></span><span class="tool-arrow">→</span></a></div><p class="hub-footnote">${t("Private by design: calculations stay in this browser.", "Privatno po dizajnu: izračuni ostaju u ovom pregledniku.")}</p></div></div></main>`;
       bindLanguage(); return;
     }
     $("root").innerHTML = `<main class="app tuning-app"><header class="lab-header"><div><a href="#">${t("← All tools", "← Svi alati")}</a><h1>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h1></div>${languageSwitch()}</header>

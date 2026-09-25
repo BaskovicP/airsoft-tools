@@ -8,7 +8,7 @@ const outputDirectory = resolve(projectRoot, "dist");
 const cloudflareDirectory = resolve(projectRoot, "cloudflare");
 
 const template = await readFile(resolve(projectRoot, "src/page.html"), "utf8");
-const modules = await Promise.all(["physics.js", "calibration.js", "acoustics.js", "optimizer.js", "playback.js", "view.js", "workspace.js", "insights.js", "parts.js", "animation.js", "chrono.js", "app.js"].map(name => readFile(resolve(projectRoot, "src", name), "utf8")));
+const modules = await Promise.all(["physics.js", "calibration.js", "acoustics.js", "optimizer.js", "playback.js", "view.js", "workspace.js", "insights.js", "parts.js", "animation.js", "chrono.js", "bb-advisor.js", "hpa-efficiency.js", "app.js"].map(name => readFile(resolve(projectRoot, "src", name), "utf8")));
 const source = template.replace("/* BUNDLED_APP */", () => modules.join("\n\n"));
 await writeFile(sourcePath, source);
 const styleMatch = source.match(/<style>([\s\S]*?)<\/style>/);

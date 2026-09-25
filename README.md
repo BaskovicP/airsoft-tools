@@ -2,6 +2,14 @@
 
 Standalone English/Croatian airsoft tools that run entirely in the browser. Open `index.html` directly—no server, account, network access or runtime dependencies are required. The first screen is a tool menu.
 
+## HPA Air-Efficiency Calculator
+
+Estimate usable shots per tank from tank internal volume, fill pressure, regulator output and headroom, delivery efficiency, barrel/working volume, reference and target dwell, and measured standard-air consumption per shot. The calculator reports a measurement-uncertainty range, usable standard litres, pressure reserve, shots per 1,000 psi, barrel-charge utilization, dwell sensitivity and common-tank comparisons. Measured consumption remains the primary input; the ideal-gas tank model and barrel-charge floor are planning estimates, not permission to exceed equipment pressure ratings.
+
+## BB Weight Advisor
+
+Compare common 0.20–0.50 g BB weights at the same entered muzzle energy. The advisor estimates flight time and retained energy at a chosen distance, crosswind drift, hop-limited expected range and cost per magazine. A visible recommendation index supports balanced, range-and-wind, or speed-and-budget priorities, while weights above the entered reliable hop limit remain visible but cannot become the recommendation. The point-mass drag and hop-lift estimates are comparative—not promised field performance—and the cost calculation uses the package price and mass entered by the user.
+
 ## Chrono String Analyzer
 
 Paste one or two chronograph strings in fps or m/s to calculate per-shot energy, mean velocity and energy, extreme spread, sample standard deviation, coefficient of variation and shot-order trend. Potential outliers are conservatively flagged with Tukey's 1.5×IQR rule and remain visible even when excluded from headline statistics. Head-to-head mode reports winners for consistency, spread, drift, speed and energy, plus a transparent relative index with balanced, consistency-first and higher-output priorities. Comparing different BB masses also reports the change in mean energy as a possible joule-creep indicator, with JSON and CSV export. Data remains local to the browser.
@@ -126,6 +134,8 @@ Searches are deterministic and capped at 60/120/240 combinations, can be cancell
 - `src/insights.js`: event-timing presentation and explicitly relative sound-contributor quantities/explanations;
 - `src/parts.js`: bilingual dynamic cutaways, measurement references and non-caliper input inventory;
 - `src/animation.js`: solver-driven cutaway rendering and schematic visual cues;
+- `src/bb-advisor.js`: pure BB flight, wind, range, cost and recommendation comparison;
+- `src/hpa-efficiency.js`: pure tank reserve, standard-air consumption and dwell comparison;
 - `src/app.js`: bilingual controls, playback, graphs and data UI.
 
 Run:
