@@ -2626,11 +2626,256 @@
 });
 
 
+/* Pure decision-tree data and scoring for the interactive accuracy troubleshooter. */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.AccuracyTroubleshooter = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const bi = (en, hr) => Object.freeze({ en, hr });
+  const option = (value, en, hr, next, scores = {}) => Object.freeze({ value, label: bi(en, hr), next, scores: Object.freeze(scores) });
+
+  const CAUSES = Object.freeze({
+    bb: Object.freeze({
+      label: bi("BB quality or unsuitable weight", "Kvaliteta ili neodgovarajuća masa BB-a"),
+      summary: bi("Mixed, damaged, dirty or overly light BBs can produce wind-sensitive groups and random flyers.", "Pomiješani, oštećeni, prljavi ili prelagani BB-i mogu uzrokovati osjetljive grupe i nasumične flyere."),
+      check: bi("Use one unopened bag of quality BBs, confirm the weight, then fire a 10-shot group.", "Upotrijebite jednu neotvorenu vrećicu kvalitetnih BB-a, potvrdite masu i ispalite grupu od 10 hitaca."),
+      pass: bi("If the group improves, the ammunition or weight was the limiting factor.", "Ako se grupa popravi, ograničenje je bilo streljivo ili njegova masa."),
+      order: 1
+    }),
+    barrel: Object.freeze({
+      label: bi("Dirty or damaged inner barrel", "Prljava ili oštećena unutarnja cijev"),
+      summary: bi("Oil, dust, residue or a damaged crown can disturb individual BBs as they leave the barrel.", "Ulje, prašina, naslage ili oštećena kruna mogu poremetiti pojedine BB-e pri izlasku iz cijevi."),
+      check: bi("Unload the replica, turn hop off, clean with lint-free patches and isopropyl alcohol, then inspect the crown.", "Ispraznite repliku, isključite hop, očistite krpicama bez dlačica i izopropilnim alkoholom te pregledajte krunu."),
+      pass: bi("Retest dry; do not leave oil in the barrel or on the hop contact patch.", "Ponovno testirajte potpuno suhu cijev; ne ostavljajte ulje u cijevi ni na kontaktnoj površini hopa."),
+      order: 2
+    }),
+    hop: Object.freeze({
+      label: bi("Hop setting or unstable adjustment", "Postavka hopa ili nestabilno podešavanje"),
+      summary: bi("Too much, too little or a dial that moves between shots changes lift and effective range.", "Previše ili premalo hopa, kao i kotačić koji mijenja položaj, utječe na uzgon i uporabni domet."),
+      check: bi("Mark the dial, adjust from zero in small steps and fire 5–10 shots after every change.", "Označite kotačić, podešavajte od nule malim koracima i ispalite 5–10 hitaca nakon svake promjene."),
+      pass: bi("The setting should hold its position and produce a repeatable, nearly flat flight path.", "Postavka mora ostati na mjestu i davati ponovljivu, gotovo ravnu putanju."),
+      order: 3
+    }),
+    magazine: Object.freeze({
+      label: bi("Magazine or feeding interaction", "Spremnik ili problem hranjenja"),
+      summary: bi("Feed pressure, dirty BBs, weak springs or fit can change BB seating and nozzle closure.", "Pritisak hranjenja, prljavi BB-i, slaba opruga ili dosjed mogu mijenjati položaj BB-a i zatvaranje mlaznice."),
+      check: bi("Repeat the same group with a known-good magazine; compare full, half-full and nearly empty states.", "Ponovite istu grupu s provjerenim spremnikom; usporedite pun, napola pun i gotovo prazan spremnik."),
+      pass: bi("A result that follows one magazine points to fit, spring tension, lips or dirt—not the barrel.", "Rezultat koji prati jedan spremnik upućuje na dosjed, oprugu, usne ili nečistoću — ne na cijev."),
+      order: 4
+    }),
+    bucking: Object.freeze({
+      label: bi("Bucking wear, contamination or poor seal", "Istrošenost, zaprljanost ili loše brtvljenje buckinga"),
+      summary: bi("A torn, oily, swollen or incompatible bucking can give weak lift, flyers and inconsistent sealing.", "Potrgan, mastan, nabubren ili nekompatibilan bucking može uzrokovati slab uzgon, flyere i neujednačeno brtvljenje."),
+      check: bi("Inspect the lips and contact patch under good light; look for tears, oil, deformation and uneven wear.", "Pod dobrim svjetlom pregledajte usne i kontaktnu površinu; tražite pukotine, ulje, deformacije i nejednako trošenje."),
+      pass: bi("Clean only with a material-safe method; replace damaged rubber with a known compatible part.", "Čistite samo metodom sigurnom za materijal; oštećenu gumicu zamijenite provjereno kompatibilnim dijelom."),
+      order: 5
+    }),
+    nub: Object.freeze({
+      label: bi("Nub, hop arm or barrel alignment", "Poravnanje nuba, hop poluge ili cijevi"),
+      summary: bi("An off-centre contact patch commonly produces repeatable left/right curve or uneven lift.", "Kontaktna površina izvan središta često uzrokuje ponovljivo skretanje lijevo/desno ili neujednačen uzgon."),
+      check: bi("With the replica unloaded, inspect the hop window from the breech while applying hop gradually.", "Na ispražnjenoj replici promatrajte hop prozor sa stražnje strane dok postupno uključujete hop."),
+      pass: bi("The patch should descend centrally and evenly; also verify the barrel clip and chamber do not rotate.", "Kontaktna površina mora se spuštati centralno i ravnomjerno; provjerite i da se kopča cijevi i komora ne zakreću."),
+      order: 6
+    }),
+    nozzle: Object.freeze({
+      label: bi("Nozzle alignment or tappet timing", "Poravnanje mlaznice ili timing tappeta"),
+      summary: bi("A nozzle that does not return consistently can alternate between good shots, low-power shots and misfeeds.", "Mlaznica koja se ne vraća jednako može izmjenjivati dobre hice, slabe hice i prazna opaljenja."),
+      check: bi("After external checks, inspect nozzle travel, chamber seating and tappet return; compare semi with controlled bursts.", "Nakon vanjskih provjera pregledajte hod mlaznice, dosjed komore i povrat tappeta; usporedite semi s kontroliranim rafalima."),
+      pass: bi("Seek a technician if gearbox or engine disassembly is outside your experience.", "Ako nemate iskustva s rastavljanjem gearboxa ili mehanizma, prepustite provjeru tehničaru."),
+      order: 7
+    }),
+    airseal: Object.freeze({
+      label: bi("Internal air-seal inconsistency", "Neujednačeno unutarnje brtvljenje"),
+      summary: bi("Cylinder, piston head, cylinder head or nozzle leaks usually appear as measurable energy variation.", "Propuštanje cilindra, glave klipa, glave cilindra ili mlaznice obično se vidi kao mjerljiva promjena energije."),
+      check: bi("Chronograph at least 10 shots with one BB weight and compare low shots with the visible flyers.", "Izmjerite najmanje 10 hitaca kronografom s jednom masom BB-a i usporedite slabe hice s vidljivim flyerima."),
+      pass: bi("Consistent energy shifts attention back to barrel and hop; large random drops justify an air-seal inspection.", "Ujednačena energija vraća sumnju na cijev i hop; veliki nasumični padovi opravdavaju pregled brtvljenja."),
+      order: 8
+    }),
+    external: Object.freeze({
+      label: bi("Wind, replica cant, sight or loose assembly", "Vjetar, nagib replike, optika ili labav sklop"),
+      summary: bi("Crosswind, tilting a hopped replica and loose sights or outer-barrel parts can mimic an internal fault.", "Bočni vjetar, naginjanje replike s hopom te labava optika ili dijelovi vanjske cijevi mogu oponašati unutarnji kvar."),
+      check: bi("Shoot supported in calm conditions, keep the replica level and verify the sight, suppressor and outer barrel are secure.", "Pucajte s oslonca u mirnim uvjetima, držite repliku ravno i provjerite optiku, prigušivač i vanjsku cijev."),
+      pass: bi("If the curve changes with wind or cant rather than the replica setup, correct the test conditions first.", "Ako se skretanje mijenja s vjetrom ili nagibom, prvo ispravite uvjete testa."),
+      order: 2.5
+    })
+  });
+
+  const SYMPTOMS = Object.freeze({
+    vertical: Object.freeze({ label: bi("Vertical spread", "Vertikalno rasipanje"), hint: bi("Shots climb and drop", "Hici idu gore i dolje"), icon: "↕", root: "v_chrono", base: { hop: 2, bb: 1, airseal: 1 } }),
+    lateral: Object.freeze({ label: bi("Left / right curve", "Skretanje lijevo / desno"), hint: bi("Shots bend or group sideways", "Hici skreću ili se šire bočno"), icon: "↔", root: "l_direction", base: { nub: 3, external: 2, barrel: 1 } }),
+    flyers: Object.freeze({ label: bi("Random flyers", "Nasumični flyeri"), hint: bi("Most shots group; some escape", "Većina grupira, neki odlete"), icon: "✦", root: "f_chrono", base: { bb: 2, barrel: 2, bucking: 1, magazine: 1 } }),
+    range: Object.freeze({ label: bi("Weak range", "Slab domet"), hint: bi("Shots fall early or cannot lift", "Hici prerano padaju ili nema uzgona"), icon: "⌁", root: "r_lift", base: { hop: 3, bucking: 2, bb: 1 } }),
+    intermittent: Object.freeze({ label: bi("Occasional bad shot", "Povremeno loš hitac"), hint: bi("A shot drops, misfeeds or loses power", "Hitac padne, ne nahrani ili izgubi snagu"), icon: "◌", root: "i_pattern", base: { magazine: 2, nozzle: 2, airseal: 1 } })
+  });
+
+  const QUESTIONS = Object.freeze({
+    v_chrono: { prompt: bi("Does a 10-shot chrono string show matching speed or energy variation?", "Pokazuje li serija od 10 hitaca na kronografu odgovarajuće promjene brzine ili energije?"), help: bi("Use one BB weight and unchanged hop. If you have no chrono, choose ‘Not tested’.", "Koristite jednu masu BB-a i nepromijenjen hop. Ako nemate kronograf, odaberite ‘Nije testirano’."), options: [
+      option("yes", "Yes, output rises and falls", "Da, izlaz raste i pada", "v_mag", { airseal: 5, nozzle: 3, magazine: 2 }),
+      option("no", "No, output is consistent", "Ne, izlaz je ujednačen", "v_hop", { hop: 4, bucking: 2, nub: 2, airseal: -2 }),
+      option("unknown", "Not tested", "Nije testirano", "v_hop", { airseal: 2, hop: 2 })
+    ] },
+    v_mag: { prompt: bi("Does the variation change with another known-good magazine?", "Mijenja li se rasipanje s drugim provjerenim spremnikom?"), options: [
+      option("yes", "Yes, it follows the magazine", "Da, prati spremnik", null, { magazine: 7, nozzle: 1 }),
+      option("no", "No, every magazine behaves alike", "Ne, svi spremnici rade jednako", "v_hop", { airseal: 4, nozzle: 3 }),
+      option("unknown", "I only tested one", "Testirao/la sam samo jedan", "v_hop", { magazine: 3, airseal: 2 })
+    ] },
+    v_hop: { prompt: bi("Does changing hop in small steps move the whole group predictably?", "Pomiče li promjena hopa u malim koracima cijelu grupu na predvidljiv način?"), options: [
+      option("yes", "Yes, the group moves together", "Da, grupa se pomiče zajedno", "v_clean", { hop: 2, bb: 2, external: 1 }),
+      option("no", "No, lift changes randomly", "Ne, uzgon se mijenja nasumično", "v_clean", { bucking: 5, nub: 4, hop: 3 }),
+      option("unknown", "I have not tested systematically", "Nisam sustavno testirao/la", "v_clean", { hop: 3 })
+    ] },
+    v_clean: { prompt: bi("Was the barrel cleaned dry immediately before this test?", "Je li cijev neposredno prije testa očišćena i potpuno osušena?"), options: [
+      option("yes", "Yes", "Da", null, { barrel: -1, bucking: 1 }),
+      option("no", "No", "Ne", null, { barrel: 6 }),
+      option("unsure", "Unsure", "Nisam siguran/na", null, { barrel: 3 })
+    ] },
+
+    l_direction: { prompt: bi("Is the sideways curve repeatably toward the same side?", "Skreću li hici ponovljivo na istu stranu?"), options: [
+      option("same", "Yes, always the same side", "Da, uvijek na istu stranu", "l_cant", { nub: 5, external: 2 }),
+      option("both", "No, it alternates left and right", "Ne, izmjenjuje lijevo i desno", "l_clean", { bucking: 3, barrel: 3, bb: 2 }),
+      option("wind", "It mainly happens outdoors", "Uglavnom se događa vani", "l_cant", { external: 5, bb: 2 })
+    ] },
+    l_cant: { prompt: bi("Does the direction change when you deliberately tilt the replica or remove crosswind?", "Mijenja li se smjer kada namjerno nagnete repliku ili uklonite bočni vjetar?"), options: [
+      option("yes", "Yes", "Da", "l_clean", { external: 7, nub: -1 }),
+      option("no", "No, it remains with the replica", "Ne, ostaje vezano uz repliku", "l_window", { nub: 5, external: -1 }),
+      option("unknown", "Not tested", "Nije testirano", "l_window", { external: 2, nub: 2 })
+    ] },
+    l_window: { prompt: bi("Looking through the hop window, does the contact patch descend centrally and evenly?", "Gledano kroz hop prozor, spušta li se kontaktna površina centralno i ravnomjerno?"), options: [
+      option("yes", "Yes, it looks centred", "Da, izgleda centrirano", "l_clean", { nub: -1, barrel: 2, external: 1 }),
+      option("no", "No, it is visibly off-centre", "Ne, vidljivo je izvan središta", null, { nub: 8, bucking: 3 }),
+      option("unknown", "I have not inspected it", "Nisam pregledao/la", "l_clean", { nub: 4 })
+    ] },
+    l_clean: { prompt: bi("Are the barrel, crown and suppressor path clean, undamaged and unobstructed?", "Jesu li cijev, kruna i put kroz prigušivač čisti, neoštećeni i bez zapreka?"), options: [
+      option("yes", "Yes", "Da", null, { barrel: -1 }),
+      option("no", "No or unsure", "Ne ili nisam siguran/na", null, { barrel: 6, external: 2 })
+    ] },
+
+    f_chrono: { prompt: bi("Do visible flyers coincide with low or high chrono readings?", "Poklapaju li se vidljivi flyeri s niskim ili visokim očitanjima kronografa?"), options: [
+      option("yes", "Yes, output changes on flyers", "Da, izlaz se mijenja kod flyera", "f_mag", { airseal: 6, nozzle: 4, magazine: 2 }),
+      option("no", "No, output stays consistent", "Ne, izlaz ostaje ujednačen", "f_clean", { bb: 3, barrel: 3, bucking: 3, airseal: -2 }),
+      option("unknown", "Not measured", "Nije izmjereno", "f_mag", { airseal: 2, bb: 2 })
+    ] },
+    f_mag: { prompt: bi("Do flyers become more common with one magazine or at a particular fill level?", "Postaju li flyeri češći s jednim spremnikom ili pri određenoj napunjenosti?"), options: [
+      option("yes", "Yes", "Da", "f_clean", { magazine: 7, nozzle: 2 }),
+      option("no", "No", "Ne", "f_clean", { magazine: -1, bucking: 2 }),
+      option("unknown", "Not compared", "Nije uspoređeno", "f_clean", { magazine: 3 })
+    ] },
+    f_clean: { prompt: bi("Does cleaning the barrel and using fresh quality BBs reduce the flyers?", "Smanjuju li se flyeri nakon čišćenja cijevi i korištenja svježih kvalitetnih BB-a?"), options: [
+      option("yes", "Yes, clearly", "Da, jasno", null, { barrel: 6, bb: 5 }),
+      option("no", "No meaningful change", "Nema značajne promjene", "f_bucking", { bucking: 4, nub: 2 }),
+      option("unknown", "Not tested together", "Nije testirano zajedno", "f_bucking", { barrel: 3, bb: 3 })
+    ] },
+    f_bucking: { prompt: bi("Is the bucking dry, undamaged and evenly seated?", "Je li bucking suh, neoštećen i ravnomjerno postavljen?"), options: [
+      option("yes", "Yes", "Da", null, { bucking: -1, nozzle: 2 }),
+      option("no", "No or visibly worn", "Ne ili je vidljivo istrošen", null, { bucking: 8, nub: 2 }),
+      option("unknown", "Not inspected", "Nije pregledano", null, { bucking: 4 })
+    ] },
+
+    r_lift: { prompt: bi("At maximum useful hop, can the replica lift your selected BB weight?", "Može li replika pri najvećoj uporabljivoj postavci hopa podići odabranu masu BB-a?"), options: [
+      option("no", "No, shots still fall early", "Ne, hici i dalje prerano padaju", "r_lighter", { hop: 5, bucking: 5, nub: 3, bb: 2 }),
+      option("over", "It overhops before the end of adjustment", "Prebacuje BB prema gore prije kraja podešavanja", "r_energy", { hop: 2, bb: 3, external: 1 }),
+      option("unstable", "Lift changes between shots", "Uzgon se mijenja između hitaca", "r_clean", { bucking: 5, nub: 4, barrel: 2 })
+    ] },
+    r_lighter: { prompt: bi("Does one step lighter BB restore a normal flight path?", "Vraća li BB jednu razinu lakši normalnu putanju?"), options: [
+      option("yes", "Yes", "Da", "r_energy", { bb: 6, hop: 3 }),
+      option("no", "No", "Ne", "r_clean", { bucking: 5, nub: 3, airseal: 2 }),
+      option("unknown", "Not tested", "Nije testirano", "r_clean", { bb: 3, hop: 2 })
+    ] },
+    r_energy: { prompt: bi("Is measured muzzle energy near the replica's normal baseline?", "Je li izmjerena energija na ustima blizu uobičajene vrijednosti replike?"), options: [
+      option("yes", "Yes, energy is normal", "Da, energija je normalna", "r_clean", { airseal: -2, hop: 3, bb: 2 }),
+      option("no", "No, energy is lower", "Ne, energija je niža", "r_mag", { airseal: 6, nozzle: 4 }),
+      option("unknown", "No baseline or chrono", "Nema početne vrijednosti ili kronografa", "r_clean", { airseal: 2 })
+    ] },
+    r_mag: { prompt: bi("Does another known-good magazine restore energy or range?", "Vraća li drugi provjereni spremnik energiju ili domet?"), options: [
+      option("yes", "Yes", "Da", null, { magazine: 8 }),
+      option("no", "No", "Ne", "r_clean", { airseal: 4, nozzle: 4 }),
+      option("unknown", "Not compared", "Nije uspoređeno", "r_clean", { magazine: 3, airseal: 2 })
+    ] },
+    r_clean: { prompt: bi("Are the barrel and bucking clean, dry and free of visible damage?", "Jesu li cijev i bucking čisti, suhi i bez vidljivih oštećenja?"), options: [
+      option("yes", "Yes", "Da", null, { barrel: -1 }),
+      option("no", "No or unsure", "Ne ili nisam siguran/na", null, { barrel: 5, bucking: 5 })
+    ] },
+
+    i_pattern: { prompt: bi("Is the bad shot usually a misfeed/double-feed, or a BB that leaves with low power?", "Je li loš hitac obično prazno/dvostruko hranjenje ili BB koji izlazi slabom snagom?"), options: [
+      option("feed", "Misfeed or double-feed", "Prazno ili dvostruko hranjenje", "i_mag", { magazine: 5, nozzle: 5 }),
+      option("low", "BB leaves with low power", "BB izlazi slabom snagom", "i_chrono", { airseal: 4, nozzle: 4, magazine: 2 }),
+      option("curve", "Power seems normal; flight is wrong", "Snaga djeluje normalno; putanja je loša", "i_clean", { bucking: 4, barrel: 3, bb: 2 })
+    ] },
+    i_mag: { prompt: bi("Does the fault follow one magazine, its fill level or pressure against the magwell?", "Prati li kvar jedan spremnik, njegovu napunjenost ili pritisak u otvoru spremnika?"), options: [
+      option("yes", "Yes", "Da", null, { magazine: 9, nozzle: 2 }),
+      option("no", "No, it happens with all magazines", "Ne, događa se sa svim spremnicima", "i_rate", { magazine: -1, nozzle: 4 }),
+      option("unknown", "Not compared", "Nije uspoređeno", "i_rate", { magazine: 3, nozzle: 2 })
+    ] },
+    i_rate: { prompt: bi("Is it more frequent during rapid semi-auto or full-auto fire?", "Događa li se češće pri brzom semi-auto ili full-auto pucanju?"), options: [
+      option("yes", "Yes", "Da", null, { nozzle: 8, magazine: 4 }),
+      option("no", "No, cadence makes no difference", "Ne, ritam ne mijenja ništa", "i_chrono", { airseal: 3, bucking: 2 }),
+      option("unknown", "Not tested", "Nije testirano", "i_chrono", { nozzle: 3 })
+    ] },
+    i_chrono: { prompt: bi("Does the bad shot register a clear energy drop on the chrono?", "Pokazuje li loš hitac jasan pad energije na kronografu?"), options: [
+      option("yes", "Yes", "Da", "i_clean", { airseal: 7, nozzle: 5 }),
+      option("no", "No, energy stays normal", "Ne, energija ostaje normalna", "i_clean", { airseal: -2, bucking: 4, barrel: 2 }),
+      option("unknown", "Not captured", "Nije zabilježeno", "i_clean", { airseal: 2 })
+    ] },
+    i_clean: { prompt: bi("Have you repeated the test with a clean dry barrel and fresh BBs?", "Jeste li ponovili test s čistom suhom cijevi i svježim BB-ima?"), options: [
+      option("yes", "Yes", "Da", null, { barrel: -1, bb: -1 }),
+      option("no", "No", "Ne", null, { barrel: 5, bb: 4 })
+    ] }
+  });
+
+  function traverse(symptomId, answers = {}) {
+    const symptom = SYMPTOMS[symptomId];
+    if (!symptom) return { path: [], currentQuestion: null, completed: false };
+    const path = [];
+    let questionId = symptom.root;
+    const visited = new Set();
+    while (questionId && QUESTIONS[questionId] && !visited.has(questionId)) {
+      visited.add(questionId);
+      const question = QUESTIONS[questionId];
+      const answer = answers[questionId];
+      path.push({ questionId, question, answer: answer || null });
+      if (!answer) return { path, currentQuestion: { id: questionId, ...question }, completed: false };
+      const selected = question.options.find(item => item.value === answer);
+      if (!selected) return { path, currentQuestion: { id: questionId, ...question }, completed: false };
+      questionId = selected.next;
+    }
+    return { path, currentQuestion: null, completed: path.length > 0 };
+  }
+
+  function analyze(symptomId, answers = {}) {
+    const symptom = SYMPTOMS[symptomId];
+    if (!symptom) return { path: [], currentQuestion: null, completed: false, rankedCauses: [], checklist: [] };
+    const walked = traverse(symptomId, answers);
+    const scores = Object.fromEntries(Object.keys(CAUSES).map(key => [key, Number(symptom.base[key] || 0)]));
+    for (const entry of walked.path) {
+      if (!entry.answer) continue;
+      const selected = entry.question.options.find(item => item.value === entry.answer);
+      for (const [cause, value] of Object.entries(selected?.scores || {})) scores[cause] = (scores[cause] || 0) + value;
+    }
+    const maximum = Math.max(1, ...Object.values(scores));
+    const rankedCauses = Object.entries(scores)
+      .filter(([, score]) => score > 0)
+      .map(([id, score]) => ({ id, score, confidence: Math.max(12, Math.round(score / maximum * 100)), ...CAUSES[id] }))
+      .sort((a, b) => b.score - a.score || a.order - b.order);
+    const shortlist = new Set(rankedCauses.slice(0, 5).map(item => item.id));
+    const checklist = Object.entries(CAUSES)
+      .filter(([id]) => shortlist.has(id))
+      .map(([id, cause]) => ({ id, ...cause, score: scores[id] }))
+      .sort((a, b) => a.order - b.order || b.score - a.score);
+    return { ...walked, rankedCauses, checklist, answeredCount: walked.path.filter(item => item.answer).length };
+  }
+
+  return { CAUSES, SYMPTOMS, QUESTIONS, traverse, analyze };
+});
+
+
 /* UI shared by the generated standalone file and Cloudflare build. */
 (() => {
   "use strict";
   const P = globalThis.PneumaticPhysics, C = globalThis.PneumaticCalibration, A = globalThis.PneumaticAcoustics, O = globalThis.PneumaticOptimizer, B = globalThis.PneumaticPlayback;
-  const I = globalThis.PneumaticInsights, Parts = globalThis.PneumaticParts, Chrono = globalThis.ChronoAnalyzer, BB = globalThis.BBWeightAdvisor, HPA = globalThis.HPAAirEfficiency;
+  const I = globalThis.PneumaticInsights, Parts = globalThis.PneumaticParts, Chrono = globalThis.ChronoAnalyzer, BB = globalThis.BBWeightAdvisor, HPA = globalThis.HPAAirEfficiency, Accuracy = globalThis.AccuracyTroubleshooter;
   const $ = id => document.getElementById(id), finite = Number.isFinite;
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   let language = "en";
@@ -2680,6 +2925,7 @@
     measuredAirCm3PerShot: 300,
     measurementUncertaintyPct: 10
   };
+  const accuracyState = { symptom: null, answers: {} };
   const fields = {
     cylinderBore: ["Cylinder internal diameter", "Unutarnji promjer cilindra", "mm", 15, 35, .01],
     strokeLength: ["Nominal piston stroke before added bumper", "Nominalni hod pistona prije dodatne gumice", "mm", 20, 150, .1],
@@ -3110,18 +3356,50 @@
     $("hpaReset").addEventListener("click", () => { Object.assign(hpaState, { tankVolumeCi: 68, fillPressurePsi: 4500, regulatorPressurePsi: 100, regulatorHeadroomPsi: 200, deliveryEfficiencyPct: 90, barrelVolumeCm3: 10.5, referenceDwellMs: 1.2, targetDwellMs: 1.2, measuredAirCm3PerShot: 300, measurementUncertaintyPct: 10 }); renderHpa(); });
     updateHpaResults();
   }
+  function accuracyText(copy) { return copy ? t(copy.en, copy.hr) : ""; }
+  function accuracyCauseMarkup(item, index) {
+    return `<article class="accuracy-cause ${index === 0 ? "is-leading" : ""}"><div class="accuracy-cause-rank"><span>${index + 1}</span><i><b style="width:${item.confidence}%"></b></i><small>${t("relative match", "relativno podudaranje")} ${item.confidence}%</small></div><h3>${esc(accuracyText(item.label))}</h3><p>${esc(accuracyText(item.summary))}</p></article>`;
+  }
+  function accuracyChecklistMarkup(items) {
+    if (!items.length) return "";
+    return `<section class="panel accuracy-checklist"><div class="panel-heading"><div><p class="eyebrow">${t("Test order", "Redoslijed provjera")}</p><h2>${t("Start simple; change one thing at a time", "Počnite jednostavno; mijenjajte jednu stvar odjednom")}</h2><p>${t("After every step, shoot the same supported 10-shot group with the same BBs, distance and hop setting.", "Nakon svakog koraka ispalite istu grupu od 10 hitaca s oslonca, istim BB-ima, udaljenošću i postavkom hopa.")}</p></div></div><ol>${items.map((item, index) => `<li><span>${index + 1}</span><div><h3>${esc(accuracyText(item.label))}</h3><p>${esc(accuracyText(item.check))}</p><small>${esc(accuracyText(item.pass))}</small></div></li>`).join("")}</ol></section>`;
+  }
+  function accuracyQuestionMarkup(analysis) {
+    const current = analysis.currentQuestion;
+    if (!current) return `<div class="accuracy-complete"><span aria-hidden="true">✓</span><div><p class="eyebrow">${t("Tree complete", "Stablo je dovršeno")}</p><h2>${t("You now have a focused test plan", "Sada imate usmjeren plan provjere")}</h2><p>${t("Treat the ranking as a diagnostic starting point, not proof. Confirm each cause with the checklist before buying parts.", "Rangiranje smatrajte polazištem dijagnostike, a ne dokazom. Potvrdite svaki uzrok popisom provjera prije kupnje dijelova.")}</p></div></div>`;
+    return `<section class="accuracy-question" aria-labelledby="accuracyQuestionTitle"><p class="eyebrow">${t(`Question ${analysis.answeredCount + 1}`, `Pitanje ${analysis.answeredCount + 1}`)}</p><h2 id="accuracyQuestionTitle">${esc(accuracyText(current.prompt))}</h2>${current.help ? `<p>${esc(accuracyText(current.help))}</p>` : ""}<div class="accuracy-options">${current.options.map((item, index) => `<button type="button" data-accuracy-answer="${esc(item.value)}" data-question-id="${esc(current.id)}"><span>${String.fromCharCode(65 + index)}</span><strong>${esc(accuracyText(item.label))}</strong><b aria-hidden="true">→</b></button>`).join("")}</div></section>`;
+  }
+  function renderAccuracy() {
+    workspace = null;
+    const symptom = accuracyState.symptom ? Accuracy.SYMPTOMS[accuracyState.symptom] : null;
+    const analysis = symptom ? Accuracy.analyze(accuracyState.symptom, accuracyState.answers) : null;
+    const symptomPicker = `<section class="accuracy-symptoms" aria-labelledby="accuracySymptomsTitle"><div><p class="eyebrow">${t("Step 1", "Korak 1")}</p><h2 id="accuracySymptomsTitle">${t("What does the bad shot look like?", "Kako izgleda loš hitac?")}</h2><p>${t("Choose the closest visible symptom. You can go back at any time.", "Odaberite najbliži vidljivi simptom. Uvijek se možete vratiti.")}</p></div><div class="accuracy-symptom-grid">${Object.entries(Accuracy.SYMPTOMS).map(([id, item]) => `<button type="button" data-accuracy-symptom="${id}" ${accuracyState.symptom === id ? "aria-pressed=\"true\"" : "aria-pressed=\"false\""}><span aria-hidden="true">${item.icon}</span><strong>${esc(accuracyText(item.label))}</strong><small>${esc(accuracyText(item.hint))}</small></button>`).join("")}</div></section>`;
+    const active = analysis ? `<div class="accuracy-workspace"><section class="panel accuracy-tree"><div class="accuracy-tree-head"><div><span>${symptom.icon}</span><div><small>${t("Selected symptom", "Odabrani simptom")}</small><strong>${esc(accuracyText(symptom.label))}</strong></div></div><button type="button" id="accuracyChange">${t("Change", "Promijeni")}</button></div><div class="accuracy-progress"><i><b style="width:${Math.min(100, Math.max(8, analysis.answeredCount / Math.max(1, analysis.path.length) * 100))}%"></b></i><span>${analysis.completed ? t("Complete", "Dovršeno") : t(`${analysis.answeredCount} answers narrow the result`, `${analysis.answeredCount} odgovora sužava rezultat`)}</span></div>${accuracyQuestionMarkup(analysis)}<div class="accuracy-nav"><button class="secondary-button" id="accuracyBack" type="button" ${analysis.answeredCount ? "" : "disabled"}>${t("← Previous answer", "← Prethodni odgovor")}</button><button class="secondary-button" id="accuracyRestart" type="button">${t("Start over", "Počni ispočetka")}</button></div></section><aside class="accuracy-live" aria-live="polite"><div class="accuracy-live-heading"><p class="eyebrow">${t("Live shortlist", "Trenutačni uži izbor")}</p><h2>${analysis.answeredCount ? t("Most likely places to look", "Najvjerojatnija mjesta za provjeru") : t("Answer the first question", "Odgovorite na prvo pitanje")}</h2><p>${t("Percentages compare these hypotheses with each other; they are not failure probabilities.", "Postoci uspoređuju ove hipoteze međusobno; nisu vjerojatnosti kvara.")}</p></div>${analysis.rankedCauses.slice(0, 3).map(accuracyCauseMarkup).join("")}</aside></div>${accuracyChecklistMarkup(analysis.checklist)}` : symptomPicker;
+    $("root").innerHTML = `<main class="app chrono-app accuracy-app"><header class="lab-header"><div><a href="#">${t("← All tools", "← Svi alati")}</a><p class="eyebrow">${t("Guided diagnosis", "Vođena dijagnostika")}</p><h1>${t("Accuracy Troubleshooter", "Dijagnostika preciznosti")}</h1></div>${languageSwitch()}</header><section class="panel chrono-intro accuracy-intro"><p>${t("Follow a short decision tree to narrow inconsistent grouping, curve, flyers, weak range and intermittent bad shots. The tool ranks what to inspect and puts BBs, cleaning and simple external checks before internal disassembly.", "Prođite kratko stablo odluke kako biste suzili uzrok neujednačene grupe, skretanja, flyera, slabog dometa ili povremenih loših hitaca. Alat rangira što pregledati i stavlja BB-e, čišćenje i jednostavne vanjske provjere prije unutarnjeg rastavljanja.")}</p></section><div class="accuracy-safety" role="note"><span aria-hidden="true">!</span><p><strong>${t("Safe testing", "Sigurno testiranje")}</strong>${t(" Wear eye protection, use a safe backstop and unload/degas/remove the battery before inspection. Never look into an assembled barrel from the muzzle.", " Nosite zaštitu za oči, koristite siguran hvatač te ispraznite/odzračite/odspojite bateriju prije pregleda. Nikada ne gledajte u sastavljenu cijev sa strane usta.")}</p></div>${active}</main>`;
+    bindLanguage();
+    document.querySelectorAll("[data-accuracy-symptom]").forEach(button => button.addEventListener("click", event => { accuracyState.symptom = event.currentTarget.dataset.accuracySymptom; accuracyState.answers = {}; renderAccuracy(); }));
+    document.querySelectorAll("[data-accuracy-answer]").forEach(button => button.addEventListener("click", event => { accuracyState.answers[event.currentTarget.dataset.questionId] = event.currentTarget.dataset.accuracyAnswer; renderAccuracy(); }));
+    if ($("accuracyChange")) $("accuracyChange").addEventListener("click", () => { accuracyState.symptom = null; accuracyState.answers = {}; renderAccuracy(); });
+    if ($("accuracyRestart")) $("accuracyRestart").addEventListener("click", () => { accuracyState.answers = {}; renderAccuracy(); });
+    if ($("accuracyBack")) $("accuracyBack").addEventListener("click", () => {
+      const answered = analysis.path.filter(item => item.answer);
+      if (answered.length) delete accuracyState.answers[answered.at(-1).questionId];
+      renderAccuracy();
+    });
+  }
   function render() {
     workspace?.rememberScroll();
     stop();
-    const lab = location.hash === "#pneumatic-timing", chrono = location.hash === "#chrono-analyzer", bbAdvisor = location.hash === "#bb-weight-advisor", hpa = location.hash === "#hpa-efficiency";
+    const lab = location.hash === "#pneumatic-timing", chrono = location.hash === "#chrono-analyzer", bbAdvisor = location.hash === "#bb-weight-advisor", hpa = location.hash === "#hpa-efficiency", accuracy = location.hash === "#accuracy-troubleshooter";
     document.documentElement.lang = language;
-    document.title = lab ? t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera") : chrono ? t("Chrono String Analyzer", "Analizator serije kronografa") : bbAdvisor ? t("BB Weight Advisor", "Savjetnik za masu BB-a") : hpa ? t("HPA Air-Efficiency Calculator", "Kalkulator učinkovitosti HPA zraka") : "Airsoft Tools";
+    document.title = lab ? t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera") : chrono ? t("Chrono String Analyzer", "Analizator serije kronografa") : bbAdvisor ? t("BB Weight Advisor", "Savjetnik za masu BB-a") : hpa ? t("HPA Air-Efficiency Calculator", "Kalkulator učinkovitosti HPA zraka") : accuracy ? t("Accuracy Troubleshooter", "Dijagnostika preciznosti") : "Airsoft Tools";
     if (chrono) { renderChrono(); return; }
     if (bbAdvisor) { renderBbAdvisor(); return; }
     if (hpa) { renderHpa(); return; }
+    if (accuracy) { renderAccuracy(); return; }
     if (!lab) {
       workspace = null;
-      $("root").innerHTML = `<main class="tool-hub"><div class="hub-shell"><nav class="hub-nav"><div class="hub-brand"><span class="hub-brand-mark">AT</span><span>Airsoft Tools</span></div>${languageSwitch()}</nav><div class="hub-content"><div class="hub-intro"><p class="eyebrow">${t("Interactive workshop", "Interaktivna radionica")}</p><h1>Airsoft Tools</h1><p>${t("Explore the mechanics behind your setup.", "Istražite mehaniku svoje konfiguracije.")}</p></div><p class="hub-count">${t("4 tools available", "Dostupna su 4 alata")}</p><div class="tool-grid"><a class="tool-card" href="#pneumatic-timing"><span class="tool-icon" aria-hidden="true">↝</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h2><p>${t("Explore airflow, piston motion and BB timing. Compare measured setups and calibrate with chrono data.", "Istražite protok zraka, gibanje pistona i BB-a. Usporedite izmjerene konfiguracije i kalibrirajte kronografom.")}</p></span><span class="tool-arrow">→</span></a><a class="tool-card" href="#chrono-analyzer"><span class="tool-icon" aria-hidden="true">▥</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Chrono String Analyzer", "Analizator serije kronografa")}</h2><p>${t("Inspect consistency, energy spread, unusual shots and possible joule creep from pasted chrono readings.", "Provjerite ujednačenost, raspon energije, neobične hice i mogući joule creep iz zalijepljenih očitanja kronografa.")}</p></span><span class="tool-arrow">→</span></a><a class="tool-card" href="#bb-weight-advisor"><span class="tool-icon" aria-hidden="true">●</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("BB Weight Advisor", "Savjetnik za masu BB-a")}</h2><p>${t("Compare common BB weights for flight time, retained energy, wind resistance, modeled range and magazine cost.", "Usporedite uobičajene mase BB-a prema vremenu leta, preostaloj energiji, otpornosti na vjetar, modeliranom dometu i cijeni spremnika.")}</p></span><span class="tool-arrow">→</span></a><a class="tool-card" href="#hpa-efficiency"><span class="tool-icon" aria-hidden="true">◉</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("HPA Air-Efficiency Calculator", "Kalkulator učinkovitosti HPA zraka")}</h2><p>${t("Estimate usable shots from tank size, pressure reserve, barrel volume, dwell and measured air consumption.", "Procijenite uporabljive hice iz veličine boce, rezerve tlaka, zapremnine cijevi, dwella i izmjerene potrošnje zraka.")}</p></span><span class="tool-arrow">→</span></a></div><p class="hub-footnote">${t("Private by design: calculations stay in this browser.", "Privatno po dizajnu: izračuni ostaju u ovom pregledniku.")}</p></div></div></main>`;
+      $("root").innerHTML = `<main class="tool-hub"><div class="hub-shell"><nav class="hub-nav"><div class="hub-brand"><span class="hub-brand-mark">AT</span><span>Airsoft Tools</span></div>${languageSwitch()}</nav><div class="hub-content"><div class="hub-intro"><p class="eyebrow">${t("Interactive workshop", "Interaktivna radionica")}</p><h1>Airsoft Tools</h1><p>${t("Explore the mechanics behind your setup.", "Istražite mehaniku svoje konfiguracije.")}</p></div><p class="hub-count">${t("5 tools available", "Dostupno je 5 alata")}</p><div class="tool-grid"><a class="tool-card" href="#pneumatic-timing"><span class="tool-icon" aria-hidden="true">↝</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h2><p>${t("Explore airflow, piston motion and BB timing. Compare measured setups and calibrate with chrono data.", "Istražite protok zraka, gibanje pistona i BB-a. Usporedite izmjerene konfiguracije i kalibrirajte kronografom.")}</p></span><span class="tool-arrow">→</span></a><a class="tool-card" href="#chrono-analyzer"><span class="tool-icon" aria-hidden="true">▥</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Chrono String Analyzer", "Analizator serije kronografa")}</h2><p>${t("Inspect consistency, energy spread, unusual shots and possible joule creep from pasted chrono readings.", "Provjerite ujednačenost, raspon energije, neobične hice i mogući joule creep iz zalijepljenih očitanja kronografa.")}</p></span><span class="tool-arrow">→</span></a><a class="tool-card" href="#bb-weight-advisor"><span class="tool-icon" aria-hidden="true">●</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("BB Weight Advisor", "Savjetnik za masu BB-a")}</h2><p>${t("Compare common BB weights for flight time, retained energy, wind resistance, modeled range and magazine cost.", "Usporedite uobičajene mase BB-a prema vremenu leta, preostaloj energiji, otpornosti na vjetar, modeliranom dometu i cijeni spremnika.")}</p></span><span class="tool-arrow">→</span></a><a class="tool-card" href="#hpa-efficiency"><span class="tool-icon" aria-hidden="true">◉</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("HPA Air-Efficiency Calculator", "Kalkulator učinkovitosti HPA zraka")}</h2><p>${t("Estimate usable shots from tank size, pressure reserve, barrel volume, dwell and measured air consumption.", "Procijenite uporabljive hice iz veličine boce, rezerve tlaka, zapremnine cijevi, dwella i izmjerene potrošnje zraka.")}</p></span><span class="tool-arrow">→</span></a><a class="tool-card" href="#accuracy-troubleshooter"><span class="tool-icon" aria-hidden="true">⌖</span><span class="tool-copy"><span class="tool-status">${t("Available", "Dostupno")}</span><h2>${t("Accuracy Troubleshooter", "Dijagnostika preciznosti")}</h2><p>${t("Follow a decision tree for vertical spread, curve, flyers, weak range and occasional bad shots.", "Pratite stablo odluke za vertikalno rasipanje, skretanje, flyere, slab domet i povremene loše hice.")}</p></span><span class="tool-arrow">→</span></a></div><p class="hub-footnote">${t("Private by design: calculations stay in this browser.", "Privatno po dizajnu: izračuni ostaju u ovom pregledniku.")}</p></div></div></main>`;
       bindLanguage(); return;
     }
     $("root").innerHTML = `<main class="app tuning-app"><header class="lab-header"><div><a href="#">${t("← All tools", "← Svi alati")}</a><h1>${t("Spring Sniper Pneumatic Timing Lab", "Laboratorij pneumatike opružnih snajpera")}</h1></div>${languageSwitch()}</header>

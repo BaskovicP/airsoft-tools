@@ -2,6 +2,10 @@
 
 Standalone English/Croatian airsoft tools that run entirely in the browser. Open `index.html` directly—no server, account, network access or runtime dependencies are required. The first screen is a tool menu.
 
+## Accuracy Troubleshooter
+
+Choose vertical spread, left/right curve, random flyers, weak range or an occasional bad shot, then follow an adaptive decision tree. Every answer updates a relative shortlist of likely causes and builds a non-invasive-first test order covering BB quality and weight, barrel cleaning, hop adjustment, magazine interaction, bucking and nub condition, nozzle timing and internal air seal. Results are diagnostic hypotheses rather than failure probabilities; the tool asks users to confirm each step with repeatable 10-shot groups before replacing parts.
+
 ## HPA Air-Efficiency Calculator
 
 Estimate usable shots per tank from tank internal volume, fill pressure, regulator output and headroom, delivery efficiency, barrel/working volume, reference and target dwell, and measured standard-air consumption per shot. The calculator reports a measurement-uncertainty range, usable standard litres, pressure reserve, shots per 1,000 psi, barrel-charge utilization, dwell sensitivity and common-tank comparisons. Measured consumption remains the primary input; the ideal-gas tank model and barrel-charge floor are planning estimates, not permission to exceed equipment pressure ratings.
@@ -136,6 +140,7 @@ Searches are deterministic and capped at 60/120/240 combinations, can be cancell
 - `src/animation.js`: solver-driven cutaway rendering and schematic visual cues;
 - `src/bb-advisor.js`: pure BB flight, wind, range, cost and recommendation comparison;
 - `src/hpa-efficiency.js`: pure tank reserve, standard-air consumption and dwell comparison;
+- `src/accuracy-troubleshooter.js`: pure symptom decision trees, cause scoring and check ordering;
 - `src/app.js`: bilingual controls, playback, graphs and data UI.
 
 Run:
