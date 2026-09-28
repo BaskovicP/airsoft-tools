@@ -2,6 +2,14 @@
 
 Standalone English/Croatian airsoft tools that run entirely in the browser. Open `index.html` directly—no server, account, network access or runtime dependencies are required. The first screen is a tool menu.
 
+## Stalker Scorpion Setup Wizard
+
+Select the exact TAC-41, SRS, VSR-10 or SSG10 cylinder-head/nozzle system to identify the documented 3.80, 4.00 or 4.40 mm air-brake family. The wizard combines current Plug & Play starting masses with the nearest published Ultimate weight stack, visualizes the piston from sear cap through body modules, guide rings, cup and air-brake, and calculates the selected assembled mass from Stalker's published combination table. A guided installation sequence covers module O-rings, bumper placement, lubrication and the free-travel check.
+
+Guide-ring identity follows the selected platform. In particular, SSG10 selections use the separately listed SSG10 front/rear POM ring set rather than the VSR10/TM-spec set. Because the vendor does not publish the exact ring outside diameter or separate ring mass, the visual difference is explicitly relative/not to scale and the exact fields remain unknown; published rounded complete-piston masses are retained until the assembled piston is weighed.
+
+The live tuning section records air-brake projection and joule strings at equal adjustment steps. It flags the first energy drop larger than 0.02 J or the observed shot-to-shot standard deviation, then directs the user back to the preceding measured position before locking the nut. Symptom-specific checklists cover low output, excess noise, chrono inconsistency, piston drag and BB/feed problems. Product generations and seller guidance are not perfectly consistent, so every mass is labeled as a starting point and the final setup must be verified with the user's BB, hop setting and chronograph.
+
 ## Accuracy Troubleshooter
 
 Choose vertical spread, left/right curve, random flyers, weak range or an occasional bad shot, then follow an adaptive decision tree. Every answer updates a relative shortlist of likely causes and builds a non-invasive-first test order covering BB quality and weight, barrel cleaning, hop adjustment, magazine interaction, bucking and nub condition, nozzle timing and internal air seal. Results are diagnostic hypotheses rather than failure probabilities; the tool asks users to confirm each step with repeatable 10-shot groups before replacing parts.
@@ -141,6 +149,7 @@ Searches are deterministic and capped at 60/120/240 combinations, can be cancell
 - `src/bb-advisor.js`: pure BB flight, wind, range, cost and recommendation comparison;
 - `src/hpa-efficiency.js`: pure tank reserve, standard-air consumption and dwell comparison;
 - `src/accuracy-troubleshooter.js`: pure symptom decision trees, cause scoring and check ordering;
+- `src/stalker-wizard.js`: Stalker compatibility profiles, published weight combinations, chrono-step detection and troubleshooting;
 - `src/app.js`: bilingual controls, playback, graphs and data UI.
 
 Run:
@@ -185,6 +194,6 @@ Run `npm run package:cloudflare` and upload `airsoft-tools-cloudflare.zip`. The 
 
 ## Sources
 
-Product identity: [Tridos AMP kit](https://tridos.design/products/ultimate-ssg10-vsr10-piston-cylinder-head-kit), [AMP manufacturer](https://amp-machine.com/shop/p/am-ultimate-vsr-piston-cylinder-head-71g-stainless-steel-one-piece-piston-with-airbrake-and-high-flow-cylinder-head-with-rubber-damper).
+Product identity: [Tridos AMP kit](https://tridos.design/products/ultimate-ssg10-vsr10-piston-cylinder-head-kit), [AMP manufacturer](https://amp-machine.com/shop/p/am-ultimate-vsr-piston-cylinder-head-71g-stainless-steel-one-piece-piston-with-airbrake-and-high-flow-cylinder-head-with-rubber-damper), [SSG10 Scorpion guide-ring set](https://www.skirmshop.nl/products/scorpion-piston-ssg10-guide-ring-set), [VSR10 Scorpion guide-ring set](https://www.skirmshop.nl/en-nl/products/scorpion-piston-vsr-10-guide-ring-set).
 
 Physics methods: [Do Duc et al., internal ballistics](https://cris.technion.ac.il/en/publications/the-internal-ballistics-of-airguns/), [NASA compressible-flow/orifice analysis](https://ntrs.nasa.gov/api/citations/19660020229/downloads/19660020229.pdf), [single-chamber muffler early-time model](https://www.sciencedirect.com/science/article/pii/0895717788901367), and [weak-shock silencer baffle experiment/CFD](https://www.sciencedirect.com/science/article/abs/pii/S0022460X03007946). More references and measurement requirements are in the physics plan.
